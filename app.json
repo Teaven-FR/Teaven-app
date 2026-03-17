@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Teaven",
+    "slug": "teaven-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "teaven",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F2F1EA"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.teaven.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F2F1EA",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.teaven.app",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-haptics"
+    ]
+  }
+}
