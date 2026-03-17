@@ -1,5 +1,6 @@
 // Carte produit carrousel — format horizontal (260px large, 180px image)
-// Avec micro-interaction "+" → "AJOUTÉ" (30px bouton)
+// Badge rating en haut à droite, bouton "+" radius 8px
+// Micro-interaction "+" → "AJOUTÉ" (30px → 76px)
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
@@ -10,7 +11,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import { Plus } from 'lucide-react-native';
+import { Plus, Star } from 'lucide-react-native';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
 import type { Product } from '@/lib/types';
 import { useCartStore } from '@/stores/cartStore';
@@ -43,11 +44,12 @@ export function ProductCardCarousel({ product, onPress }: ProductCardCarouselPro
   }));
 
   const handleAdd = () => {
+    // Retour haptique
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     addItem(product);
 
-    // Animation : étirer le bouton de 30px à 80px
-    buttonWidth.value = withSpring(80, SPRING_CONFIG);
+    // Animation : étirer le bouton de 30px à 76px
+    buttonWidth.value = withSpring(76, SPRING_CONFIG);
     textOpacity.value = withDelay(100, withTiming(1, { duration: 200 }));
 
     // Refermer après 1.4s
@@ -57,20 +59,21 @@ export function ProductCardCarousel({ product, onPress }: ProductCardCarouselPro
 
   return (
     <Pressable onPress={onPress} style={styles.card}>
-      <Image
-        source={{ uri: product.image }}
-        style={styles.image}
-        contentFit="cover"
-        transition={300}
-      />
-      <View style={styles.content}>
-        <View style={styles.tags}>
-          {product.tags.map((tag) => (
-            <View key={tag} style={styles.tag}>
-              <Text style={styles.tagText}>{tag}</Text>
-            </View>
-          ))}
+      {/* Image avec badge rating */}
+      <View style={styles.imageContainer}>
+        <Image
+          source={{ uri: product.image }}
+          style={styles.image}
+          contentFit="cover"
+          transition={300}
+        />
+        <View style={styles.ratingBadge}>
+          <Star size={10} color="#FFFFFF" fill="#FFFFFF" strokeWidth={1.5} />
+          <Text style={styles.ratingText}>{product.rating}</Text>
         </View>
+      </View>
+
+      <View style={styles.content}>
         <Text style={styles.name} numberOfLines={1}>{product.name}</Text>
         <Text style={styles.description} numberOfLines={2}>{product.description}</Text>
         <View style={styles.footer}>
@@ -97,39 +100,45 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadows.card,
   },
+  imageContainer: {
+    position: 'relative',
+  },
   image: {
     width: '100%',
     height: 180,
   },
+  ratingBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  ratingText: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: '#FFFFFF',
+  },
   content: {
     padding: spacing.md,
-  },
-  tags: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  tag: {
-    backgroundColor: colors.greenLight,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.sm,
-  },
-  tagText: {
-    fontFamily: fonts.regular,
-    fontSize: 10,
-    color: colors.green,
   },
   name: {
     fontFamily: fonts.bold,
     fontSize: 15,
     color: colors.text,
     letterSpacing: -0.2,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   description: {
-    ...typography.bodySmall,
-    fontSize: 12,
+    fontFamily: fonts.regular,
+    fontSize: 11.5,
+    color: colors.textSecondary,
+    lineHeight: 16,
     marginBottom: spacing.sm,
   },
   footer: {
@@ -143,7 +152,7 @@ const styles = StyleSheet.create({
   addButton: {
     height: 30,
     backgroundColor: colors.green,
-    borderRadius: 15,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

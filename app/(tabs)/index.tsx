@@ -1,5 +1,7 @@
-// Écran Accueil — fidèle aux maquettes
+// Écran Accueil — fidèle aux maquettes Teaven
+import { useState, useRef, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, TextInput } from 'react-native';
+import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -10,10 +12,16 @@ import { useCatalog } from '@/hooks/useCatalog';
 import { mockUser, mockProducts } from '@/constants/mockData';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
 
+// Largeur d'une card carrousel + gap
+const CARD_WIDTH = 260;
+const CARD_GAP = spacing.md;
+const SNAP_INTERVAL = CARD_WIDTH + CARD_GAP;
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { products, categories, selectedCategory, setSelectedCategory } = useCatalog();
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
 
   const formatPrice = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
@@ -25,6 +33,16 @@ export default function HomeScreen() {
   const favorites = [...mockProducts]
     .sort((a, b) => b.rating - a.rating)
     .slice(0, 3);
+
+  // Calcul de la page active du carrousel pour les dots
+  const handleCarouselScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const offsetX = event.nativeEvent.contentOffset.x;
+      const index = Math.round(offsetX / SNAP_INTERVAL);
+      setActiveCardIndex(index);
+    },
+    [],
+  );
 
   return (
     <ScrollView
@@ -44,14 +62,14 @@ export default function HomeScreen() {
           </View>
         </View>
         <Pressable style={styles.notifButton}>
-          <Bell size={20} color={colors.text} strokeWidth={1.6} />
+          <Bell size={20} color={colors.textSecondary} strokeWidth={1.5} />
         </Pressable>
       </View>
 
       {/* Barre de recherche */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Search size={18} color={colors.textMuted} strokeWidth={1.6} />
+          <Search size={16} color={colors.textMuted} strokeWidth={1.6} />
           <TextInput
             style={styles.searchInput}
             placeholder="Rechercher..."
@@ -80,14 +98,16 @@ export default function HomeScreen() {
       {/* Section "À LA CARTE" */}
       <Text style={styles.sectionLabel}>À LA CARTE</Text>
 
-      {/* Carrousel produits horizontal */}
+      {/* Carrousel produits horizontal avec snap */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.carousel}
         decelerationRate="fast"
-        snapToInterval={260 + spacing.md}
+        snapToInterval={SNAP_INTERVAL}
         snapToAlignment="start"
+        onScroll={handleCarouselScroll}
+        scrollEventThrottle={16}
       >
         {carouselProducts.map((product) => (
           <ProductCardCarousel
@@ -97,6 +117,16 @@ export default function HomeScreen() {
           />
         ))}
       </ScrollView>
+
+      {/* Dots pagination */}
+      <View style={styles.dotsContainer}>
+        {carouselProducts.map((product, index) => (
+          <View
+            key={product.id}
+            style={[styles.dot, index === activeCardIndex && styles.dotActive]}
+          />
+        ))}
+      </View>
 
       {/* Section "Nos coups de cœur" */}
       <View style={styles.favoritesHeader}>
@@ -234,7 +264,27 @@ const styles = StyleSheet.create({
   // Carrousel
   carousel: {
     paddingHorizontal: spacing.xl,
-    gap: spacing.md,
+    gap: CARD_GAP,
+  },
+
+  // Dots pagination
+  dotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.md,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+  },
+  dotActive: {
+    width: 18,
+    backgroundColor: colors.green,
+    borderRadius: 9,
   },
 
   // Coups de cœur
@@ -251,7 +301,7 @@ const styles = StyleSheet.create({
   },
   seeAll: {
     fontFamily: fonts.regular,
-    fontSize: 13,
+    fontSize: 12,
     color: colors.green,
   },
 
@@ -264,8 +314,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.sm,
+    borderRadius: radii.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     gap: spacing.md,
     ...shadows.subtle,
   },
@@ -284,15 +335,18 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 13.5,
     color: colors.text,
-    marginBottom: 1,
+    marginBottom: 2,
   },
   favoriteDescription: {
     fontFamily: fonts.regular,
     fontSize: 11,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   favoritePrice: {
-    ...typography.price,
+    fontFamily: fonts.mono,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.green,
     marginRight: spacing.xs,
   },
 });
