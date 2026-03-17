@@ -1,6 +1,7 @@
 // État du panier — Zustand store
 import { create } from 'zustand';
 import type { Product, CartItem } from '@/lib/types';
+import { mockProducts } from '@/constants/mockData';
 
 interface CartState {
   items: CartItem[];
@@ -12,8 +13,14 @@ interface CartState {
   totalPrice: () => number;
 }
 
+// Pré-remplir avec 2 articles mock
+const initialItems: CartItem[] = [
+  { product: mockProducts[0], quantity: 2 }, // Zen Buddha Bowl ×2
+  { product: mockProducts[1], quantity: 1 }, // Matcha Zen Latte ×1
+];
+
 export const useCartStore = create<CartState>((set, get) => ({
-  items: [],
+  items: initialItems,
 
   addItem: (product: Product) => {
     set((state) => {
