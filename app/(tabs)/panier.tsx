@@ -1,10 +1,9 @@
 // Écran Panier & Checkout — articles, Click & Collect, fidélité, paiement
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import * as Haptics from 'expo-haptics';
 import {
   ChevronLeft,
   ShoppingBag,
@@ -95,20 +94,14 @@ export default function PanierScreen() {
               </View>
               <View style={styles.qtySelector}>
                 <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    updateQuantity(item.product.id, item.quantity - 1);
-                  }}
+                  onPress={() => updateQuantity(item.product.id, item.quantity - 1)}
                   style={styles.qtyButton}
                 >
                   <Minus size={12} color={colors.textSecondary} strokeWidth={2} />
                 </Pressable>
                 <Text style={styles.qtyValue}>{item.quantity}</Text>
                 <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    updateQuantity(item.product.id, item.quantity + 1);
-                  }}
+                  onPress={() => updateQuantity(item.product.id, item.quantity + 1)}
                   style={styles.qtyButton}
                 >
                   <Plus size={12} color={colors.textSecondary} strokeWidth={2} />
@@ -151,10 +144,7 @@ export default function PanierScreen() {
           </View>
           <Switch
             value={useLoyalty}
-            onValueChange={(v) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setUseLoyalty(v);
-            }}
+            onValueChange={setUseLoyalty}
             trackColor={{ false: '#E8E7E2', true: colors.green }}
             thumbColor="#FFFFFF"
           />
@@ -191,10 +181,7 @@ export default function PanierScreen() {
             return (
               <Pressable
                 key={option.id}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setPaymentMethod(option.id);
-                }}
+                onPress={() => setPaymentMethod(option.id)}
                 style={[
                   styles.paymentCard,
                   selected && styles.paymentCardSelected,
@@ -222,9 +209,7 @@ export default function PanierScreen() {
       {/* ──── CTA sticky ──── */}
       <View style={[styles.cta, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          }}
+          onPress={() => {}}
           style={({ pressed }) => [
             styles.ctaButton,
             pressed && styles.ctaPressed,

@@ -1,6 +1,5 @@
 // Sélecteur de quantité (+/-)
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { Minus, Plus } from 'lucide-react-native';
 import { colors, fonts, radii, spacing } from '@/constants/theme';
 
@@ -19,24 +18,10 @@ export function QuantitySelector({
   min = 0,
   max = 99,
 }: QuantitySelectorProps) {
-  const handleIncrement = () => {
-    if (quantity < max) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onIncrement();
-    }
-  };
-
-  const handleDecrement = () => {
-    if (quantity > min) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onDecrement();
-    }
-  };
-
   return (
     <View style={styles.container}>
       <Pressable
-        onPress={handleDecrement}
+        onPress={quantity > min ? onDecrement : undefined}
         style={[styles.button, quantity <= min && styles.disabled]}
         disabled={quantity <= min}
       >
@@ -44,7 +29,7 @@ export function QuantitySelector({
       </Pressable>
       <Text style={styles.quantity}>{quantity}</Text>
       <Pressable
-        onPress={handleIncrement}
+        onPress={quantity < max ? onIncrement : undefined}
         style={[styles.button, quantity >= max && styles.disabled]}
         disabled={quantity >= max}
       >

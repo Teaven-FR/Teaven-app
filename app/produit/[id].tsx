@@ -1,23 +1,18 @@
 // Fiche produit — hero gradient + détails scrollables + CTA sticky
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   Pressable,
+  Animated,
   Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
 import {
   ArrowLeft,
   Share2,
@@ -32,8 +27,6 @@ import { useCartStore } from '@/stores/cartStore';
 import { mockProducts } from '@/constants/mockData';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 const HERO_HEIGHT = 340;
 
 export default function ProductScreen() {
@@ -46,8 +39,8 @@ export default function ProductScreen() {
   const [showFullDescription, setShowFullDescription] = useState(false);
 
   // Micro-interaction scale pour les CTA
-  const addScale = useSharedValue(1);
-  const orderScale = useSharedValue(1);
+  const addScale = useRef(new Animated.Value(1)).current;
+  const orderScale = useRef(new Animated.Value(1)).current;
 
   const product = mockProducts.find((p) => p.id === id);
 
@@ -63,46 +56,39 @@ export default function ProductScreen() {
   }
 
   const handleAddToCart = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     for (let i = 0; i < quantity; i++) addItem(product);
   };
 
   const handleOrder = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     for (let i = 0; i < quantity; i++) addItem(product);
     router.push('/(tabs)/panier');
   };
 
   const incrementQty = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setQuantity((q) => q + 1);
   };
 
   const decrementQty = () => {
     if (quantity <= 1) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setQuantity((q) => q - 1);
   };
 
-  const addButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: addScale.value }],
-  }));
+  const animatePressIn = (scale: Animated.Value) => {
+    Animated.spring(scale, {
+      toValue: 0.97,
+      damping: 15,
+      stiffness: 300,
+      useNativeDriver: true,
+    }).start();
+  };
 
-  const orderButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: orderScale.value }],
-  }));
-
-  const handlePressInAdd = () => {
-    addScale.value = withSpring(0.97, { damping: 15, stiffness: 300 });
-  };
-  const handlePressOutAdd = () => {
-    addScale.value = withSpring(1, { damping: 15, stiffness: 300 });
-  };
-  const handlePressInOrder = () => {
-    orderScale.value = withSpring(0.97, { damping: 15, stiffness: 300 });
-  };
-  const handlePressOutOrder = () => {
-    orderScale.value = withSpring(1, { damping: 15, stiffness: 300 });
+  const animatePressOut = (scale: Animated.Value) => {
+    Animated.spring(scale, {
+      toValue: 1,
+      damping: 15,
+      stiffness: 300,
+      useNativeDriver: true,
+    }).start();
   };
 
   return (
@@ -216,22 +202,26 @@ export default function ProductScreen() {
 
       {/* ──── CTA sticky ──── */}
       <View style={[styles.cta, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <AnimatedPressable
-          onPress={handleAddToCart}
-          onPressIn={handlePressInAdd}
-          onPressOut={handlePressOutAdd}
-          style={[styles.ctaButton, styles.ctaSecondary, addButtonStyle]}
-        >
-          <Text style={styles.ctaSecondaryText}>Ajouter au panier</Text>
-        </AnimatedPressable>
-        <AnimatedPressable
-          onPress={handleOrder}
-          onPressIn={handlePressInOrder}
-          onPressOut={handlePressOutOrder}
-          style={[styles.ctaButton, styles.ctaPrimary, orderButtonStyle]}
-        >
-          <Text style={styles.ctaPrimaryText}>Commander</Text>
-        </AnimatedPressable>
+        <Animated.View style={{ flex: 1, transform: [{ scale: addScale }] }}>
+          <Pressable
+            onPress={handleAddToCart}
+            onPressIn={() => animatePressIn(addScale)}
+            onPressOut={() => animatePressOut(addScale)}
+            style={[styles.ctaButton, styles.ctaSecondary]}
+          >
+            <Text style={styles.ctaSecondaryText}>Ajouter au panier</Text>
+          </Pressable>
+        </Animated.View>
+        <Animated.View style={{ flex: 1, transform: [{ scale: orderScale }] }}>
+          <Pressable
+            onPress={handleOrder}
+            onPressIn={() => animatePressIn(orderScale)}
+            onPressOut={() => animatePressOut(orderScale)}
+            style={[styles.ctaButton, styles.ctaPrimary]}
+          >
+            <Text style={styles.ctaPrimaryText}>Commander</Text>
+          </Pressable>
+        </Animated.View>
       </View>
     </View>
   );
@@ -416,7 +406,6 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   ctaButton: {
-    flex: 1,
     height: 44,
     borderRadius: 12,
     alignItems: 'center',
