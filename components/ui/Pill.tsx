@@ -1,4 +1,4 @@
-// Pill — filtre catégorie
+// Pill — filtre catégorie (hauteur 32px, radius 50px)
 import { Pressable, Text, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, radii, spacing, typography } from '@/constants/theme';
@@ -29,8 +29,10 @@ export function Pill({ label, active = false, onPress }: PillProps) {
 
 const styles = StyleSheet.create({
   pill: {
+    height: 32,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderRadius: radii.pill,
     backgroundColor: colors.surface,
     borderWidth: 1,

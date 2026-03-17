@@ -1,28 +1,34 @@
-// Root layout — chargement des fonts et providers
-import { useEffect } from 'react';
+// Root layout — chargement des fonts Bw Modelica et providers
+import { useEffect, useCallback } from 'react';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from '@/components/layout/StatusBar';
 
-// Empêcher le splash screen de se cacher automatiquement
+// Empêcher le splash screen de se cacher tant que les fonts ne sont pas prêtes
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     'BwModelica-Thin': require('@/assets/fonts/BwModelica-Thin.otf'),
     'BwModelica-Regular': require('@/assets/fonts/BwModelica-Regular.otf'),
     'BwModelica-Bold': require('@/assets/fonts/BwModelica-Bold.otf'),
   });
 
-  useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
+  const onLayoutReady = useCallback(async () => {
+    if (fontsLoaded || fontError) {
+      await SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    onLayoutReady();
+  }, [onLayoutReady]);
+
+  // Tant que les fonts ne sont pas chargées, ne rien rendre (splash screen natif affiché)
+  if (!fontsLoaded && !fontError) {
     return null;
   }
 
