@@ -24,7 +24,6 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.teaven.app",
-      "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png",
