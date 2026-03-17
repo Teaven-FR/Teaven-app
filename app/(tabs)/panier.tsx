@@ -1,6 +1,13 @@
-// Écran Panier & Checkout — articles, Click & Collect, fidélité, paiement
+// Écran Panier & Checkout — données dynamiques depuis cartStore
 import { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Switch } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  Switch,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -12,7 +19,9 @@ import {
   Clock,
   Minus,
   Plus,
+  Trash2,
 } from 'lucide-react-native';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useCart } from '@/hooks/useCart';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 
@@ -21,16 +30,23 @@ type PaymentMethod = 'card' | 'wallet' | 'mixed';
 export default function PanierScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { items, totalItems, totalPrice, formattedTotal, updateQuantity, formatPrice } =
-    useCart();
+  const {
+    items,
+    totalItems,
+    subtotal,
+    tax,
+    updateQuantity,
+    removeItem,
+    formatPrice,
+    getLoyaltyDiscount,
+  } = useCart();
 
   const [useLoyalty, setUseLoyalty] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
 
   // Calculs récap
-  const subtotal = totalPrice;
-  const loyaltyDiscount = useLoyalty ? 250 : 0; // 2.50 € de remise mock
-  const total = subtotal - loyaltyDiscount;
+  const loyaltyDiscount = getLoyaltyDiscount(useLoyalty);
+  const total = subtotal + tax - loyaltyDiscount;
 
   const paymentOptions: { id: PaymentMethod; label: string }[] = [
     { id: 'card', label: 'Carte bancaire' },
@@ -38,24 +54,22 @@ export default function PanierScreen() {
     { id: 'mixed', label: 'Mixte (Points + Carte)' },
   ];
 
+  // État vide
   if (items.length === 0) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <ChevronLeft size={20} color={colors.text} strokeWidth={2} />
-          </Pressable>
+          <View style={styles.headerSpacer} />
           <Text style={styles.headerTitle}>Votre panier</Text>
           <View style={styles.headerSpacer} />
         </View>
-        <View style={styles.empty}>
-          <ShoppingBag size={48} color={colors.textMuted} strokeWidth={1.2} />
-          <Text style={styles.emptyTitle}>Ton panier est vide</Text>
-          <Text style={styles.emptySubtitle}>
-            Explore notre carte pour trouver ton bonheur
-          </Text>
-        </View>
+        <EmptyState
+          icon={<ShoppingBag size={48} color={colors.textMuted} strokeWidth={1.2} />}
+          title="Votre panier est vide"
+          subtitle="Découvrez notre carte pour trouver votre bonheur"
+          ctaLabel="Explorer la carte"
+          onCtaPress={() => router.push('/carte')}
+        />
       </View>
     );
   }
@@ -85,6 +99,7 @@ export default function PanierScreen() {
                 source={{ uri: item.product.image }}
                 style={styles.articleImage}
                 contentFit="cover"
+                placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
               />
               <View style={styles.articleInfo}>
                 <Text style={styles.articleName}>{item.product.name}</Text>
@@ -92,19 +107,30 @@ export default function PanierScreen() {
                   {formatPrice(item.product.price)}
                 </Text>
               </View>
-              <View style={styles.qtySelector}>
+              <View style={styles.qtyArea}>
+                <View style={styles.qtySelector}>
+                  <Pressable
+                    onPress={() => updateQuantity(item.product.id, item.quantity - 1)}
+                    style={styles.qtyButton}
+                    accessibilityLabel="Réduire la quantité"
+                  >
+                    <Minus size={12} color={colors.textSecondary} strokeWidth={2} />
+                  </Pressable>
+                  <Text style={styles.qtyValue}>{item.quantity}</Text>
+                  <Pressable
+                    onPress={() => updateQuantity(item.product.id, item.quantity + 1)}
+                    style={styles.qtyButton}
+                    accessibilityLabel="Augmenter la quantité"
+                  >
+                    <Plus size={12} color={colors.textSecondary} strokeWidth={2} />
+                  </Pressable>
+                </View>
                 <Pressable
-                  onPress={() => updateQuantity(item.product.id, item.quantity - 1)}
-                  style={styles.qtyButton}
+                  onPress={() => removeItem(item.product.id)}
+                  style={styles.deleteButton}
+                  accessibilityLabel="Supprimer l'article"
                 >
-                  <Minus size={12} color={colors.textSecondary} strokeWidth={2} />
-                </Pressable>
-                <Text style={styles.qtyValue}>{item.quantity}</Text>
-                <Pressable
-                  onPress={() => updateQuantity(item.product.id, item.quantity + 1)}
-                  style={styles.qtyButton}
-                >
-                  <Plus size={12} color={colors.textSecondary} strokeWidth={2} />
+                  <Trash2 size={14} color={colors.error} strokeWidth={1.8} />
                 </Pressable>
               </View>
             </View>
@@ -125,9 +151,7 @@ export default function PanierScreen() {
           </View>
           <Pressable style={styles.collectSlot}>
             <Clock size={12} color={colors.textSecondary} strokeWidth={1.8} />
-            <Text style={styles.collectSlotText}>
-              Aujourd'hui, 14:30 – 15:00 ›
-            </Text>
+            <Text style={styles.collectSlotText}>Aujourd'hui, 14:30 – 15:00 ›</Text>
           </Pressable>
         </View>
 
@@ -139,7 +163,7 @@ export default function PanierScreen() {
             </View>
             <View>
               <Text style={styles.loyaltyTitle}>Points de fidélité</Text>
-              <Text style={styles.loyaltyBalance}>Solde : 1,240 pts</Text>
+              <Text style={styles.loyaltyBalance}>Solde : 1 240 pts</Text>
             </View>
           </View>
           <Switch
@@ -155,6 +179,10 @@ export default function PanierScreen() {
           <View style={styles.recapRow}>
             <Text style={styles.recapLabel}>Sous-total</Text>
             <Text style={styles.recapValue}>{formatPrice(subtotal)}</Text>
+          </View>
+          <View style={styles.recapRow}>
+            <Text style={styles.recapLabel}>TVA (5,5%)</Text>
+            <Text style={styles.recapValue}>{formatPrice(tax)}</Text>
           </View>
           {useLoyalty && (
             <View style={styles.recapRow}>
@@ -182,22 +210,14 @@ export default function PanierScreen() {
               <Pressable
                 key={option.id}
                 onPress={() => setPaymentMethod(option.id)}
-                style={[
-                  styles.paymentCard,
-                  selected && styles.paymentCardSelected,
-                ]}
+                style={[styles.paymentCard, selected && styles.paymentCardSelected]}
+                accessibilityLabel={option.label}
+                accessibilityState={{ selected }}
               >
-                <View
-                  style={[styles.radio, selected && styles.radioSelected]}
-                >
+                <View style={[styles.radio, selected && styles.radioSelected]}>
                   {selected && <View style={styles.radioDot} />}
                 </View>
-                <Text
-                  style={[
-                    styles.paymentLabel,
-                    selected && styles.paymentLabelSelected,
-                  ]}
-                >
+                <Text style={[styles.paymentLabel, selected && styles.paymentLabelSelected]}>
                   {option.label}
                 </Text>
               </Pressable>
@@ -210,10 +230,8 @@ export default function PanierScreen() {
       <View style={[styles.cta, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <Pressable
           onPress={() => {}}
-          style={({ pressed }) => [
-            styles.ctaButton,
-            pressed && styles.ctaPressed,
-          ]}
+          style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaPressed]}
+          accessibilityLabel={`Valider ma commande, ${formatPrice(total)}`}
         >
           <Text style={styles.ctaText}>
             Valider ma commande — {formatPrice(total)}
@@ -256,23 +274,6 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 32,
-  },
-
-  // Empty
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    paddingBottom: 100,
-  },
-  emptyTitle: {
-    ...typography.h3,
-    marginTop: spacing.sm,
-  },
-  emptySubtitle: {
-    ...typography.bodySmall,
-    textAlign: 'center',
   },
 
   // Scroll
@@ -327,6 +328,10 @@ const styles = StyleSheet.create({
     color: colors.green,
     marginTop: 2,
   },
+  qtyArea: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
   qtySelector: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -346,6 +351,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     minWidth: 16,
     textAlign: 'center',
+  },
+  deleteButton: {
+    width: 28,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Click & Collect
@@ -528,7 +539,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaPressed: {
-    transform: [{ scale: 0.97 }],
+    opacity: 0.9,
   },
   ctaText: {
     fontFamily: fonts.bold,

@@ -1,10 +1,13 @@
-// Root layout — chargement des fonts Bw Modelica et providers
-import { useState, useEffect, useCallback } from 'react';
-import { View } from 'react-native';
+// Root layout — chargement des fonts, onboarding check, providers
+import { useState, useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from '@/components/layout/StatusBar';
+import { ToastProvider } from '@/contexts/ToastContext';
+
+const ONBOARDING_KEY = '@teaven/onboarding_completed';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -13,27 +16,49 @@ export default function RootLayout() {
     'BwModelica-Bold': require('@/assets/fonts/BwModelica-Bold.otf'),
   });
 
-  // Tant que les fonts ne sont pas chargées, ne rien rendre
-  if (!fontsLoaded && !fontError) {
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+
+  // Vérifier si l'onboarding a été fait
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY).then((val) => {
+      setOnboardingDone(val === 'true');
+    });
+  }, []);
+
+  // Tant que les fonts ou l'état onboarding ne sont pas prêts
+  if ((!fontsLoaded && !fontError) || onboardingDone === null) {
     return null;
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="onboarding" />
-        <Stack.Screen
-          name="produit/[id]"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-        <Stack.Screen name="auth/login" />
-        <Stack.Screen name="auth/otp" />
-      </Stack>
+      <ToastProvider>
+        <StatusBar />
+        <Stack screenOptions={{ headerShown: false }}>
+          {!onboardingDone ? (
+            <Stack.Screen name="onboarding" />
+          ) : (
+            <Stack.Screen name="(tabs)" />
+          )}
+          <Stack.Screen name="onboarding" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen
+            name="produit/[id]"
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <Stack.Screen
+            name="article/[id]"
+            options={{
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen name="auth/login" />
+          <Stack.Screen name="auth/otp" />
+        </Stack>
+      </ToastProvider>
     </GestureHandlerRootView>
   );
 }

@@ -1,6 +1,15 @@
-// Écran Profil — identité, carte fidélité, wallet, récompenses
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+// Écran Profil — animations compteur, wallet modal, historique commandes
+import { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  Animated,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Settings,
@@ -8,8 +17,16 @@ import {
   Coffee,
   Gift,
   Percent,
+  ClipboardList,
+  HelpCircle,
+  LogOut,
+  RotateCcw,
 } from 'lucide-react-native';
+import { RechargeModal } from '@/components/ui/RechargeModal';
+import { useToast } from '@/contexts/ToastContext';
+import { useCartStore } from '@/stores/cartStore';
 import { mockUser } from '@/constants/mockData';
+import { mockOrders } from '@/constants/mockOrders';
 import { colors, fonts, spacing, shadows } from '@/constants/theme';
 
 // Mock récompenses
@@ -21,127 +38,238 @@ const rewards = [
 
 export default function ProfilScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { showToast } = useToast();
+  const addItem = useCartStore((s) => s.addItem);
+
+  const [walletBalance, setWalletBalance] = useState(mockUser.walletBalance);
+  const [rechargeVisible, setRechargeVisible] = useState(false);
+
+  // Animation compteur points
+  const pointsAnim = useRef(new Animated.Value(0)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const [displayedPoints, setDisplayedPoints] = useState(0);
+
+  useEffect(() => {
+    // Animation counting 0 → 1250
+    Animated.timing(pointsAnim, {
+      toValue: mockUser.loyaltyPoints,
+      duration: 1500,
+      useNativeDriver: false,
+    }).start();
+
+    // Mettre à jour le texte affiché
+    const listenerId = pointsAnim.addListener(({ value }) => {
+      setDisplayedPoints(Math.round(value));
+    });
+
+    // Barre de progression 0% → 75%
+    Animated.timing(progressAnim, {
+      toValue: 75,
+      duration: 1500,
+      useNativeDriver: false,
+    }).start();
+
+    return () => pointsAnim.removeListener(listenerId);
+  }, [pointsAnim, progressAnim]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
 
   const formatWallet = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
 
+  const formatPrice = (cents: number) =>
+    (cents / 100).toFixed(2).replace('.', ',') + ' €';
+
+  // Recommander une commande
+  const handleReorder = (orderId: string) => {
+    const order = mockOrders.find((o) => o.id === orderId);
+    if (!order) return;
+    order.items.forEach(({ product, quantity }) => {
+      for (let i = 0; i < quantity; i++) addItem(product);
+    });
+    showToast('Articles ajoutés au panier');
+    router.push('/panier');
+  };
+
   return (
-    <ScrollView
-      style={[styles.container, { paddingTop: insets.top }]}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* ──── Header ──── */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mon Profil</Text>
-        <Pressable>
-          <Settings size={20} color={colors.textSecondary} strokeWidth={1.8} />
-        </Pressable>
-      </View>
-
-      {/* ──── Identité ──── */}
-      <View style={styles.identity}>
-        <LinearGradient
-          colors={['#2C4A32', '#4A6B50']}
-          style={styles.avatar}
-        >
-          <Text style={styles.avatarInitial}>
-            {mockUser.name.charAt(0).toUpperCase()}
-          </Text>
-        </LinearGradient>
-        <View>
-          <Text style={styles.userName}>{mockUser.name}</Text>
-          <View style={styles.premiumRow}>
-            <CheckCircle size={12} color={colors.green} strokeWidth={2} />
-            <Text style={styles.premiumLabel}>Membre Premium</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* ──── Carte fidélité TEAVEN CLUB ──── */}
-      <View style={styles.loyaltyWrapper}>
-        <LinearGradient
-          colors={['#2C4A32', '#4A6B50']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.loyaltyCard}
-        >
-          {/* Cercle décoratif */}
-          <View style={styles.decorCircle} />
-
-          <Text style={styles.loyaltyClub}>TEAVEN CLUB</Text>
-          <Text style={styles.loyaltyName}>{mockUser.name}</Text>
-
-          <View style={styles.pointsRow}>
-            <Text style={styles.pointsValue}>
-              {mockUser.loyaltyPoints.toLocaleString('fr-FR')}
-            </Text>
-            <Text style={styles.pointsUnit}>pts</Text>
-          </View>
-
-          <Text style={styles.loyaltyLevel}>
-            NIVEAU {mockUser.loyaltyLevel.toUpperCase()}
-          </Text>
-
-          {/* Barre de progression */}
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: '75%' }]} />
-          </View>
-
-          <View style={styles.progressInfo}>
-            <Text style={styles.progressText}>
-              Prochain : Boisson offerte
-            </Text>
-            <Text style={styles.progressPercent}>75%</Text>
-          </View>
-        </LinearGradient>
-      </View>
-
-      {/* ──── Wallet ──── */}
-      <View style={styles.walletCard}>
-        <View style={styles.walletHeader}>
-          <View>
-            <Text style={styles.walletLabel}>PORTE-MONNAIE</Text>
-            <Text style={styles.walletBalance}>
-              {formatWallet(mockUser.walletBalance)}
-            </Text>
-          </View>
-          <Pressable style={styles.rechargeButton}>
-            <Text style={styles.rechargeText}>Recharger</Text>
+    <>
+      <ScrollView
+        style={[styles.container, { paddingTop: insets.top }]}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ──── Header ──── */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Mon Profil</Text>
+          <Pressable accessibilityLabel="Paramètres">
+            <Settings size={20} color={colors.textSecondary} strokeWidth={1.8} />
           </Pressable>
         </View>
-      </View>
 
-      {/* ──── Récompenses ──── */}
-      <View style={styles.rewardsHeader}>
-        <Text style={styles.rewardsTitle}>Récompenses</Text>
-        <Pressable>
-          <Text style={styles.rewardsSeeAll}>Tout voir</Text>
-        </Pressable>
-      </View>
+        {/* ──── Identité ──── */}
+        <View style={styles.identity}>
+          <LinearGradient colors={['#2C4A32', '#4A6B50']} style={styles.avatar}>
+            <Text style={styles.avatarInitial}>
+              {mockUser.name.charAt(0).toUpperCase()}
+            </Text>
+          </LinearGradient>
+          <View>
+            <Text style={styles.userName}>{mockUser.name}</Text>
+            <View style={styles.premiumRow}>
+              <CheckCircle size={12} color={colors.green} strokeWidth={2} />
+              <Text style={styles.premiumLabel}>Membre Premium</Text>
+            </View>
+          </View>
+        </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.rewardsScroll}
-      >
-        {rewards.map((reward) => {
-          const Icon = reward.icon;
-          return (
-            <View key={reward.id} style={styles.rewardCard}>
-              <View style={styles.rewardIconWrap}>
-                <Icon size={18} color={colors.green} strokeWidth={1.8} />
+        {/* ──── Carte fidélité TEAVEN CLUB ──── */}
+        <View style={styles.loyaltyWrapper}>
+          <LinearGradient
+            colors={['#2C4A32', '#4A6B50']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.loyaltyCard}
+          >
+            <View style={styles.decorCircle} />
+            <Text style={styles.loyaltyClub}>TEAVEN CLUB</Text>
+            <Text style={styles.loyaltyName}>{mockUser.name}</Text>
+
+            <View style={styles.pointsRow}>
+              <Text style={styles.pointsValue}>
+                {displayedPoints.toLocaleString('fr-FR')}
+              </Text>
+              <Text style={styles.pointsUnit}>pts</Text>
+            </View>
+
+            <Text style={styles.loyaltyLevel}>
+              NIVEAU {mockUser.loyaltyLevel.toUpperCase()}
+            </Text>
+
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[styles.progressFill, { width: progressWidth as any }]}
+              />
+            </View>
+
+            <View style={styles.progressInfo}>
+              <Text style={styles.progressText}>Prochain : Boisson offerte</Text>
+              <Text style={styles.progressPercent}>75%</Text>
+            </View>
+          </LinearGradient>
+        </View>
+
+        {/* ──── Wallet ──── */}
+        <View style={styles.walletCard}>
+          <View style={styles.walletHeader}>
+            <View>
+              <Text style={styles.walletLabel}>PORTE-MONNAIE</Text>
+              <Text style={styles.walletBalance}>{formatWallet(walletBalance)}</Text>
+            </View>
+            <Pressable
+              style={styles.rechargeButton}
+              onPress={() => setRechargeVisible(true)}
+              accessibilityLabel="Recharger le porte-monnaie"
+            >
+              <Text style={styles.rechargeText}>Recharger</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* ──── Récompenses ──── */}
+        <View style={styles.rewardsHeader}>
+          <Text style={styles.rewardsTitle}>Récompenses</Text>
+          <Pressable>
+            <Text style={styles.rewardsSeeAll}>Tout voir</Text>
+          </Pressable>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.rewardsScroll}
+        >
+          {rewards.map((reward) => {
+            const Icon = reward.icon;
+            return (
+              <View key={reward.id} style={styles.rewardCard}>
+                <View style={styles.rewardIconWrap}>
+                  <Icon size={18} color={colors.green} strokeWidth={1.8} />
+                </View>
+                <Text style={styles.rewardName}>{reward.name}</Text>
+                <Text style={styles.rewardSub}>{reward.sub}</Text>
+                <Pressable accessibilityLabel={`Utiliser ${reward.name}`}>
+                  <Text style={styles.rewardCta}>{reward.cta}</Text>
+                </Pressable>
               </View>
-              <Text style={styles.rewardName}>{reward.name}</Text>
-              <Text style={styles.rewardSub}>{reward.sub}</Text>
-              <Pressable>
-                <Text style={styles.rewardCta}>{reward.cta}</Text>
+            );
+          })}
+        </ScrollView>
+
+        {/* ──── Historique commandes ──── */}
+        <View style={styles.ordersHeader}>
+          <Text style={styles.ordersTitle}>Mes commandes</Text>
+          <Pressable>
+            <Text style={styles.ordersSeeAll}>Tout voir</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.ordersList}>
+          {mockOrders.slice(0, 3).map((order) => (
+            <View key={order.id} style={styles.orderCard}>
+              <View style={styles.orderInfo}>
+                <View style={styles.orderIconWrap}>
+                  <ClipboardList size={16} color={colors.green} strokeWidth={1.8} />
+                </View>
+                <View style={styles.orderDetails}>
+                  <Text style={styles.orderName} numberOfLines={1}>
+                    {order.items.map((i) => i.product.name).join(', ')}
+                  </Text>
+                  <Text style={styles.orderMeta}>
+                    {order.date} · {formatPrice(order.total)}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => handleReorder(order.id)}
+                style={styles.reorderButton}
+                accessibilityLabel="Recommander cette commande"
+              >
+                <RotateCcw size={16} color={colors.green} strokeWidth={1.8} />
               </Pressable>
             </View>
-          );
-        })}
+          ))}
+        </View>
+
+        {/* ──── Menu ──── */}
+        <View style={styles.menu}>
+          <Pressable style={styles.menuItem}>
+            <HelpCircle size={18} color={colors.green} strokeWidth={1.6} />
+            <Text style={styles.menuItemText}>Aide & FAQ</Text>
+          </Pressable>
+          <View style={styles.menuSep} />
+          <Pressable style={styles.menuItem}>
+            <LogOut size={18} color={colors.error} strokeWidth={1.6} />
+            <Text style={[styles.menuItemText, { color: colors.error }]}>
+              Déconnexion
+            </Text>
+          </Pressable>
+        </View>
       </ScrollView>
-    </ScrollView>
+
+      {/* Modal rechargement */}
+      <RechargeModal
+        visible={rechargeVisible}
+        onClose={() => setRechargeVisible(false)}
+        onRecharge={(amount) => {
+          setWalletBalance((prev) => prev + amount);
+          showToast('Porte-monnaie rechargé !');
+        }}
+      />
+    </>
   );
 }
 
@@ -356,6 +484,7 @@ const styles = StyleSheet.create({
   rewardsScroll: {
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
+    marginBottom: spacing.xxl,
   },
   rewardCard: {
     width: 150,
@@ -390,5 +519,100 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 12,
     color: colors.green,
+  },
+
+  // Historique commandes
+  ordersHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  ordersTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: colors.text,
+  },
+  ordersSeeAll: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.green,
+  },
+  ordersList: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.sm,
+    marginBottom: spacing.xxl,
+  },
+  orderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+  },
+  orderInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  orderIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orderDetails: {
+    flex: 1,
+  },
+  orderName: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  orderMeta: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  reorderButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+
+  // Menu
+  menu: {
+    marginHorizontal: spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: 16,
+  },
+  menuItemText: {
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    color: colors.text,
+  },
+  menuSep: {
+    height: 0.5,
+    backgroundColor: colors.border,
+    marginLeft: 50,
   },
 });

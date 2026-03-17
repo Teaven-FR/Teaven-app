@@ -1,79 +1,43 @@
-// Écran Blog Atmosphère — article à la une + articles récents
+// Écran Blog Atmosphère — article à la une + articles récents + navigation
 import { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
 import { Pill } from '@/components/ui/Pill';
+import { mockArticles, type BlogArticleFull } from '@/constants/mockArticles';
 import { colors, fonts, spacing } from '@/constants/theme';
-import type { BlogArticle } from '@/lib/types';
 
-// ── Données mock ──
-const mockArticles: (BlogArticle & { author: string })[] = [
-  {
-    id: '1',
-    title: 'Les bienfaits du matcha sur la concentration',
-    excerpt:
-      'Découvrez comment le matcha peut améliorer votre focus et votre énergie au quotidien grâce à sa teneur unique en L-théanine.',
-    image:
-      'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?w=600&h=400&fit=crop',
-    category: 'Bien-être',
-    readTime: 5,
-    publishedAt: '15 mars 2026',
-    author: 'Éléonore V.',
-  },
-  {
-    id: '2',
-    title: 'Meal prep : organiser ses repas healthy pour la semaine',
-    excerpt:
-      'Nos conseils pour préparer vos repas de la semaine en toute sérénité et gagner du temps chaque jour.',
-    image:
-      'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&h=400&fit=crop',
-    category: 'Nutrition',
-    readTime: 7,
-    publishedAt: '10 mars 2026',
-    author: 'Sophie M.',
-  },
-  {
-    id: '3',
-    title: '5 rituels du matin pour démarrer en douceur',
-    excerpt:
-      'Des habitudes simples pour des matins sereins qui transforment votre journée entière.',
-    image:
-      'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&h=400&fit=crop',
-    category: 'Lifestyle',
-    readTime: 4,
-    publishedAt: '5 mars 2026',
-    author: 'Camille D.',
-  },
-  {
-    id: '4',
-    title: 'Le guide complet des super-aliments',
-    excerpt:
-      'Quels sont les vrais super-aliments et comment les intégrer facilement dans votre alimentation quotidienne.',
-    image:
-      'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600&h=400&fit=crop',
-    category: 'Nutrition',
-    readTime: 8,
-    publishedAt: '1 mars 2026',
-    author: 'Hugo L.',
-  },
+const CATEGORY_LABELS: Record<string, string> = {
+  'bien-etre': 'Bien-être',
+  nutrition: 'Nutrition',
+  lifestyle: 'Lifestyle',
+};
+
+const blogCategories = [
+  { id: 'all', label: 'Tout' },
+  { id: 'nutrition', label: 'Nutrition' },
+  { id: 'bien-etre', label: 'Bien-être' },
+  { id: 'lifestyle', label: 'Lifestyle' },
 ];
-
-const blogCategories = ['Tout', 'Nutrition', 'Bien-être', 'Lifestyle'];
 
 export default function BlogScreen() {
   const insets = useSafeAreaInsets();
-  const [selectedCategory, setSelectedCategory] = useState('Tout');
+  const router = useRouter();
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
-  const featured = mockArticles[0];
+  // Article à la une (toujours featured)
+  const featured = mockArticles.find((a) => a.featured) || mockArticles[0];
+
+  // Articles récents filtrés (excluant le featured)
   const recentArticles =
-    selectedCategory === 'Tout'
-      ? mockArticles.slice(1)
-      : mockArticles
-          .slice(1)
-          .filter((a) => a.category === selectedCategory);
+    selectedCategory === 'all'
+      ? mockArticles.filter((a) => a.id !== featured.id)
+      : mockArticles.filter(
+          (a) => a.category === selectedCategory && a.id !== featured.id,
+        );
 
   return (
     <ScrollView
@@ -87,7 +51,7 @@ export default function BlogScreen() {
           <Text style={styles.title}>Atmosphère</Text>
           <Text style={styles.subtitle}>Prenez soin de vous</Text>
         </View>
-        <Pressable>
+        <Pressable accessibilityLabel="Rechercher un article">
           <Search size={20} color={colors.textSecondary} strokeWidth={1.8} />
         </Pressable>
       </View>
@@ -100,29 +64,34 @@ export default function BlogScreen() {
       >
         {blogCategories.map((cat) => (
           <Pill
-            key={cat}
-            label={cat}
-            active={selectedCategory === cat}
-            onPress={() => setSelectedCategory(cat)}
+            key={cat.id}
+            label={cat.label}
+            active={selectedCategory === cat.id}
+            onPress={() => setSelectedCategory(cat.id)}
           />
         ))}
       </ScrollView>
 
       {/* ──── Article à la une ──── */}
       <View style={styles.featuredWrapper}>
-        <Pressable style={styles.featuredCard}>
+        <Pressable
+          style={styles.featuredCard}
+          onPress={() => router.push(`/article/${featured.id}`)}
+          accessibilityLabel={`Article à la une : ${featured.title}`}
+        >
           <Image
-            source={{ uri: featured.image }}
+            source={{ uri: featured.imageUrl }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             transition={400}
+            placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
           />
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.55)']}
             style={styles.featuredOverlay}
           >
             <Text style={styles.featuredLabel}>
-              À LA UNE · {featured.category.toUpperCase()}
+              À LA UNE · {(CATEGORY_LABELS[featured.category] || featured.category).toUpperCase()}
             </Text>
             <Text style={styles.featuredTitle}>{featured.title}</Text>
             <Text style={styles.featuredMeta}>
@@ -138,16 +107,22 @@ export default function BlogScreen() {
       {/* ──── Cards articles ──── */}
       <View style={styles.articles}>
         {recentArticles.map((article) => (
-          <View key={article.id} style={styles.articleCard}>
+          <Pressable
+            key={article.id}
+            style={styles.articleCard}
+            onPress={() => router.push(`/article/${article.id}`)}
+            accessibilityLabel={article.title}
+          >
             <Image
-              source={{ uri: article.image }}
+              source={{ uri: article.imageUrl }}
               style={styles.articleImage}
               contentFit="cover"
               transition={300}
+              placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
             />
             <View style={styles.articleCatRow}>
               <Text style={styles.articleCategory}>
-                {article.category.toUpperCase()}
+                {(CATEGORY_LABELS[article.category] || article.category).toUpperCase()}
               </Text>
               <Text style={styles.articleDate}>{article.publishedAt}</Text>
             </View>
@@ -157,10 +132,8 @@ export default function BlogScreen() {
             <Text style={styles.articleExcerpt} numberOfLines={2}>
               {article.excerpt}
             </Text>
-            <Pressable>
-              <Text style={styles.readMore}>Lire la suite</Text>
-            </Pressable>
-          </View>
+            <Text style={styles.readMore}>Lire la suite</Text>
+          </Pressable>
         ))}
       </View>
     </ScrollView>

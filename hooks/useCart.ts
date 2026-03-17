@@ -15,9 +15,13 @@ export function useCart() {
     removeItem: store.removeItem,
     updateQuantity: store.updateQuantity,
     clearCart: store.clearCart,
-    totalItems: store.totalItems(),
-    totalPrice: store.totalPrice(),
-    formattedTotal: formatPrice(store.totalPrice()),
+    totalItems: store.getItemCount(),
+    totalPrice: store.getSubtotal(),
+    subtotal: store.getSubtotal(),
+    tax: store.getTax(),
+    total: store.getTotal(),
+    formattedTotal: formatPrice(store.getSubtotal()),
     formatPrice,
+    getLoyaltyDiscount: store.getLoyaltyDiscount,
   };
 }

@@ -1,5 +1,5 @@
-// Fiche produit — hero gradient + détails scrollables + CTA sticky
-import { useState, useRef } from 'react';
+// Fiche produit — hero parallax + modificateurs + suggestions
+import { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Pressable,
   Animated,
-  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,29 +22,84 @@ import {
   Plus,
   Star,
 } from 'lucide-react-native';
+import { ModifierSelector, type ModifierGroup } from '@/components/features/ModifierSelector';
+import { ProductMiniCard } from '@/components/features/ProductMiniCard';
 import { useCartStore } from '@/stores/cartStore';
+import { useToast } from '@/contexts/ToastContext';
 import { mockProducts } from '@/constants/mockData';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 
 const HERO_HEIGHT = 340;
+
+// Modificateurs par produit
+const productModifiers: Record<string, ModifierGroup[]> = {
+  '2': [ // Matcha Zen Latte
+    {
+      id: 'size',
+      label: 'Personnaliser — Taille',
+      type: 'single',
+      options: [
+        { id: 'small', label: 'Petit', price: 0 },
+        { id: 'medium', label: 'Moyen', price: 0 },
+        { id: 'large', label: 'Grand', price: 100 },
+      ],
+    },
+    {
+      id: 'extras',
+      label: 'Suppléments',
+      type: 'multiple',
+      options: [
+        { id: 'oat', label: "Lait d'avoine", price: 50 },
+        { id: 'maple', label: "Sirop d'érable", price: 30 },
+      ],
+    },
+  ],
+  '1': [ // Zen Buddha Bowl
+    {
+      id: 'size',
+      label: 'Personnaliser — Taille',
+      type: 'single',
+      options: [
+        { id: 'regular', label: 'Normal', price: 0 },
+        { id: 'xl', label: 'XL', price: 200 },
+      ],
+    },
+    {
+      id: 'extras',
+      label: 'Suppléments',
+      type: 'multiple',
+      options: [
+        { id: 'avocado', label: 'Avocat extra', price: 150 },
+        { id: 'tofu', label: 'Tofu grillé', price: 100 },
+      ],
+    },
+  ],
+};
 
 export default function ProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const addItem = useCartStore((s) => s.addItem);
+  const { showToast } = useToast();
 
   const [quantity, setQuantity] = useState(1);
   const [showFullDescription, setShowFullDescription] = useState(false);
+  const [selectedModifiers, setSelectedModifiers] = useState<Record<string, string[]>>({});
 
-  // Micro-interaction scale pour les CTA
+  // Parallax scroll
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const heroTranslate = scrollY.interpolate({
+    inputRange: [-100, 0, HERO_HEIGHT],
+    outputRange: [-50, 0, HERO_HEIGHT * 0.4],
+    extrapolate: 'clamp',
+  });
+
+  // Micro-interaction boutons CTA
   const addScale = useRef(new Animated.Value(1)).current;
   const orderScale = useRef(new Animated.Value(1)).current;
 
   const product = mockProducts.find((p) => p.id === id);
-
-  const formatPrice = (cents: number) =>
-    (cents / 100).toFixed(2).replace('.', ',') + ' €';
 
   if (!product) {
     return (
@@ -55,22 +109,52 @@ export default function ProductScreen() {
     );
   }
 
+  // Calcul du prix avec modificateurs
+  const modifiers = productModifiers[product.id] || [];
+  const extraPrice = Object.entries(selectedModifiers).reduce((sum, [groupId, ids]) => {
+    const group = modifiers.find((g) => g.id === groupId);
+    if (!group) return sum;
+    return sum + ids.reduce((s, optId) => {
+      const opt = group.options.find((o) => o.id === optId);
+      return s + (opt?.price || 0);
+    }, 0);
+  }, 0);
+
+  const unitPrice = product.price + extraPrice;
+
+  // Suggestions : même catégorie, produit différent
+  const suggestions = mockProducts
+    .filter((p) => p.category === product.category && p.id !== product.id)
+    .slice(0, 3);
+
+  const formatPrice = (cents: number) =>
+    (cents / 100).toFixed(2).replace('.', ',') + ' €';
+
+  const handleModifierToggle = (groupId: string, modifierId: string) => {
+    const group = modifiers.find((g) => g.id === groupId);
+    if (!group) return;
+
+    setSelectedModifiers((prev) => {
+      const current = prev[groupId] || [];
+      if (group.type === 'single') {
+        return { ...prev, [groupId]: [modifierId] };
+      }
+      // multiple toggle
+      if (current.includes(modifierId)) {
+        return { ...prev, [groupId]: current.filter((id) => id !== modifierId) };
+      }
+      return { ...prev, [groupId]: [...current, modifierId] };
+    });
+  };
+
   const handleAddToCart = () => {
     for (let i = 0; i < quantity; i++) addItem(product);
+    showToast('Ajouté au panier');
   };
 
   const handleOrder = () => {
     for (let i = 0; i < quantity; i++) addItem(product);
     router.push('/(tabs)/panier');
-  };
-
-  const incrementQty = () => {
-    setQuantity((q) => q + 1);
-  };
-
-  const decrementQty = () => {
-    if (quantity <= 1) return;
-    setQuantity((q) => q - 1);
   };
 
   const animatePressIn = (scale: Animated.Value) => {
@@ -93,28 +177,41 @@ export default function ProductScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
+        scrollEventThrottle={16}
       >
-        {/* ──── Hero zone ──── */}
-        <LinearGradient
-          colors={['#2C4A32', '#3A5A40', '#4A6B50']}
-          style={styles.hero}
+        {/* ──── Hero zone avec parallax ──── */}
+        <Animated.View
+          style={[
+            styles.hero,
+            { transform: [{ translateY: heroTranslate }] },
+          ]}
         >
+          <LinearGradient
+            colors={['#2C4A32', '#3A5A40', '#4A6B50']}
+            style={StyleSheet.absoluteFill}
+          />
           <Image
             source={{ uri: product.image }}
             style={styles.heroImage}
             contentFit="contain"
             transition={400}
+            placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
           />
-        </LinearGradient>
+        </Animated.View>
 
         {/* Bouton retour */}
         <Pressable
           onPress={() => router.back()}
           style={[styles.navButton, { top: insets.top + 12, left: 20 }]}
+          accessibilityLabel="Retour"
         >
           <ArrowLeft size={16} color="#FFFFFF" strokeWidth={2} />
         </Pressable>
@@ -122,6 +219,7 @@ export default function ProductScreen() {
         {/* Bouton partage */}
         <Pressable
           style={[styles.navButton, { top: insets.top + 12, right: 20 }]}
+          accessibilityLabel="Partager"
         >
           <Share2 size={16} color="#FFFFFF" strokeWidth={2} />
         </Pressable>
@@ -168,6 +266,20 @@ export default function ProductScreen() {
             </Pressable>
           )}
 
+          {/* Modificateurs */}
+          {modifiers.length > 0 && (
+            <View style={styles.modifiersSection}>
+              {modifiers.map((group) => (
+                <ModifierSelector
+                  key={group.id}
+                  group={group}
+                  selected={selectedModifiers[group.id] || []}
+                  onToggle={(modId) => handleModifierToggle(group.id, modId)}
+                />
+              ))}
+            </View>
+          )}
+
           {/* Tags */}
           <View style={styles.tags}>
             {product.tags.map((tag) => (
@@ -179,11 +291,12 @@ export default function ProductScreen() {
 
           {/* Prix + sélecteur quantité */}
           <View style={styles.priceRow}>
-            <Text style={styles.price}>{formatPrice(product.price)}</Text>
+            <Text style={styles.price}>{formatPrice(unitPrice)}</Text>
             <View style={styles.quantitySelector}>
               <Pressable
-                onPress={decrementQty}
+                onPress={() => quantity > 1 && setQuantity((q) => q - 1)}
                 style={[styles.qtyButton, quantity <= 1 && styles.qtyButtonDisabled]}
+                accessibilityLabel="Réduire la quantité"
               >
                 <Minus
                   size={14}
@@ -192,13 +305,37 @@ export default function ProductScreen() {
                 />
               </Pressable>
               <Text style={styles.qtyValue}>{quantity}</Text>
-              <Pressable onPress={incrementQty} style={styles.qtyButton}>
+              <Pressable
+                onPress={() => setQuantity((q) => q + 1)}
+                style={styles.qtyButton}
+                accessibilityLabel="Augmenter la quantité"
+              >
                 <Plus size={14} color={colors.textSecondary} strokeWidth={2} />
               </Pressable>
             </View>
           </View>
+
+          {/* Suggestions */}
+          {suggestions.length > 0 && (
+            <View style={styles.suggestionsSection}>
+              <Text style={styles.suggestionsTitle}>Vous aimerez aussi</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.suggestionsScroll}
+              >
+                {suggestions.map((p) => (
+                  <ProductMiniCard
+                    key={p.id}
+                    product={p}
+                    onPress={() => router.push(`/produit/${p.id}`)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* ──── CTA sticky ──── */}
       <View style={[styles.cta, { paddingBottom: Math.max(insets.bottom, 16) }]}>
@@ -208,6 +345,7 @@ export default function ProductScreen() {
             onPressIn={() => animatePressIn(addScale)}
             onPressOut={() => animatePressOut(addScale)}
             style={[styles.ctaButton, styles.ctaSecondary]}
+            accessibilityLabel="Ajouter au panier"
           >
             <Text style={styles.ctaSecondaryText}>Ajouter au panier</Text>
           </Pressable>
@@ -218,6 +356,7 @@ export default function ProductScreen() {
             onPressIn={() => animatePressIn(orderScale)}
             onPressOut={() => animatePressOut(orderScale)}
             style={[styles.ctaButton, styles.ctaPrimary]}
+            accessibilityLabel="Commander maintenant"
           >
             <Text style={styles.ctaPrimaryText}>Commander</Text>
           </Pressable>
@@ -251,10 +390,6 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '70%',
     height: 260,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
   },
   navButton: {
     position: 'absolute',
@@ -338,6 +473,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
 
+  // Modificateurs
+  modifiersSection: {
+    marginBottom: spacing.sm,
+  },
+
   // Tags
   tags: {
     flexDirection: 'row',
@@ -393,6 +533,20 @@ const styles = StyleSheet.create({
     color: colors.text,
     minWidth: 20,
     textAlign: 'center',
+  },
+
+  // Suggestions
+  suggestionsSection: {
+    marginBottom: spacing.xl,
+  },
+  suggestionsTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  suggestionsScroll: {
+    gap: spacing.md,
   },
 
   // CTA sticky
