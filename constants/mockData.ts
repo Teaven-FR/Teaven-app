@@ -13,6 +13,7 @@ export const mockProducts: Product[] = [
     kcal: 520,
     prepTime: 15,
     tags: ['Vegan', 'Bio'],
+    location: 'Franconville',
     available: true,
   },
   {
@@ -26,6 +27,7 @@ export const mockProducts: Product[] = [
     kcal: 580,
     prepTime: 15,
     tags: ['Vegan', 'Bio'],
+    location: 'Franconville',
     available: true,
   },
   {
@@ -39,6 +41,7 @@ export const mockProducts: Product[] = [
     kcal: 380,
     prepTime: 10,
     tags: ['Bio'],
+    location: 'Franconville',
     available: true,
   },
   {
@@ -52,6 +55,7 @@ export const mockProducts: Product[] = [
     kcal: 0,
     prepTime: 5,
     tags: ['Bio'],
+    location: 'Franconville',
     available: true,
   },
   {
@@ -65,6 +69,7 @@ export const mockProducts: Product[] = [
     kcal: 180,
     prepTime: 5,
     tags: ['Vegan', 'Bio'],
+    location: 'Franconville',
     available: true,
   },
   {
@@ -78,6 +83,7 @@ export const mockProducts: Product[] = [
     kcal: 0,
     prepTime: 5,
     tags: ['Bio'],
+    location: 'Franconville',
     available: true,
   },
 ];

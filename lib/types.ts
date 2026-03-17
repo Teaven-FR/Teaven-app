@@ -11,6 +11,7 @@ export interface Product {
   kcal: number;
   prepTime: number; // en minutes
   tags: string[];
+  location: string;
   available: boolean;
 }
 
