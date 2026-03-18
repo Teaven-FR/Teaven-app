@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Teaven — Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #F2F1EA;
+  --surface: #FFFFFF;
+  --green: #6B8F71;
+  --green-dark: #4A6B50;
+  --green-light: #E8F0EA;
+  --text: #2A2A2A;
+  --text-secondary: #8A8A82;
+  --text-muted: #B0AFA8;
+  --border: #E8E7E2;
+  --error: #D4544A;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: #1a1a1a;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding: 20px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.phone {
+  width: 375px;
+  height: 812px;
+  background: var(--bg);
+  border-radius: 40px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 25px 80px rgba(0,0,0,0.4);
+  flex-shrink: 0;
+}
+.phone-inner {
+  height: 100%;
+  overflow-y: auto;
+  padding-bottom: 90px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.phone-inner::-webkit-scrollbar { display: none; }
+
+/* Status bar */
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.status-bar-right { display: flex; gap: 4px; align-items: center; font-size: 11px; }
+
+/* Screen label */
+.screen-label {
+  position: absolute;
+  top: -30px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Tab bar */
+.tab-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: var(--surface);
+  border-top: 0.5px solid var(--border);
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-start;
+  padding-top: 10px;
+  border-radius: 0 0 40px 40px;
+}
+.tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 9.5px;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+.tab-item.active { color: var(--green); }
+.tab-item .tab-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tab-item svg { width: 20px; height: 20px; stroke-width: 1.5; }
+
+/* ═══ COMMON ═══ */
+.section-px { padding-left: 20px; padding-right: 20px; }
+.pill-row {
+  display: flex;
+  gap: 8px;
+  padding: 8px 20px;
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.pill-row::-webkit-scrollbar { display: none; }
+.pill {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 50px;
+  font-size: 12.5px;
+  font-weight: 400;
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  letter-spacing: 0.3px;
+  cursor: pointer;
+}
+.pill.active {
+  background: var(--green);
+  color: #fff;
+  border-color: var(--green);
+  font-weight: 600;
+}
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-top: 16px;
+  margin-bottom: 12px;
+}
+
+/* ═══ HOME SCREEN ═══ */
+.home-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px 12px;
+}
+.home-header-left { display: flex; align-items: center; gap: 12px; }
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 19px;
+  background: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+}
+.greeting { font-weight: 700; font-size: 26px; letter-spacing: -0.5px; color: var(--text); }
+.greeting-sub { font-size: 13px; color: var(--text-secondary); margin-top: 1px; }
+.notif-btn {
+  width: 38px; height: 38px; border-radius: 19px;
+  background: var(--surface); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Search bar */
+.search-bar {
+  margin: 0 20px 8px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 0 12px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Promo banner */
+.promo-card {
+  margin: 0 20px 8px;
+  height: 100px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #E8F0EA, #D4E5D7);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  overflow: hidden;
+}
+.promo-content { flex: 1; }
+.promo-title { font-weight: 700; font-size: 16px; color: var(--text); }
+.promo-sub { font-size: 12px; color: #4A6B50; line-height: 18px; margin-top: 4px; }
+.promo-cta { font-weight: 700; font-size: 13px; color: var(--green); margin-top: 4px; }
+.promo-icon {
+  width: 60px; height: 60px; border-radius: 30px;
+  background: rgba(107,143,113,0.08);
+  display: flex; align-items: center; justify-content: center;
+  margin-left: 12px;
+}
+
+/* Product carousel */
+.carousel {
+  display: flex; gap: 12px;
+  padding: 0 20px; overflow-x: auto;
+  -ms-overflow-style: none; scrollbar-width: none;
+}
+.carousel::-webkit-scrollbar { display: none; }
+.product-card {
+  flex-shrink: 0;
+  width: 260px;
+  background: var(--surface);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.product-card img {
+  width: 100%; height: 160px; object-fit: cover;
+}
+.product-card-body { padding: 12px 14px 14px; }
+.product-card-name { font-weight: 700; font-size: 14px; color: var(--text); }
+.product-card-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.product-card-footer {
+  display: flex; justify-content: space-between; align-items: center; margin-top: 10px;
+}
+.product-card-price {
+  font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 14px; color: var(--green);
+}
+.product-card-tags { display: flex; gap: 4px; }
+.product-tag {
+  font-size: 10px; padding: 2px 8px; border-radius: 50px;
+  background: var(--green-light); color: var(--green-dark); font-weight: 500;
+}
+.product-card-meta {
+  display: flex; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--text-muted);
+}
+
+/* Dots */
+.dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
+.dot { width: 6px; height: 6px; border-radius: 3px; background: var(--border); }
+.dot.active { width: 18px; background: var(--green); border-radius: 9px; }
+
+/* Favorites */
+.fav-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 20px; margin-top: 24px; margin-bottom: 12px;
+}
+.fav-title { font-weight: 700; font-size: 17px; color: var(--text); }
+.see-all { font-size: 12px; color: var(--green); }
+.fav-list { padding: 0 20px; display: flex; flex-direction: column; gap: 8px; }
+.fav-item {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border-radius: 14px;
+  padding: 10px 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.fav-thumb { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; }
+.fav-content { flex: 1; }
+.fav-name { font-weight: 700; font-size: 13.5px; color: var(--text); }
+.fav-desc { font-size: 11px; color: var(--text-muted); }
+.fav-price { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px; color: var(--green); }
+
+/* ═══ CARTE SCREEN ═══ */
+.carte-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 16px 20px 12px;
+}
+.carte-title { font-weight: 700; font-size: 24px; letter-spacing: -0.5px; color: var(--text); }
+.carte-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.product-count {
+  font-size: 11px; font-weight: 700; letter-spacing: 2px;
+  color: var(--text-muted); margin: 0 20px 12px;
+}
+.grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px 12px;
+  padding: 0 20px;
+}
+.grid-card {
+  background: var(--surface); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.grid-card img { width: 100%; height: 120px; object-fit: cover; }
+.grid-card-body { padding: 10px 12px 12px; }
+.grid-card-name { font-weight: 700; font-size: 13px; color: var(--text); }
+.grid-card-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grid-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.grid-card-price { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px; color: var(--green); }
+.grid-card-rating { font-size: 11px; color: var(--text-secondary); }
+.grid-add-btn {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--green); color: #fff; font-size: 16px; font-weight: 300;
+  display: flex; align-items: center; justify-content: center; border: none; cursor: pointer;
+}
+
+/* ═══ BLOG SCREEN ═══ */
+.blog-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 16px 20px 12px;
+}
+.blog-title { font-weight: 700; font-size: 28px; letter-spacing: -0.5px; color: var(--text); }
+.blog-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.featured-card {
+  margin: 12px 20px 24px;
+  height: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+}
+.featured-card img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.featured-overlay {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 16px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.55));
+}
+.featured-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 2px;
+  color: rgba(255,255,255,0.75); margin-bottom: 4px;
+}
+.featured-title { font-weight: 700; font-size: 18px; color: #fff; margin-bottom: 4px; }
+.featured-meta { font-size: 11px; color: rgba(255,255,255,0.65); }
+.recent-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 3px;
+  color: var(--green); padding: 0 20px; margin-bottom: 16px;
+}
+.article-list { padding: 0 20px; display: flex; flex-direction: column; gap: 28px; }
+.article-card {}
+.article-card img { width: 100%; aspect-ratio: 1.6; border-radius: 12px; object-fit: cover; margin-bottom: 12px; }
+.article-cat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.article-category { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--green); }
+.article-date { font-size: 11px; color: var(--text-muted); }
+.article-title { font-weight: 700; font-size: 16px; color: var(--text); margin-bottom: 4px; }
+.article-excerpt { font-size: 13px; line-height: 20px; color: #737373; margin-bottom: 8px; }
+.read-more { font-weight: 700; font-size: 12px; color: var(--green); text-decoration: underline; }
+
+/* ═══ PANIER SCREEN ═══ */
+.panier-header {
+  display: flex; align-items: center; padding: 12px 20px;
+}
+.panier-header-title {
+  flex: 1; font-weight: 700; font-size: 22px; letter-spacing: -0.3px;
+  color: var(--text); text-align: center;
+}
+.back-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+.header-spacer { width: 32px; }
+
+.article-item {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border-radius: 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(0,0,0,0.03);
+}
+.article-item img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
+.article-item-info { flex: 1; }
+.article-item-name { font-weight: 700; font-size: 13.5px; color: var(--text); }
+.article-item-price { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--green); margin-top: 2px; }
+.qty-area { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.qty-selector { display: flex; align-items: center; gap: 8px; }
+.qty-btn {
+  width: 28px; height: 28px; border-radius: 8px; background: #F5F5F0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--text-secondary); border: none; cursor: pointer;
+}
+.qty-value { font-weight: 700; font-size: 14px; color: var(--text); min-width: 16px; text-align: center; }
+
+.collect-card {
+  background: var(--surface); border-radius: 14px; padding: 14px;
+  margin-top: 16px;
+}
+.collect-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.collect-title { font-weight: 700; font-size: 13px; color: #4A6B50; }
+.collect-address { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+.collect-slot {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #F5F5F0; border-radius: 8px; padding: 6px 8px;
+  font-size: 12px; color: var(--text-secondary);
+}
+
+.loyalty-card-panier {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); border-radius: 14px; padding: 12px 14px;
+  margin-top: 16px;
+}
+.loyalty-left { display: flex; align-items: center; gap: 12px; }
+.loyalty-icon {
+  width: 32px; height: 32px; border-radius: 16px;
+  background: var(--green-light);
+  display: flex; align-items: center; justify-content: center;
+}
+.loyalty-title-small { font-weight: 700; font-size: 13px; color: var(--text); }
+.loyalty-balance-small { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+
+.toggle-track {
+  width: 44px; height: 26px; border-radius: 13px;
+  background: var(--green); position: relative; cursor: pointer;
+}
+.toggle-thumb {
+  width: 22px; height: 22px; border-radius: 11px;
+  background: #fff; position: absolute; top: 2px; right: 2px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.recap { margin-top: 16px; }
+.recap-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.recap-label { font-size: 13px; color: var(--text-secondary); }
+.recap-value { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text); }
+.recap-discount { color: var(--green); }
+.recap-divider { height: 0.5px; background: var(--border); margin: 4px 0; }
+.recap-total-label { font-weight: 700; font-size: 15px; color: var(--text); }
+.recap-total-value { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: var(--green); }
+
+.payment-option {
+  display: flex; align-items: center; gap: 12px;
+  height: 48px; background: var(--surface); border-radius: 12px;
+  border: 1px solid var(--border); padding: 0 14px;
+}
+.payment-option.selected { border: 1.5px solid var(--green); background: #F8FAF8; }
+.radio {
+  width: 18px; height: 18px; border-radius: 9px;
+  border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+}
+.radio.selected { border-color: var(--green); }
+.radio-dot { width: 10px; height: 10px; border-radius: 5px; background: var(--green); }
+.payment-label { font-size: 13px; color: var(--text); }
+.payment-label.selected { font-weight: 700; }
+
+.cta-bar {
+  position: absolute; bottom: 80px; left: 0; right: 0;
+  padding: 12px 20px 8px;
+  background: var(--bg);
+  border-top: 0.5px solid var(--border);
+}
+.cta-button {
+  width: 100%; height: 48px; border-radius: 14px; background: var(--green);
+  color: #fff; font-weight: 700; font-size: 15px; border: none; cursor: pointer;
+  font-family: 'Inter', sans-serif;
+}
+.cta-disclaimer { font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 8px; }
+
+/* ═══ PROFIL SCREEN ═══ */
+.profil-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px 12px;
+}
+.profil-title { font-weight: 700; font-size: 22px; color: var(--text); }
+.identity {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; margin-bottom: 24px;
+}
+.avatar-large {
+  width: 52px; height: 52px; border-radius: 26px;
+  background: linear-gradient(135deg, #2C4A32, #4A6B50);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 18px;
+  border: 2px solid var(--border);
+}
+.user-name { font-weight: 700; font-size: 16px; color: var(--text); }
+.premium-row { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.premium-label { font-size: 12px; color: var(--green); }
+
+.loyalty-card {
+  margin: 0 20px 16px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #2C4A32, #4A6B50);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(58,90,64,0.2);
+}
+.decor-circle {
+  position: absolute; top: -20px; right: -20px;
+  width: 100px; height: 100px; border-radius: 50px;
+  background: rgba(255,255,255,0.04);
+}
+.loyalty-club {
+  font-size: 10px; font-weight: 700; letter-spacing: 3px;
+  color: rgba(255,255,255,0.5); margin-bottom: 8px;
+}
+.loyalty-name { font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 12px; }
+.points-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 8px; }
+.points-value { font-family: 'JetBrains Mono', monospace; font-size: 36px; font-weight: 700; color: #fff; }
+.points-unit { font-size: 14px; color: rgba(255,255,255,0.7); }
+.loyalty-level {
+  font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
+  color: rgba(255,255,255,0.75); margin-bottom: 12px;
+}
+.progress-track { height: 3px; background: rgba(255,255,255,0.15); border-radius: 1.5px; margin-bottom: 8px; }
+.progress-fill { height: 3px; background: #fff; border-radius: 1.5px; width: 75%; }
+.progress-info { display: flex; justify-content: space-between; }
+.progress-text { font-size: 11px; color: rgba(255,255,255,0.6); }
+
+.wallet-card {
+  margin: 0 20px 24px;
+  background: var(--surface);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+}
+.wallet-header { display: flex; justify-content: space-between; align-items: center; }
+.wallet-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 4px; }
+.wallet-balance { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: var(--text); }
+.recharge-btn {
+  height: 32px; padding: 0 16px;
+  background: var(--green); border-radius: 8px;
+  color: #fff; font-weight: 700; font-size: 12px;
+  border: none; cursor: pointer; font-family: 'Inter', sans-serif;
+}
+
+.rewards-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 20px; margin-bottom: 12px;
+}
+.rewards-title { font-weight: 700; font-size: 16px; color: var(--text); }
+.rewards-see-all { font-size: 12px; color: var(--green); }
+.rewards-scroll {
+  display: flex; gap: 12px; padding: 0 20px; margin-bottom: 24px;
+  overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none;
+}
+.rewards-scroll::-webkit-scrollbar { display: none; }
+.reward-card {
+  flex-shrink: 0; width: 150px;
+  background: var(--surface); border-radius: 12px;
+  border: 1px solid var(--border); padding: 14px;
+}
+.reward-icon {
+  width: 32px; height: 32px; border-radius: 8px; background: #F5F5F0;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 8px; font-size: 16px;
+}
+.reward-name { font-weight: 700; font-size: 13px; color: var(--text); margin-bottom: 2px; }
+.reward-sub { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+.reward-cta { font-weight: 700; font-size: 12px; color: var(--green); cursor: pointer; }
+
+.orders-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 20px; margin-bottom: 12px;
+}
+.orders-title { font-weight: 700; font-size: 16px; color: var(--text); }
+.orders-see-all { font-size: 12px; color: var(--green); }
+.orders-list { padding: 0 20px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.order-card {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); border-radius: 12px;
+  border: 1px solid var(--border); padding: 12px;
+}
+.order-info { display: flex; align-items: center; gap: 12px; flex: 1; }
+.order-icon {
+  width: 36px; height: 36px; border-radius: 8px; background: #F5F5F0;
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.order-name { font-weight: 700; font-size: 13px; color: var(--text); margin-bottom: 2px; }
+.order-meta { font-size: 11px; color: var(--text-muted); }
+.reorder-btn {
+  width: 36px; height: 36px; border-radius: 18px;
+  background: var(--green-light);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; cursor: pointer; margin-left: 8px;
+}
+
+.menu-section {
+  margin: 0 20px;
+  background: var(--surface); border-radius: 14px; overflow: hidden;
+}
+.menu-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px; font-size: 15px; color: var(--text); cursor: pointer;
+}
+.menu-sep { height: 0.5px; background: var(--border); margin-left: 50px; }
+.menu-item.danger { color: var(--error); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SCREEN 1: HOME                         -->
+<!-- ═══════════════════════════════════════ -->
+<div style="position:relative; margin-top: 40px;">
+  <div class="screen-label">Accueil</div>
+  <div class="phone">
+    <div class="phone-inner">
+      <div class="status-bar">
+        <span>17:34</span>
+        <div class="status-bar-right">5G ■■□</div>
+      </div>
+
+      <div class="home-header">
+        <div class="home-header-left">
+          <div class="avatar">J</div>
+          <div>
+            <div class="greeting">Bonjour Johan</div>
+            <div class="greeting-sub">Qu'est-ce qui vous ferait du bien ?</div>
+          </div>
+        </div>
+        <div class="notif-btn">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </div>
+      </div>
+
+      <div class="search-bar">
+        <svg width="16" height="16" fill="none" stroke="#B0AFA8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Rechercher...
+      </div>
+
+      <div class="promo-card">
+        <div class="promo-content">
+          <div class="promo-title">Première commande ?</div>
+          <div class="promo-sub">Profitez de -15% avec le code BIENVENUE</div>
+          <div class="promo-cta">En profiter</div>
+        </div>
+        <div class="promo-icon">
+          <svg width="36" height="36" fill="none" stroke="#6B8F71" stroke-width="1" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66L12 14l4 6 2 .5C22 15 15 2 8 4"/></svg>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill active">Tout</span>
+        <span class="pill">Nourrir</span>
+        <span class="pill">Savourer</span>
+        <span class="pill">Pâtisseries</span>
+        <span class="pill">Emporter</span>
+      </div>
+
+      <div class="section-label section-px">À LA CARTE</div>
+
+      <div class="carousel">
+        <div class="product-card">
+          <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=520&h=360&fit=crop" alt="Zen Buddha Bowl"/>
+          <div class="product-card-body">
+            <div class="product-card-name">Zen Buddha Bowl</div>
+            <div class="product-card-desc">Quinoa, avocat, pois chiches, légumes de saison</div>
+            <div class="product-card-meta">
+              <span>⭐ 4.8</span>
+              <span>520 kcal</span>
+              <span>15 min</span>
+            </div>
+            <div class="product-card-footer">
+              <span class="product-card-price">14,50 €</span>
+              <div class="product-card-tags">
+                <span class="product-tag">Vegan</span>
+                <span class="product-tag">Bio</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="product-card">
+          <img src="https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=400&h=520&fit=crop" alt="Matcha Zen Latte"/>
+          <div class="product-card-body">
+            <div class="product-card-name">Matcha Zen Latte Glacé</div>
+            <div class="product-card-desc">Thé matcha de cérémonie, lait d'avoine</div>
+            <div class="product-card-meta">
+              <span>⭐ 4.8</span>
+              <span>580 kcal</span>
+              <span>15 min</span>
+            </div>
+            <div class="product-card-footer">
+              <span class="product-card-price">6,50 €</span>
+              <div class="product-card-tags">
+                <span class="product-tag">Vegan</span>
+                <span class="product-tag">Bio</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dots">
+        <span class="dot active"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+
+      <div class="fav-header">
+        <span class="fav-title">Nos coups de cœur</span>
+        <span class="see-all">Voir tout</span>
+      </div>
+
+      <div class="fav-list">
+        <div class="fav-item">
+          <img class="fav-thumb" src="https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=520&h=360&fit=crop" alt=""/>
+          <div class="fav-content">
+            <div class="fav-name">Carrot Cake Maison</div>
+            <div class="fav-desc">Gâteau aux carottes, noix de pécan</div>
+          </div>
+          <span class="fav-price">5,90 €</span>
+        </div>
+        <div class="fav-item">
+          <img class="fav-thumb" src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=520&h=360&fit=crop" alt=""/>
+          <div class="fav-content">
+            <div class="fav-name">Zen Buddha Bowl</div>
+            <div class="fav-desc">Quinoa, avocat, pois chiches</div>
+          </div>
+          <span class="fav-price">14,50 €</span>
+        </div>
+        <div class="fav-item">
+          <img class="fav-thumb" src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=520&h=360&fit=crop" alt=""/>
+          <div class="fav-content">
+            <div class="fav-name">Poke Bowl Saumon</div>
+            <div class="fav-desc">Riz vinaigré, saumon mariné, edamame</div>
+          </div>
+          <span class="fav-price">15,90 €</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item active">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
+        Accueil
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+        Carte
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
+        Panier
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+        Blog
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        Profil
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SCREEN 2: CARTE                        -->
+<!-- ═══════════════════════════════════════ -->
+<div style="position:relative; margin-top: 40px;">
+  <div class="screen-label">Carte / Menu</div>
+  <div class="phone">
+    <div class="phone-inner">
+      <div class="status-bar">
+        <span>17:34</span>
+        <div class="status-bar-right">5G ■■□</div>
+      </div>
+
+      <div class="carte-header">
+        <div>
+          <div class="carte-title">Notre carte</div>
+          <div class="carte-sub">Fait maison, chaque jour.</div>
+        </div>
+        <div class="notif-btn">
+          <svg width="17" height="17" fill="none" stroke="#8A8A82" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill active">Tout</span>
+        <span class="pill">Nourrir</span>
+        <span class="pill">Savourer</span>
+        <span class="pill">Pâtisseries</span>
+        <span class="pill">Emporter</span>
+      </div>
+
+      <div class="product-count">12 PRODUITS</div>
+
+      <div class="grid">
+        <div class="grid-card">
+          <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=520&h=360&fit=crop" alt=""/>
+          <div class="grid-card-body">
+            <div class="grid-card-name">Zen Buddha Bowl</div>
+            <div class="grid-card-desc">Quinoa, avocat, pois chiches</div>
+            <div class="grid-card-footer">
+              <span class="grid-card-price">14,50 €</span>
+              <button class="grid-add-btn">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid-card">
+          <img src="https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=400&h=520&fit=crop" alt=""/>
+          <div class="grid-card-body">
+            <div class="grid-card-name">Matcha Zen Latte</div>
+            <div class="grid-card-desc">Thé matcha, lait d'avoine</div>
+            <div class="grid-card-footer">
+              <span class="grid-card-price">6,50 €</span>
+              <button class="grid-add-btn">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid-card">
+          <img src="https://images.unsplash.com/photo-1540420773420-3366772f4999?w=520&h=360&fit=crop" alt=""/>
+          <div class="grid-card-body">
+            <div class="grid-card-name">Salade Printanière</div>
+            <div class="grid-card-desc">Mesclun, chèvre frais, noix</div>
+            <div class="grid-card-footer">
+              <span class="grid-card-price">12,90 €</span>
+              <button class="grid-add-btn">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid-card">
+          <img src="https://images.unsplash.com/photo-1571934811356-5cc061b6821f?w=400&h=500&fit=crop" alt=""/>
+          <div class="grid-card-body">
+            <div class="grid-card-name">Earl Grey Bio</div>
+            <div class="grid-card-desc">Thé noir bergamote, floral</div>
+            <div class="grid-card-footer">
+              <span class="grid-card-price">4,80 €</span>
+              <button class="grid-add-btn">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid-card">
+          <img src="https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=520&h=360&fit=crop" alt=""/>
+          <div class="grid-card-body">
+            <div class="grid-card-name">Carrot Cake</div>
+            <div class="grid-card-desc">Gâteau carottes, cream cheese</div>
+            <div class="grid-card-footer">
+              <span class="grid-card-price">5,90 €</span>
+              <button class="grid-add-btn">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid-card">
+          <img src="https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=520&h=360&fit=crop" alt=""/>
+          <div class="grid-card-body">
+            <div class="grid-card-name">Cookie Chocolat</div>
+            <div class="grid-card-desc">Chocolat noir 70%, caramélisé</div>
+            <div class="grid-card-footer">
+              <span class="grid-card-price">3,90 €</span>
+              <button class="grid-add-btn">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
+        Accueil
+      </div>
+      <div class="tab-item active">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+        Carte
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
+        Panier
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+        Blog
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        Profil
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SCREEN 3: PANIER                       -->
+<!-- ═══════════════════════════════════════ -->
+<div style="position:relative; margin-top: 40px;">
+  <div class="screen-label">Panier</div>
+  <div class="phone">
+    <div class="phone-inner" style="padding-bottom: 170px;">
+      <div class="status-bar">
+        <span>17:34</span>
+        <div class="status-bar-right">5G ■■□</div>
+      </div>
+
+      <div class="panier-header">
+        <div class="back-btn">
+          <svg width="20" height="20" fill="none" stroke="#2A2A2A" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </div>
+        <div class="panier-header-title">Votre panier</div>
+        <div class="header-spacer"></div>
+      </div>
+
+      <div class="section-px">
+        <div class="section-label" style="margin-top:8px;">ARTICLES</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div class="article-item">
+            <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=520&h=360&fit=crop" alt=""/>
+            <div class="article-item-info">
+              <div class="article-item-name">Zen Buddha Bowl</div>
+              <div class="article-item-price">14,50 €</div>
+            </div>
+            <div class="qty-area">
+              <div class="qty-selector">
+                <button class="qty-btn">−</button>
+                <span class="qty-value">1</span>
+                <button class="qty-btn">+</button>
+              </div>
+              <svg width="14" height="14" fill="none" stroke="#D4544A" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </div>
+          </div>
+          <div class="article-item">
+            <img src="https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=400&h=520&fit=crop" alt=""/>
+            <div class="article-item-info">
+              <div class="article-item-name">Matcha Zen Latte Glacé</div>
+              <div class="article-item-price">6,50 €</div>
+            </div>
+            <div class="qty-area">
+              <div class="qty-selector">
+                <button class="qty-btn">−</button>
+                <span class="qty-value">2</span>
+                <button class="qty-btn">+</button>
+              </div>
+              <svg width="14" height="14" fill="none" stroke="#D4544A" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="collect-card">
+          <div class="collect-header">
+            <svg width="14" height="14" fill="none" stroke="#4A6B50" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+            <span class="collect-title">Click & Collect</span>
+          </div>
+          <div class="collect-address">
+            <svg width="12" height="12" fill="none" stroke="#8A8A82" stroke-width="1.8" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            12 rue de la Gare, 95130 Franconville
+          </div>
+          <div class="collect-slot">
+            <svg width="12" height="12" fill="none" stroke="#8A8A82" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Aujourd'hui, 14:30 – 15:00 ›
+          </div>
+        </div>
+
+        <div class="loyalty-card-panier">
+          <div class="loyalty-left">
+            <div class="loyalty-icon">⭐</div>
+            <div>
+              <div class="loyalty-title-small">Points de fidélité</div>
+              <div class="loyalty-balance-small">Solde : 1 240 pts</div>
+            </div>
+          </div>
+          <div class="toggle-track">
+            <div class="toggle-thumb"></div>
+          </div>
+        </div>
+
+        <div class="recap">
+          <div class="recap-row">
+            <span class="recap-label">Sous-total</span>
+            <span class="recap-value">27,50 €</span>
+          </div>
+          <div class="recap-row">
+            <span class="recap-label">TVA (5,5%)</span>
+            <span class="recap-value">1,51 €</span>
+          </div>
+          <div class="recap-row">
+            <span class="recap-label recap-discount">Remise fidélité</span>
+            <span class="recap-value recap-discount">-2,75 €</span>
+          </div>
+          <div class="recap-divider"></div>
+          <div class="recap-row">
+            <span class="recap-total-label">Total</span>
+            <span class="recap-total-value">26,26 €</span>
+          </div>
+        </div>
+
+        <div class="section-label">PAIEMENT</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div class="payment-option selected">
+            <div class="radio selected"><div class="radio-dot"></div></div>
+            <span class="payment-label selected">Carte bancaire</span>
+          </div>
+          <div class="payment-option">
+            <div class="radio"></div>
+            <span class="payment-label">Wallet Teaven</span>
+          </div>
+          <div class="payment-option">
+            <div class="radio"></div>
+            <span class="payment-label">Mixte (Points + Carte)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-bar">
+      <button class="cta-button">Valider ma commande — 26,26 €</button>
+      <div class="cta-disclaimer">En validant, vous acceptez nos conditions générales de vente.</div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
+        Accueil
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+        Carte
+      </div>
+      <div class="tab-item active">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
+        Panier
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+        Blog
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        Profil
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SCREEN 4: BLOG                         -->
+<!-- ═══════════════════════════════════════ -->
+<div style="position:relative; margin-top: 40px;">
+  <div class="screen-label">Blog / Atmosphère</div>
+  <div class="phone">
+    <div class="phone-inner">
+      <div class="status-bar">
+        <span>17:34</span>
+        <div class="status-bar-right">5G ■■□</div>
+      </div>
+
+      <div class="blog-header">
+        <div>
+          <div class="blog-title">Atmosphère</div>
+          <div class="blog-sub">Prenez soin de vous</div>
+        </div>
+        <svg width="20" height="20" fill="none" stroke="#8A8A82" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill active">Tout</span>
+        <span class="pill">Nutrition</span>
+        <span class="pill">Bien-être</span>
+        <span class="pill">Lifestyle</span>
+      </div>
+
+      <div class="featured-card">
+        <img src="https://images.unsplash.com/photo-1544025162-d76694265947?w=800&h=500&fit=crop" alt="Featured article"/>
+        <div class="featured-overlay">
+          <div class="featured-label">À LA UNE · NUTRITION</div>
+          <div class="featured-title">Les bienfaits du thé vert sur la concentration</div>
+          <div class="featured-meta">Par Sophie Martin · 5 min de lecture</div>
+        </div>
+      </div>
+
+      <div class="recent-label">ARTICLES RÉCENTS</div>
+
+      <div class="article-list">
+        <div class="article-card">
+          <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&h=500&fit=crop" alt=""/>
+          <div class="article-cat-row">
+            <span class="article-category">BIEN-ÊTRE</span>
+            <span class="article-date">12 mars 2026</span>
+          </div>
+          <div class="article-title">5 rituels matinaux pour commencer la journée zen</div>
+          <div class="article-excerpt">Découvrez des habitudes simples qui transformeront vos matins et boosteront votre énergie...</div>
+          <span class="read-more">Lire la suite</span>
+        </div>
+        <div class="article-card">
+          <img src="https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800&h=500&fit=crop" alt=""/>
+          <div class="article-cat-row">
+            <span class="article-category">NUTRITION</span>
+            <span class="article-date">8 mars 2026</span>
+          </div>
+          <div class="article-title">Superaliments : mythe ou réalité ?</div>
+          <div class="article-excerpt">Un tour d'horizon des aliments dits "super" et ce que la science en dit réellement...</div>
+          <span class="read-more">Lire la suite</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
+        Accueil
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+        Carte
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
+        Panier
+      </div>
+      <div class="tab-item active">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+        Blog
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        Profil
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SCREEN 5: PROFIL                       -->
+<!-- ═══════════════════════════════════════ -->
+<div style="position:relative; margin-top: 40px;">
+  <div class="screen-label">Profil</div>
+  <div class="phone">
+    <div class="phone-inner">
+      <div class="status-bar">
+        <span>17:34</span>
+        <div class="status-bar-right">5G ■■□</div>
+      </div>
+
+      <div class="profil-header">
+        <span class="profil-title">Mon Profil</span>
+        <svg width="20" height="20" fill="none" stroke="#8A8A82" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.26.4.4.87.4 1.36V11"/></svg>
+      </div>
+
+      <div class="identity">
+        <div class="avatar-large">J</div>
+        <div>
+          <div class="user-name">Johan</div>
+          <div class="premium-row">
+            <svg width="12" height="12" fill="none" stroke="#6B8F71" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <span class="premium-label">Membre Premium</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="loyalty-card">
+        <div class="decor-circle"></div>
+        <div class="loyalty-club">TEAVEN CLUB</div>
+        <div class="loyalty-name">Johan</div>
+        <div class="points-row">
+          <span class="points-value">1 250</span>
+          <span class="points-unit">pts</span>
+        </div>
+        <div class="loyalty-level">NIVEAU OR</div>
+        <div class="progress-track">
+          <div class="progress-fill"></div>
+        </div>
+        <div class="progress-info">
+          <span class="progress-text">Prochain : Boisson offerte</span>
+          <span class="progress-text">75%</span>
+        </div>
+      </div>
+
+      <div class="wallet-card">
+        <div class="wallet-header">
+          <div>
+            <div class="wallet-label">PORTE-MONNAIE</div>
+            <div class="wallet-balance">42,50 €</div>
+          </div>
+          <button class="recharge-btn">Recharger</button>
+        </div>
+      </div>
+
+      <div class="rewards-header">
+        <span class="rewards-title">Récompenses</span>
+        <span class="rewards-see-all">Tout voir</span>
+      </div>
+
+      <div class="rewards-scroll">
+        <div class="reward-card">
+          <div class="reward-icon">☕</div>
+          <div class="reward-name">Boisson offerte</div>
+          <div class="reward-sub">500 pts</div>
+          <span class="reward-cta">Utiliser</span>
+        </div>
+        <div class="reward-card">
+          <div class="reward-icon">🎁</div>
+          <div class="reward-name">Dessert offert</div>
+          <div class="reward-sub">750 pts</div>
+          <span class="reward-cta">Utiliser</span>
+        </div>
+        <div class="reward-card">
+          <div class="reward-icon">%</div>
+          <div class="reward-name">-20% sur carte</div>
+          <div class="reward-sub">1000 pts</div>
+          <span class="reward-cta">Utiliser</span>
+        </div>
+      </div>
+
+      <div class="orders-header">
+        <span class="orders-title">Mes commandes</span>
+        <span class="orders-see-all">Tout voir</span>
+      </div>
+
+      <div class="orders-list">
+        <div class="order-card">
+          <div class="order-info">
+            <div class="order-icon">📋</div>
+            <div>
+              <div class="order-name">Zen Buddha Bowl, Matcha Latte</div>
+              <div class="order-meta">14 mars · 21,00 €</div>
+            </div>
+          </div>
+          <div class="reorder-btn">↻</div>
+        </div>
+        <div class="order-card">
+          <div class="order-info">
+            <div class="order-icon">📋</div>
+            <div>
+              <div class="order-name">Salade Printanière, Earl Grey</div>
+              <div class="order-meta">10 mars · 17,70 €</div>
+            </div>
+          </div>
+          <div class="reorder-btn">↻</div>
+        </div>
+        <div class="order-card">
+          <div class="order-info">
+            <div class="order-icon">📋</div>
+            <div>
+              <div class="order-name">Poke Bowl Saumon</div>
+              <div class="order-meta">7 mars · 15,90 €</div>
+            </div>
+          </div>
+          <div class="reorder-btn">↻</div>
+        </div>
+      </div>
+
+      <div class="menu-section">
+        <div class="menu-item">
+          <svg width="18" height="18" fill="none" stroke="#6B8F71" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Aide & FAQ
+        </div>
+        <div class="menu-sep"></div>
+        <div class="menu-item danger">
+          <svg width="18" height="18" fill="none" stroke="#D4544A" stroke-width="1.6" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Déconnexion
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
+        Accueil
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+        Carte
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
+        Panier
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+        Blog
+      </div>
+      <div class="tab-item active">
+        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        Profil
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
