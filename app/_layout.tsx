@@ -1,5 +1,6 @@
 // Root layout — chargement des fonts, onboarding check, providers
 import { useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -20,13 +21,20 @@ export default function RootLayout() {
 
   // Vérifier si l'onboarding a été fait
   useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_KEY).then((val) => {
-      setOnboardingDone(val === 'true');
-    });
+    AsyncStorage.getItem(ONBOARDING_KEY)
+      .then((val) => {
+        setOnboardingDone(val === 'true');
+      })
+      .catch(() => {
+        // Fallback si AsyncStorage échoue (web)
+        setOnboardingDone(false);
+      });
   }, []);
 
   // Tant que les fonts ou l'état onboarding ne sont pas prêts
-  if ((!fontsLoaded && !fontError) || onboardingDone === null) {
+  // Sur web, on n'attend pas les fonts pour éviter un écran blanc
+  const fontsReady = fontsLoaded || fontError || Platform.OS === 'web';
+  if (!fontsReady || onboardingDone === null) {
     return null;
   }
 
