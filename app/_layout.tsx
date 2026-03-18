@@ -57,6 +57,14 @@ export default function RootLayout() {
           />
           <Stack.Screen name="auth/login" />
           <Stack.Screen name="auth/otp" />
+          <Stack.Screen
+            name="order-confirmation"
+            options={{
+              presentation: 'modal',
+              animation: 'fade',
+              gestureEnabled: false,
+            }}
+          />
         </Stack>
       </ToastProvider>
     </GestureHandlerRootView>

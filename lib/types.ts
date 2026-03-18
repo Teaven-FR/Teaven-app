@@ -15,7 +15,7 @@ export interface Product {
   available: boolean;
 }
 
-export type ProductCategory = 'nourrir' | 'savourer' | 'emporter';
+export type ProductCategory = 'nourrir' | 'savourer' | 'emporter' | 'patisseries';
 
 export interface Category {
   id: string;

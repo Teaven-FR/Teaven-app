@@ -229,7 +229,7 @@ export default function PanierScreen() {
       {/* ──── CTA sticky ──── */}
       <View style={[styles.cta, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <Pressable
-          onPress={() => {}}
+          onPress={() => router.push('/order-confirmation')}
           style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaPressed]}
           accessibilityLabel={`Valider ma commande, ${formatPrice(total)}`}
         >
