@@ -1,1138 +1,632 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Teaven — Preview</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg: #F2F1EA;
-  --surface: #FFFFFF;
-  --green: #6B8F71;
-  --green-dark: #4A6B50;
-  --green-light: #E8F0EA;
-  --text: #2A2A2A;
-  --text-secondary: #8A8A82;
-  --text-muted: #B0AFA8;
-  --border: #E8E7E2;
-  --error: #D4544A;
-}
-* { margin:0; padding:0; box-sizing:border-box; }
-body {
-  font-family: 'Inter', -apple-system, sans-serif;
-  background: #1a1a1a;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  min-height: 100vh;
-  padding: 20px;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-.phone {
-  width: 375px;
-  height: 812px;
-  background: var(--bg);
-  border-radius: 40px;
-  overflow: hidden;
-  position: relative;
-  box-shadow: 0 25px 80px rgba(0,0,0,0.4);
-  flex-shrink: 0;
-}
-.phone-inner {
-  height: 100%;
-  overflow-y: auto;
-  padding-bottom: 90px;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.phone-inner::-webkit-scrollbar { display: none; }
+/* ─── RESET ─── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
 
-/* Status bar */
-.status-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 24px 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-}
-.status-bar-right { display: flex; gap: 4px; align-items: center; font-size: 11px; }
-
-/* Screen label */
-.screen-label {
-  position: absolute;
-  top: -30px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  color: #888;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+/* ─── DESIGN TOKENS ─── */
+:root{
+  --bg:#F2F1EA;--surface:#FFF;--green:#6B8F71;--green-dark:#4A6B50;--green-light:#E8F0EA;
+  --text:#2A2A2A;--text-sec:#8A8A82;--text-muted:#B0AFA8;--border:#E8E7E2;--error:#D4544A;
+  --font:'DM Sans',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  --xs:4px;--sm:8px;--md:12px;--lg:16px;--xl:20px;--xxl:24px;--xxxl:32px;
+  --r-sm:8px;--r-md:12px;--r-lg:14px;--r-xl:16px;--r-pill:50px;--r-card:20px;
 }
 
-/* Tab bar */
-.tab-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 80px;
-  background: var(--surface);
-  border-top: 0.5px solid var(--border);
-  display: flex;
-  justify-content: space-around;
-  align-items: flex-start;
-  padding-top: 10px;
-  border-radius: 0 0 40px 40px;
-}
-.tab-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  font-size: 9.5px;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-}
-.tab-item.active { color: var(--green); }
-.tab-item .tab-icon {
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.tab-item svg { width: 20px; height: 20px; stroke-width: 1.5; }
-
-/* ═══ COMMON ═══ */
-.section-px { padding-left: 20px; padding-right: 20px; }
-.pill-row {
-  display: flex;
-  gap: 8px;
-  padding: 8px 20px;
-  overflow-x: auto;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.pill-row::-webkit-scrollbar { display: none; }
-.pill {
-  flex-shrink: 0;
-  padding: 8px 16px;
-  border-radius: 50px;
-  font-size: 12.5px;
-  font-weight: 400;
-  background: var(--surface);
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  letter-spacing: 0.3px;
-  cursor: pointer;
-}
-.pill.active {
-  background: var(--green);
-  color: #fff;
-  border-color: var(--green);
-  font-weight: 600;
-}
-.section-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 3px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  margin-top: 16px;
-  margin-bottom: 12px;
+body{
+  font-family:var(--font);color:var(--text);background:#1a1a1a;
+  display:flex;justify-content:center;align-items:flex-start;min-height:100vh;
+  padding:24px 12px;gap:24px;flex-wrap:wrap;
 }
 
-/* ═══ HOME SCREEN ═══ */
-.home-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px 12px;
+/* ─── IPHONE FRAME ─── */
+.phone{
+  width:390px;height:844px;background:var(--bg);border-radius:44px;overflow:hidden;
+  box-shadow:0 24px 80px rgba(0,0,0,.4),inset 0 0 0 3px #222,inset 0 0 0 4px #444;
+  position:relative;display:flex;flex-direction:column;flex-shrink:0;
 }
-.home-header-left { display: flex; align-items: center; gap: 12px; }
-.avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 19px;
-  background: var(--green);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 700;
-  font-size: 16px;
+.phone-notch{
+  position:absolute;top:0;left:50%;transform:translateX(-50%);width:160px;height:34px;
+  background:#000;border-radius:0 0 20px 20px;z-index:100;
 }
-.greeting { font-weight: 700; font-size: 26px; letter-spacing: -0.5px; color: var(--text); }
-.greeting-sub { font-size: 13px; color: var(--text-secondary); margin-top: 1px; }
-.notif-btn {
-  width: 38px; height: 38px; border-radius: 19px;
-  background: var(--surface); border: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
+.status-bar{
+  height:54px;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 28px 4px;font-size:12px;font-weight:600;color:var(--text);flex-shrink:0;
+}
+.screen{
+  flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+}
+.screen::-webkit-scrollbar{display:none}
+
+/* ─── TAB BAR ─── */
+.tab-bar{
+  height:80px;background:rgba(255,255,255,.92);backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border-top:0.5px solid var(--border);display:flex;justify-content:space-around;
+  align-items:flex-start;padding-top:8px;flex-shrink:0;
+}
+.tab{
+  display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;
+  border:none;background:none;padding:4px 8px;font-family:var(--font);
+}
+.tab svg{width:22px;height:22px;stroke-width:1.6;fill:none;stroke:var(--text-muted);transition:.15s}
+.tab span{font-size:9.5px;letter-spacing:.5px;color:var(--text-muted);transition:.15s}
+.tab.active svg{stroke:var(--green)}
+.tab.active span{color:var(--green);font-weight:700}
+
+/* ─── SHARED UI ─── */
+.pill{
+  display:inline-flex;align-items:center;height:32px;padding:0 14px;border-radius:var(--r-pill);
+  font-size:12.5px;letter-spacing:.3px;cursor:pointer;border:1px solid var(--border);
+  background:var(--surface);color:var(--text-sec);white-space:nowrap;transition:.15s;
+  font-family:var(--font);
+}
+.pill.active{background:var(--text);color:#fff;border-color:var(--text)}
+.pill:hover:not(.active){background:#f0efea}
+
+.section-label{
+  font-weight:700;font-size:10px;letter-spacing:3px;text-transform:uppercase;
+  color:var(--text-muted);padding:0 var(--xl);margin-top:var(--lg);margin-bottom:var(--md);
 }
 
-/* Search bar */
-.search-bar {
-  margin: 0 20px 8px;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface);
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  padding: 0 12px;
-  color: var(--text-muted);
-  font-size: 14px;
+.pad-h{padding-left:var(--xl);padding-right:var(--xl)}
+
+/* ─── SCREEN: HOME ─── */
+.home-header{
+  display:flex;justify-content:space-between;align-items:center;padding:var(--lg) var(--xl) var(--md);
+}
+.home-header-left{display:flex;align-items:center;gap:var(--md)}
+.avatar-circle{
+  width:38px;height:38px;border-radius:50%;background:var(--green);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;
+}
+.greeting{font-weight:700;font-size:26px;letter-spacing:-.5px;color:var(--text)}
+.home-subtitle{font-size:13px;color:var(--text-sec);margin-top:1px}
+.notif-btn{
+  width:38px;height:38px;border-radius:50%;background:var(--surface);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
 }
 
-/* Promo banner */
-.promo-card {
-  margin: 0 20px 8px;
-  height: 100px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #E8F0EA, #D4E5D7);
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  overflow: hidden;
+.search-bar{
+  height:42px;display:flex;align-items:center;background:var(--surface);border-radius:var(--r-md);
+  border:1px solid var(--border);padding:0 var(--md);gap:var(--sm);margin:0 var(--xl) var(--sm);
 }
-.promo-content { flex: 1; }
-.promo-title { font-weight: 700; font-size: 16px; color: var(--text); }
-.promo-sub { font-size: 12px; color: #4A6B50; line-height: 18px; margin-top: 4px; }
-.promo-cta { font-weight: 700; font-size: 13px; color: var(--green); margin-top: 4px; }
-.promo-icon {
-  width: 60px; height: 60px; border-radius: 30px;
-  background: rgba(107,143,113,0.08);
-  display: flex; align-items: center; justify-content: center;
-  margin-left: 12px;
+.search-bar span{font-size:14px;color:var(--text-muted)}
+
+.promo-card{
+  margin:0 var(--xl) var(--sm);height:100px;border-radius:16px;
+  background:linear-gradient(135deg,#E8F0EA,#D4E5D7);
+  display:flex;align-items:center;padding:0 var(--xl);overflow:hidden;
+}
+.promo-content{flex:1;display:flex;flex-direction:column;gap:4px}
+.promo-title{font-weight:700;font-size:16px;color:var(--text)}
+.promo-sub{font-size:12px;color:var(--green-dark);line-height:18px}
+.promo-cta{font-weight:700;font-size:13px;color:var(--green);margin-top:4px;cursor:pointer}
+.promo-icon{
+  width:60px;height:60px;border-radius:50%;background:rgba(107,143,113,.08);
+  display:flex;align-items:center;justify-content:center;margin-left:var(--md);
 }
 
-/* Product carousel */
-.carousel {
-  display: flex; gap: 12px;
-  padding: 0 20px; overflow-x: auto;
-  -ms-overflow-style: none; scrollbar-width: none;
+.pills-row{
+  display:flex;gap:var(--sm);padding:var(--md) var(--xl);overflow-x:auto;
 }
-.carousel::-webkit-scrollbar { display: none; }
-.product-card {
-  flex-shrink: 0;
-  width: 260px;
-  background: var(--surface);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-.product-card img {
-  width: 100%; height: 160px; object-fit: cover;
-}
-.product-card-body { padding: 12px 14px 14px; }
-.product-card-name { font-weight: 700; font-size: 14px; color: var(--text); }
-.product-card-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.product-card-footer {
-  display: flex; justify-content: space-between; align-items: center; margin-top: 10px;
-}
-.product-card-price {
-  font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 14px; color: var(--green);
-}
-.product-card-tags { display: flex; gap: 4px; }
-.product-tag {
-  font-size: 10px; padding: 2px 8px; border-radius: 50px;
-  background: var(--green-light); color: var(--green-dark); font-weight: 500;
-}
-.product-card-meta {
-  display: flex; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--text-muted);
-}
+.pills-row::-webkit-scrollbar{display:none}
 
-/* Dots */
-.dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
-.dot { width: 6px; height: 6px; border-radius: 3px; background: var(--border); }
-.dot.active { width: 18px; background: var(--green); border-radius: 9px; }
+/* Carousel */
+.carousel-track{
+  display:flex;gap:var(--md);padding:0 var(--xl);overflow-x:auto;scroll-snap-type:x mandatory;
+}
+.carousel-track::-webkit-scrollbar{display:none}
+.carousel-card{
+  min-width:260px;max-width:260px;scroll-snap-align:start;border-radius:var(--r-card);
+  overflow:hidden;background:var(--surface);box-shadow:0 2px 8px rgba(0,0,0,.05);cursor:pointer;
+}
+.carousel-card img{width:100%;height:160px;object-fit:cover;display:block}
+.carousel-card-body{padding:12px 14px}
+.carousel-card-tags{display:flex;gap:6px;margin-bottom:6px}
+.carousel-card-tag{
+  font-size:10px;font-weight:700;letter-spacing:1px;color:var(--green);
+  background:var(--green-light);padding:2px 8px;border-radius:6px;
+}
+.carousel-card-name{font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px}
+.carousel-card-desc{font-size:11px;color:var(--text-muted);margin-bottom:8px;line-height:16px}
+.carousel-card-footer{display:flex;justify-content:space-between;align-items:center}
+.carousel-card-price{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)}
+.carousel-card-meta{font-size:10px;color:var(--text-muted)}
+
+.dots{display:flex;justify-content:center;gap:6px;margin-top:var(--md)}
+.dot{width:6px;height:6px;border-radius:3px;background:var(--border)}
+.dot.active{width:18px;background:var(--green);border-radius:9px;transition:.3s}
 
 /* Favorites */
-.fav-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 0 20px; margin-top: 24px; margin-bottom: 12px;
+.fav-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:0 var(--xl);margin-top:var(--xxl);margin-bottom:var(--md);
 }
-.fav-title { font-weight: 700; font-size: 17px; color: var(--text); }
-.see-all { font-size: 12px; color: var(--green); }
-.fav-list { padding: 0 20px; display: flex; flex-direction: column; gap: 8px; }
-.fav-item {
-  display: flex; align-items: center; gap: 12px;
-  background: var(--surface); border-radius: 14px;
-  padding: 10px 14px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-.fav-thumb { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; }
-.fav-content { flex: 1; }
-.fav-name { font-weight: 700; font-size: 13.5px; color: var(--text); }
-.fav-desc { font-size: 11px; color: var(--text-muted); }
-.fav-price { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px; color: var(--green); }
+.fav-title{font-weight:700;font-size:17px;letter-spacing:-.2px}
+.see-all{font-size:12px;color:var(--green);cursor:pointer}
 
-/* ═══ CARTE SCREEN ═══ */
-.carte-header {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  padding: 16px 20px 12px;
+.fav-item{
+  display:flex;align-items:center;background:var(--surface);border-radius:var(--r-lg);
+  padding:10px 14px;gap:var(--md);box-shadow:0 1px 3px rgba(0,0,0,.04);
+  margin:0 var(--xl) var(--sm);cursor:pointer;transition:opacity .15s;
 }
-.carte-title { font-weight: 700; font-size: 24px; letter-spacing: -0.5px; color: var(--text); }
-.carte-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
-.product-count {
-  font-size: 11px; font-weight: 700; letter-spacing: 2px;
-  color: var(--text-muted); margin: 0 20px 12px;
+.fav-item:hover{opacity:.85}
+.fav-thumb{width:46px;height:46px;border-radius:10px;object-fit:cover}
+.fav-content{flex:1;min-width:0}
+.fav-name{font-weight:700;font-size:13.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fav-desc{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fav-price{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green);white-space:nowrap}
+
+/* ─── SCREEN: CARTE ─── */
+.carte-header{
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding:var(--lg) var(--xl) var(--md);
 }
-.grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px 12px;
-  padding: 0 20px;
+.carte-title{font-weight:700;font-size:24px;letter-spacing:-.5px;color:var(--text)}
+.carte-sub{font-size:13px;color:var(--text-sec);margin-top:2px}
+.search-circle{
+  width:38px;height:38px;border-radius:50%;background:var(--surface);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
 }
-.grid-card {
-  background: var(--surface); border-radius: 14px; overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-.grid-card img { width: 100%; height: 120px; object-fit: cover; }
-.grid-card-body { padding: 10px 12px 12px; }
-.grid-card-name { font-weight: 700; font-size: 13px; color: var(--text); }
-.grid-card-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.grid-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-.grid-card-price { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px; color: var(--green); }
-.grid-card-rating { font-size: 11px; color: var(--text-secondary); }
-.grid-add-btn {
-  width: 28px; height: 28px; border-radius: 8px;
-  background: var(--green); color: #fff; font-size: 16px; font-weight: 300;
-  display: flex; align-items: center; justify-content: center; border: none; cursor: pointer;
+.count-text{
+  font-weight:700;font-size:11px;letter-spacing:2px;color:var(--text-muted);
+  padding:0 var(--xl);margin-bottom:var(--md);
 }
 
-/* ═══ BLOG SCREEN ═══ */
-.blog-header {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  padding: 16px 20px 12px;
+.product-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:var(--md);padding:0 var(--xl);
 }
-.blog-title { font-weight: 700; font-size: 28px; letter-spacing: -0.5px; color: var(--text); }
-.blog-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
-.featured-card {
-  margin: 12px 20px 24px;
-  height: 220px;
-  border-radius: 16px;
-  overflow: hidden;
-  position: relative;
+.grid-card{
+  background:var(--surface);border-radius:var(--r-card);overflow:hidden;
+  box-shadow:0 2px 8px rgba(0,0,0,.05);cursor:pointer;transition:transform .15s;
 }
-.featured-card img {
-  width: 100%; height: 100%; object-fit: cover;
+.grid-card:hover{transform:translateY(-2px)}
+.grid-card img{width:100%;height:130px;object-fit:cover;display:block}
+.grid-card-body{padding:10px 12px}
+.grid-card-name{font-weight:700;font-size:13px;color:var(--text);margin-bottom:2px}
+.grid-card-desc{font-size:10.5px;color:var(--text-muted);line-height:15px;margin-bottom:6px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.grid-card-footer{display:flex;justify-content:space-between;align-items:center}
+.grid-card-price{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)}
+.grid-card-add{
+  width:28px;height:28px;border-radius:8px;background:var(--green);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;
+  border:none;font-weight:300;line-height:1;
 }
-.featured-overlay {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 16px;
-  background: linear-gradient(transparent, rgba(0,0,0,0.55));
-}
-.featured-label {
-  font-size: 10px; font-weight: 700; letter-spacing: 2px;
-  color: rgba(255,255,255,0.75); margin-bottom: 4px;
-}
-.featured-title { font-weight: 700; font-size: 18px; color: #fff; margin-bottom: 4px; }
-.featured-meta { font-size: 11px; color: rgba(255,255,255,0.65); }
-.recent-label {
-  font-size: 10px; font-weight: 700; letter-spacing: 3px;
-  color: var(--green); padding: 0 20px; margin-bottom: 16px;
-}
-.article-list { padding: 0 20px; display: flex; flex-direction: column; gap: 28px; }
-.article-card {}
-.article-card img { width: 100%; aspect-ratio: 1.6; border-radius: 12px; object-fit: cover; margin-bottom: 12px; }
-.article-cat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.article-category { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--green); }
-.article-date { font-size: 11px; color: var(--text-muted); }
-.article-title { font-weight: 700; font-size: 16px; color: var(--text); margin-bottom: 4px; }
-.article-excerpt { font-size: 13px; line-height: 20px; color: #737373; margin-bottom: 8px; }
-.read-more { font-weight: 700; font-size: 12px; color: var(--green); text-decoration: underline; }
+.grid-card-add:hover{background:var(--green-dark)}
+.grid-card-rating{font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:2px}
 
-/* ═══ PANIER SCREEN ═══ */
-.panier-header {
-  display: flex; align-items: center; padding: 12px 20px;
+/* ─── SCREEN: PANIER ─── */
+.panier-header{
+  display:flex;align-items:center;padding:var(--md) var(--xl);
 }
-.panier-header-title {
-  flex: 1; font-weight: 700; font-size: 22px; letter-spacing: -0.3px;
-  color: var(--text); text-align: center;
+.panier-header .back{width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.panier-header h2{
+  flex:1;text-align:center;font-weight:700;font-size:22px;letter-spacing:-.3px;color:var(--text);
 }
-.back-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
-.header-spacer { width: 32px; }
+.panier-header .spacer{width:32px}
 
-.article-item {
-  display: flex; align-items: center; gap: 12px;
-  background: var(--surface); border-radius: 14px;
-  padding: 10px 14px;
-  border: 1px solid rgba(0,0,0,0.03);
+.article-card{
+  display:flex;align-items:center;background:var(--surface);border-radius:14px;
+  padding:10px;padding-right:14px;border:1px solid rgba(0,0,0,.03);margin:0 var(--xl) var(--sm);
 }
-.article-item img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
-.article-item-info { flex: 1; }
-.article-item-name { font-weight: 700; font-size: 13.5px; color: var(--text); }
-.article-item-price { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--green); margin-top: 2px; }
-.qty-area { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.qty-selector { display: flex; align-items: center; gap: 8px; }
-.qty-btn {
-  width: 28px; height: 28px; border-radius: 8px; background: #F5F5F0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; color: var(--text-secondary); border: none; cursor: pointer;
+.article-card img{width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0}
+.article-info{flex:1;margin-left:var(--md);min-width:0}
+.article-name{font-weight:700;font-size:13.5px;color:var(--text)}
+.article-price{font-family:var(--mono);font-size:12px;color:var(--green);margin-top:2px}
+.qty-area{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.qty-selector{display:flex;align-items:center;gap:var(--sm)}
+.qty-btn{
+  width:28px;height:28px;border-radius:8px;background:#F5F5F0;border:none;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--text-sec);
+  font-family:var(--font);
 }
-.qty-value { font-weight: 700; font-size: 14px; color: var(--text); min-width: 16px; text-align: center; }
+.qty-btn:hover{background:#eae9e3}
+.qty-val{font-weight:700;font-size:14px;color:var(--text);min-width:16px;text-align:center}
+.delete-btn{cursor:pointer;color:var(--error);font-size:14px}
 
-.collect-card {
-  background: var(--surface); border-radius: 14px; padding: 14px;
-  margin-top: 16px;
+.collect-card{
+  background:var(--surface);border-radius:14px;padding:14px;margin:var(--lg) var(--xl) 0;
+  display:flex;flex-direction:column;gap:var(--sm);
 }
-.collect-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.collect-title { font-weight: 700; font-size: 13px; color: #4A6B50; }
-.collect-address { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
-.collect-slot {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: #F5F5F0; border-radius: 8px; padding: 6px 8px;
-  font-size: 12px; color: var(--text-secondary);
+.collect-header{display:flex;align-items:center;gap:var(--sm);font-weight:700;font-size:13px;color:var(--green-dark)}
+.collect-address{font-size:12px;color:var(--text-sec);display:flex;align-items:center;gap:6px}
+.collect-slot{
+  font-size:12px;color:var(--text-sec);background:#F5F5F0;border-radius:8px;
+  padding:6px var(--sm);align-self:flex-start;display:flex;align-items:center;gap:6px;
 }
 
-.loyalty-card-panier {
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--surface); border-radius: 14px; padding: 12px 14px;
-  margin-top: 16px;
+.loyalty-toggle{
+  display:flex;align-items:center;justify-content:space-between;background:var(--surface);
+  border-radius:14px;padding:12px 14px;margin:var(--lg) var(--xl) 0;
 }
-.loyalty-left { display: flex; align-items: center; gap: 12px; }
-.loyalty-icon {
-  width: 32px; height: 32px; border-radius: 16px;
-  background: var(--green-light);
-  display: flex; align-items: center; justify-content: center;
+.loyalty-left{display:flex;align-items:center;gap:var(--md)}
+.loyalty-icon{
+  width:32px;height:32px;border-radius:50%;background:var(--green-light);
+  display:flex;align-items:center;justify-content:center;
 }
-.loyalty-title-small { font-weight: 700; font-size: 13px; color: var(--text); }
-.loyalty-balance-small { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+.loyalty-title{font-weight:700;font-size:13px;color:var(--text)}
+.loyalty-balance{font-family:var(--mono);font-size:11px;color:var(--text-sec);margin-top:1px}
 
-.toggle-track {
-  width: 44px; height: 26px; border-radius: 13px;
-  background: var(--green); position: relative; cursor: pointer;
+.toggle{
+  width:44px;height:24px;border-radius:12px;background:var(--border);cursor:pointer;
+  position:relative;transition:.2s;
 }
-.toggle-thumb {
-  width: 22px; height: 22px; border-radius: 11px;
-  background: #fff; position: absolute; top: 2px; right: 2px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+.toggle.on{background:var(--green)}
+.toggle::after{
+  content:'';position:absolute;width:20px;height:20px;border-radius:50%;background:#fff;
+  top:2px;left:2px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.15);
 }
+.toggle.on::after{left:22px}
 
-.recap { margin-top: 16px; }
-.recap-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.recap-label { font-size: 13px; color: var(--text-secondary); }
-.recap-value { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text); }
-.recap-discount { color: var(--green); }
-.recap-divider { height: 0.5px; background: var(--border); margin: 4px 0; }
-.recap-total-label { font-weight: 700; font-size: 15px; color: var(--text); }
-.recap-total-value { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: var(--green); }
+.recap{margin:var(--lg) var(--xl) 0;display:flex;flex-direction:column;gap:var(--sm)}
+.recap-row{display:flex;justify-content:space-between;align-items:center}
+.recap-label{font-size:13px;color:var(--text-sec)}
+.recap-value{font-family:var(--mono);font-size:13px;color:var(--text)}
+.recap-discount{color:var(--green)!important}
+.recap-divider{height:.5px;background:var(--border);margin:var(--xs) 0}
+.recap-total-label{font-weight:700;font-size:15px;color:var(--text)}
+.recap-total-value{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--green)}
 
-.payment-option {
-  display: flex; align-items: center; gap: 12px;
-  height: 48px; background: var(--surface); border-radius: 12px;
-  border: 1px solid var(--border); padding: 0 14px;
+.payment-card{
+  display:flex;align-items:center;height:48px;background:var(--surface);border-radius:12px;
+  border:1px solid var(--border);padding:0 14px;gap:var(--md);margin:0 var(--xl) var(--sm);
+  cursor:pointer;transition:.15s;
 }
-.payment-option.selected { border: 1.5px solid var(--green); background: #F8FAF8; }
-.radio {
-  width: 18px; height: 18px; border-radius: 9px;
-  border: 1.5px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
+.payment-card.selected{border:1.5px solid var(--green);background:#F8FAF8}
+.radio{
+  width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
 }
-.radio.selected { border-color: var(--green); }
-.radio-dot { width: 10px; height: 10px; border-radius: 5px; background: var(--green); }
-.payment-label { font-size: 13px; color: var(--text); }
-.payment-label.selected { font-weight: 700; }
+.payment-card.selected .radio{border-color:var(--green)}
+.radio-dot{width:10px;height:10px;border-radius:50%;background:var(--green);display:none}
+.payment-card.selected .radio-dot{display:block}
+.payment-label{font-size:13px;color:var(--text)}
+.payment-card.selected .payment-label{font-weight:700}
 
-.cta-bar {
-  position: absolute; bottom: 80px; left: 0; right: 0;
-  padding: 12px 20px 8px;
-  background: var(--bg);
-  border-top: 0.5px solid var(--border);
+.cta-bar{
+  padding:var(--md) var(--xl) var(--lg);background:var(--bg);
+  border-top:.5px solid var(--border);flex-shrink:0;
 }
-.cta-button {
-  width: 100%; height: 48px; border-radius: 14px; background: var(--green);
-  color: #fff; font-weight: 700; font-size: 15px; border: none; cursor: pointer;
-  font-family: 'Inter', sans-serif;
+.cta-btn{
+  height:48px;border-radius:14px;background:var(--green);display:flex;align-items:center;
+  justify-content:center;color:#fff;font-weight:700;font-size:15px;cursor:pointer;
+  border:none;width:100%;font-family:var(--font);transition:opacity .15s;
 }
-.cta-disclaimer { font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 8px; }
+.cta-btn:hover{opacity:.9}
+.cta-disclaimer{font-size:11px;color:var(--text-muted);text-align:center;margin-top:var(--sm)}
 
-/* ═══ PROFIL SCREEN ═══ */
-.profil-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 16px 20px 12px;
+/* ─── SCREEN: BLOG ─── */
+.blog-header{
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding:var(--lg) var(--xl) var(--md);
 }
-.profil-title { font-weight: 700; font-size: 22px; color: var(--text); }
-.identity {
-  display: flex; align-items: center; gap: 12px;
-  padding: 0 20px; margin-bottom: 24px;
-}
-.avatar-large {
-  width: 52px; height: 52px; border-radius: 26px;
-  background: linear-gradient(135deg, #2C4A32, #4A6B50);
-  display: flex; align-items: center; justify-content: center;
-  color: #fff; font-weight: 700; font-size: 18px;
-  border: 2px solid var(--border);
-}
-.user-name { font-weight: 700; font-size: 16px; color: var(--text); }
-.premium-row { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
-.premium-label { font-size: 12px; color: var(--green); }
+.blog-title{font-weight:700;font-size:28px;letter-spacing:-.5px;color:var(--text)}
+.blog-sub{font-size:13px;color:var(--text-sec);margin-top:2px}
 
-.loyalty-card {
-  margin: 0 20px 16px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #2C4A32, #4A6B50);
-  padding: 20px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 8px 24px rgba(58,90,64,0.2);
+.featured-card{
+  margin:var(--md) var(--xl) var(--xxl);height:220px;border-radius:16px;overflow:hidden;
+  position:relative;cursor:pointer;
 }
-.decor-circle {
-  position: absolute; top: -20px; right: -20px;
-  width: 100px; height: 100px; border-radius: 50px;
-  background: rgba(255,255,255,0.04);
+.featured-card img{width:100%;height:100%;object-fit:cover;display:block}
+.featured-overlay{
+  position:absolute;bottom:0;left:0;right:0;padding:var(--lg);
+  background:linear-gradient(transparent,rgba(0,0,0,.55));
+  display:flex;flex-direction:column;justify-content:flex-end;
 }
-.loyalty-club {
-  font-size: 10px; font-weight: 700; letter-spacing: 3px;
-  color: rgba(255,255,255,0.5); margin-bottom: 8px;
+.featured-label{
+  font-weight:700;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.75);margin-bottom:var(--xs);
 }
-.loyalty-name { font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 12px; }
-.points-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 8px; }
-.points-value { font-family: 'JetBrains Mono', monospace; font-size: 36px; font-weight: 700; color: #fff; }
-.points-unit { font-size: 14px; color: rgba(255,255,255,0.7); }
-.loyalty-level {
-  font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
-  color: rgba(255,255,255,0.75); margin-bottom: 12px;
-}
-.progress-track { height: 3px; background: rgba(255,255,255,0.15); border-radius: 1.5px; margin-bottom: 8px; }
-.progress-fill { height: 3px; background: #fff; border-radius: 1.5px; width: 75%; }
-.progress-info { display: flex; justify-content: space-between; }
-.progress-text { font-size: 11px; color: rgba(255,255,255,0.6); }
+.featured-title{font-weight:700;font-size:18px;color:#fff;margin-bottom:var(--xs)}
+.featured-meta{font-size:11px;color:rgba(255,255,255,.65)}
 
-.wallet-card {
-  margin: 0 20px 24px;
-  background: var(--surface);
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  padding: 14px 16px;
-}
-.wallet-header { display: flex; justify-content: space-between; align-items: center; }
-.wallet-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 4px; }
-.wallet-balance { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: var(--text); }
-.recharge-btn {
-  height: 32px; padding: 0 16px;
-  background: var(--green); border-radius: 8px;
-  color: #fff; font-weight: 700; font-size: 12px;
-  border: none; cursor: pointer; font-family: 'Inter', sans-serif;
+.recent-label{
+  font-weight:700;font-size:10px;letter-spacing:3px;color:var(--green);
+  padding:0 var(--xl);margin-bottom:var(--lg);
 }
 
-.rewards-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 0 20px; margin-bottom: 12px;
-}
-.rewards-title { font-weight: 700; font-size: 16px; color: var(--text); }
-.rewards-see-all { font-size: 12px; color: var(--green); }
-.rewards-scroll {
-  display: flex; gap: 12px; padding: 0 20px; margin-bottom: 24px;
-  overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none;
-}
-.rewards-scroll::-webkit-scrollbar { display: none; }
-.reward-card {
-  flex-shrink: 0; width: 150px;
-  background: var(--surface); border-radius: 12px;
-  border: 1px solid var(--border); padding: 14px;
-}
-.reward-icon {
-  width: 32px; height: 32px; border-radius: 8px; background: #F5F5F0;
-  display: flex; align-items: center; justify-content: center;
-  margin-bottom: 8px; font-size: 16px;
-}
-.reward-name { font-weight: 700; font-size: 13px; color: var(--text); margin-bottom: 2px; }
-.reward-sub { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
-.reward-cta { font-weight: 700; font-size: 12px; color: var(--green); cursor: pointer; }
+.blog-articles{padding:0 var(--xl);display:flex;flex-direction:column;gap:28px}
+.blog-article{cursor:pointer}
+.blog-article img{width:100%;aspect-ratio:1.6;border-radius:12px;object-fit:cover;display:block;margin-bottom:var(--md)}
+.blog-cat-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--xs)}
+.blog-cat{font-weight:700;font-size:10px;letter-spacing:2px;color:var(--green)}
+.blog-date{font-size:11px;color:var(--text-muted)}
+.blog-article-title{font-weight:700;font-size:16px;color:var(--text);margin-bottom:var(--xs)}
+.blog-excerpt{font-size:13px;line-height:20px;color:#737373;margin-bottom:var(--sm);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.blog-read-more{font-weight:700;font-size:12px;color:var(--green);text-decoration:underline}
 
-.orders-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 0 20px; margin-bottom: 12px;
+/* ─── SCREEN: PROFIL ─── */
+.profil-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:var(--lg) var(--xl) var(--md);
 }
-.orders-title { font-weight: 700; font-size: 16px; color: var(--text); }
-.orders-see-all { font-size: 12px; color: var(--green); }
-.orders-list { padding: 0 20px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
-.order-card {
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--surface); border-radius: 12px;
-  border: 1px solid var(--border); padding: 12px;
+.profil-header-title{font-weight:700;font-size:22px;color:var(--text)}
+
+.identity{
+  display:flex;align-items:center;gap:var(--md);padding:0 var(--xl);margin-bottom:var(--xxl);
 }
-.order-info { display: flex; align-items: center; gap: 12px; flex: 1; }
-.order-icon {
-  width: 36px; height: 36px; border-radius: 8px; background: #F5F5F0;
-  display: flex; align-items: center; justify-content: center; font-size: 14px;
+.identity-avatar{
+  width:52px;height:52px;border-radius:50%;
+  background:linear-gradient(135deg,#2C4A32,#4A6B50);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:18px;color:#fff;border:2px solid var(--border);flex-shrink:0;
 }
-.order-name { font-weight: 700; font-size: 13px; color: var(--text); margin-bottom: 2px; }
-.order-meta { font-size: 11px; color: var(--text-muted); }
-.reorder-btn {
-  width: 36px; height: 36px; border-radius: 18px;
-  background: var(--green-light);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; cursor: pointer; margin-left: 8px;
+.identity-name{font-weight:700;font-size:16px;color:var(--text)}
+.premium-row{display:flex;align-items:center;gap:4px;margin-top:2px}
+.premium-label{font-size:12px;color:var(--green)}
+
+.loyalty-card{
+  margin:0 var(--xl) var(--lg);border-radius:20px;padding:20px;overflow:hidden;
+  background:linear-gradient(135deg,#2C4A32,#4A6B50);color:#fff;position:relative;
+  box-shadow:0 8px 24px rgba(58,90,64,.2);
+}
+.decor-circle{
+  position:absolute;top:-20px;right:-20px;width:100px;height:100px;border-radius:50%;
+  background:rgba(255,255,255,.04);
+}
+.loyalty-club{font-weight:700;font-size:10px;letter-spacing:3px;color:rgba(255,255,255,.5);margin-bottom:var(--sm)}
+.loyalty-name{font-weight:700;font-size:14px;color:#fff;margin-bottom:var(--md)}
+.points-row{display:flex;align-items:baseline;gap:var(--xs);margin-bottom:var(--sm)}
+.points-value{font-family:var(--mono);font-size:36px;font-weight:700;color:#fff}
+.points-unit{font-size:14px;color:rgba(255,255,255,.7)}
+.loyalty-level{font-weight:700;font-size:12px;letter-spacing:1.5px;color:rgba(255,255,255,.75);margin-bottom:var(--md)}
+.progress-track{height:3px;background:rgba(255,255,255,.15);border-radius:2px;margin-bottom:var(--sm)}
+.progress-fill{height:3px;background:#fff;border-radius:2px;width:0;transition:width 1.5s ease}
+.progress-info{display:flex;justify-content:space-between;align-items:center}
+.progress-text{font-size:11px;color:rgba(255,255,255,.6)}
+
+.wallet-card{
+  margin:0 var(--xl) var(--xxl);background:var(--surface);border-radius:14px;
+  border:1px solid var(--border);padding:14px 16px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.wallet-label{font-weight:700;font-size:10px;letter-spacing:2px;color:var(--text-muted);margin-bottom:var(--xs)}
+.wallet-balance{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text)}
+.recharge-btn{
+  height:32px;padding:0 var(--lg);background:var(--green);border-radius:8px;border:none;
+  font-weight:700;font-size:12px;color:#fff;cursor:pointer;font-family:var(--font);
+}
+.recharge-btn:hover{background:var(--green-dark)}
+
+.rewards-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:0 var(--xl);margin-bottom:var(--md);
+}
+.rewards-title{font-weight:700;font-size:16px;color:var(--text)}
+.rewards-see-all{font-size:12px;color:var(--green);cursor:pointer}
+
+.rewards-scroll{
+  display:flex;gap:var(--md);padding:0 var(--xl);overflow-x:auto;margin-bottom:var(--xxl);
+}
+.rewards-scroll::-webkit-scrollbar{display:none}
+.reward-card{
+  min-width:150px;background:var(--surface);border-radius:12px;border:1px solid var(--border);
+  padding:14px;flex-shrink:0;
+}
+.reward-icon{
+  width:32px;height:32px;border-radius:8px;background:#F5F5F0;
+  display:flex;align-items:center;justify-content:center;margin-bottom:var(--sm);font-size:16px;
+}
+.reward-name{font-weight:700;font-size:13px;color:var(--text);margin-bottom:2px}
+.reward-sub{font-size:11px;color:var(--text-muted);margin-bottom:var(--sm)}
+.reward-cta{font-weight:700;font-size:12px;color:var(--green);cursor:pointer}
+
+.orders-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:0 var(--xl);margin-bottom:var(--md);
+}
+.orders-title{font-weight:700;font-size:16px;color:var(--text)}
+.orders-see-all{font-size:12px;color:var(--green);cursor:pointer}
+
+.order-card{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--surface);border-radius:12px;border:1px solid var(--border);
+  padding:12px;margin:0 var(--xl) var(--sm);
+}
+.order-info{display:flex;align-items:center;gap:var(--md);flex:1;min-width:0}
+.order-icon{
+  width:36px;height:36px;border-radius:8px;background:#F5F5F0;
+  display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;
+}
+.order-details{flex:1;min-width:0}
+.order-name{font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.order-meta{font-size:11px;color:var(--text-muted);margin-top:2px}
+.reorder-btn{
+  width:36px;height:36px;border-radius:50%;background:var(--green-light);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;margin-left:var(--sm);
+  flex-shrink:0;
 }
 
-.menu-section {
-  margin: 0 20px;
-  background: var(--surface); border-radius: 14px; overflow: hidden;
+.menu-section{
+  margin:var(--xxl) var(--xl) 0;background:var(--surface);border-radius:14px;overflow:hidden;
 }
-.menu-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 16px; font-size: 15px; color: var(--text); cursor: pointer;
+.menu-item{
+  display:flex;align-items:center;gap:var(--md);padding:16px;cursor:pointer;font-size:15px;
 }
-.menu-sep { height: 0.5px; background: var(--border); margin-left: 50px; }
-.menu-item.danger { color: var(--error); }
+.menu-item:hover{background:#fafaf8}
+.menu-sep{height:.5px;background:var(--border);margin-left:50px}
+
+/* ─── TOAST ─── */
+.toast{
+  position:absolute;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--text);color:#fff;padding:10px 20px;border-radius:12px;font-size:13px;
+  font-weight:600;opacity:0;transition:.3s;pointer-events:none;z-index:200;white-space:nowrap;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:440px){
+  .phone{width:100%;height:100vh;border-radius:0;box-shadow:none}
+  body{padding:0;background:var(--bg)}
+  .phone-notch{display:none}
+  .status-bar{height:44px}
+}
+
+/* Hide screens */
+.screen-content{display:none}
+.screen-content.active{display:block}
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════ -->
-<!-- SCREEN 1: HOME                         -->
-<!-- ═══════════════════════════════════════ -->
-<div style="position:relative; margin-top: 40px;">
-  <div class="screen-label">Accueil</div>
-  <div class="phone">
-    <div class="phone-inner">
-      <div class="status-bar">
-        <span>17:34</span>
-        <div class="status-bar-right">5G ■■□</div>
-      </div>
+<div class="phone" id="app">
+  <div class="phone-notch"></div>
+  <div class="status-bar">
+    <span>9:41</span>
+    <span style="display:flex;align-items:center;gap:4px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="6" width="18" height="12" rx="2"/><line x1="23" y1="13" x2="23" y2="11"/></svg>
+    </span>
+  </div>
 
+  <div class="screen" id="screen">
+    <!-- ════════════════ HOME ════════════════ -->
+    <div class="screen-content active" id="screen-home">
       <div class="home-header">
         <div class="home-header-left">
-          <div class="avatar">J</div>
+          <div class="avatar-circle">J</div>
           <div>
-            <div class="greeting">Bonjour Johan</div>
-            <div class="greeting-sub">Qu'est-ce qui vous ferait du bien ?</div>
+            <div class="greeting" id="greeting">Bonjour Johan</div>
+            <div class="home-subtitle">Qu'est-ce qui vous ferait du bien ?</div>
           </div>
         </div>
         <div class="notif-btn">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8A8A82" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         </div>
       </div>
 
       <div class="search-bar">
-        <svg width="16" height="16" fill="none" stroke="#B0AFA8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        Rechercher...
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B0AFA8" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <span>Rechercher...</span>
       </div>
 
       <div class="promo-card">
         <div class="promo-content">
-          <div class="promo-title">Première commande ?</div>
+          <div class="promo-title">Premiere commande ?</div>
           <div class="promo-sub">Profitez de -15% avec le code BIENVENUE</div>
           <div class="promo-cta">En profiter</div>
         </div>
         <div class="promo-icon">
-          <svg width="36" height="36" fill="none" stroke="#6B8F71" stroke-width="1" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66L12 14l4 6 2 .5C22 15 15 2 8 4"/></svg>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#6B8F71" stroke-width="1"><path d="M11 20A7 7 0 0 1 9.8 6.9C15.5 4.9 17 3.5 17 3.5s1.5 2 2.1 7.7A7 7 0 0 1 11 20z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
         </div>
       </div>
 
-      <div class="pill-row">
-        <span class="pill active">Tout</span>
-        <span class="pill">Nourrir</span>
-        <span class="pill">Savourer</span>
-        <span class="pill">Pâtisseries</span>
-        <span class="pill">Emporter</span>
-      </div>
-
-      <div class="section-label section-px">À LA CARTE</div>
-
-      <div class="carousel">
-        <div class="product-card">
-          <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=520&h=360&fit=crop" alt="Zen Buddha Bowl"/>
-          <div class="product-card-body">
-            <div class="product-card-name">Zen Buddha Bowl</div>
-            <div class="product-card-desc">Quinoa, avocat, pois chiches, légumes de saison</div>
-            <div class="product-card-meta">
-              <span>⭐ 4.8</span>
-              <span>520 kcal</span>
-              <span>15 min</span>
-            </div>
-            <div class="product-card-footer">
-              <span class="product-card-price">14,50 €</span>
-              <div class="product-card-tags">
-                <span class="product-tag">Vegan</span>
-                <span class="product-tag">Bio</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="product-card">
-          <img src="https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=400&h=520&fit=crop" alt="Matcha Zen Latte"/>
-          <div class="product-card-body">
-            <div class="product-card-name">Matcha Zen Latte Glacé</div>
-            <div class="product-card-desc">Thé matcha de cérémonie, lait d'avoine</div>
-            <div class="product-card-meta">
-              <span>⭐ 4.8</span>
-              <span>580 kcal</span>
-              <span>15 min</span>
-            </div>
-            <div class="product-card-footer">
-              <span class="product-card-price">6,50 €</span>
-              <div class="product-card-tags">
-                <span class="product-tag">Vegan</span>
-                <span class="product-tag">Bio</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="dots">
-        <span class="dot active"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
-      </div>
+      <div class="pills-row" id="home-pills"></div>
+      <div class="section-label">A LA CARTE</div>
+      <div class="carousel-track" id="home-carousel"></div>
+      <div class="dots" id="home-dots"></div>
 
       <div class="fav-header">
-        <span class="fav-title">Nos coups de cœur</span>
-        <span class="see-all">Voir tout</span>
+        <div class="fav-title">Nos coups de coeur</div>
+        <div class="see-all" onclick="switchTab(1)">Voir tout</div>
       </div>
-
-      <div class="fav-list">
-        <div class="fav-item">
-          <img class="fav-thumb" src="https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=520&h=360&fit=crop" alt=""/>
-          <div class="fav-content">
-            <div class="fav-name">Carrot Cake Maison</div>
-            <div class="fav-desc">Gâteau aux carottes, noix de pécan</div>
-          </div>
-          <span class="fav-price">5,90 €</span>
-        </div>
-        <div class="fav-item">
-          <img class="fav-thumb" src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=520&h=360&fit=crop" alt=""/>
-          <div class="fav-content">
-            <div class="fav-name">Zen Buddha Bowl</div>
-            <div class="fav-desc">Quinoa, avocat, pois chiches</div>
-          </div>
-          <span class="fav-price">14,50 €</span>
-        </div>
-        <div class="fav-item">
-          <img class="fav-thumb" src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=520&h=360&fit=crop" alt=""/>
-          <div class="fav-content">
-            <div class="fav-name">Poke Bowl Saumon</div>
-            <div class="fav-desc">Riz vinaigré, saumon mariné, edamame</div>
-          </div>
-          <span class="fav-price">15,90 €</span>
-        </div>
-      </div>
+      <div id="home-favorites"></div>
+      <div style="height:24px"></div>
     </div>
 
-    <div class="tab-bar">
-      <div class="tab-item active">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
-        Accueil
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
-        Carte
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
-        Panier
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
-        Blog
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-        Profil
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════ -->
-<!-- SCREEN 2: CARTE                        -->
-<!-- ═══════════════════════════════════════ -->
-<div style="position:relative; margin-top: 40px;">
-  <div class="screen-label">Carte / Menu</div>
-  <div class="phone">
-    <div class="phone-inner">
-      <div class="status-bar">
-        <span>17:34</span>
-        <div class="status-bar-right">5G ■■□</div>
-      </div>
-
+    <!-- ════════════════ CARTE ════════════════ -->
+    <div class="screen-content" id="screen-carte">
       <div class="carte-header">
         <div>
           <div class="carte-title">Notre carte</div>
           <div class="carte-sub">Fait maison, chaque jour.</div>
         </div>
-        <div class="notif-btn">
-          <svg width="17" height="17" fill="none" stroke="#8A8A82" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <div class="search-circle">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8A8A82" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </div>
       </div>
-
-      <div class="pill-row">
-        <span class="pill active">Tout</span>
-        <span class="pill">Nourrir</span>
-        <span class="pill">Savourer</span>
-        <span class="pill">Pâtisseries</span>
-        <span class="pill">Emporter</span>
-      </div>
-
-      <div class="product-count">12 PRODUITS</div>
-
-      <div class="grid">
-        <div class="grid-card">
-          <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=520&h=360&fit=crop" alt=""/>
-          <div class="grid-card-body">
-            <div class="grid-card-name">Zen Buddha Bowl</div>
-            <div class="grid-card-desc">Quinoa, avocat, pois chiches</div>
-            <div class="grid-card-footer">
-              <span class="grid-card-price">14,50 €</span>
-              <button class="grid-add-btn">+</button>
-            </div>
-          </div>
-        </div>
-        <div class="grid-card">
-          <img src="https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=400&h=520&fit=crop" alt=""/>
-          <div class="grid-card-body">
-            <div class="grid-card-name">Matcha Zen Latte</div>
-            <div class="grid-card-desc">Thé matcha, lait d'avoine</div>
-            <div class="grid-card-footer">
-              <span class="grid-card-price">6,50 €</span>
-              <button class="grid-add-btn">+</button>
-            </div>
-          </div>
-        </div>
-        <div class="grid-card">
-          <img src="https://images.unsplash.com/photo-1540420773420-3366772f4999?w=520&h=360&fit=crop" alt=""/>
-          <div class="grid-card-body">
-            <div class="grid-card-name">Salade Printanière</div>
-            <div class="grid-card-desc">Mesclun, chèvre frais, noix</div>
-            <div class="grid-card-footer">
-              <span class="grid-card-price">12,90 €</span>
-              <button class="grid-add-btn">+</button>
-            </div>
-          </div>
-        </div>
-        <div class="grid-card">
-          <img src="https://images.unsplash.com/photo-1571934811356-5cc061b6821f?w=400&h=500&fit=crop" alt=""/>
-          <div class="grid-card-body">
-            <div class="grid-card-name">Earl Grey Bio</div>
-            <div class="grid-card-desc">Thé noir bergamote, floral</div>
-            <div class="grid-card-footer">
-              <span class="grid-card-price">4,80 €</span>
-              <button class="grid-add-btn">+</button>
-            </div>
-          </div>
-        </div>
-        <div class="grid-card">
-          <img src="https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=520&h=360&fit=crop" alt=""/>
-          <div class="grid-card-body">
-            <div class="grid-card-name">Carrot Cake</div>
-            <div class="grid-card-desc">Gâteau carottes, cream cheese</div>
-            <div class="grid-card-footer">
-              <span class="grid-card-price">5,90 €</span>
-              <button class="grid-add-btn">+</button>
-            </div>
-          </div>
-        </div>
-        <div class="grid-card">
-          <img src="https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=520&h=360&fit=crop" alt=""/>
-          <div class="grid-card-body">
-            <div class="grid-card-name">Cookie Chocolat</div>
-            <div class="grid-card-desc">Chocolat noir 70%, caramélisé</div>
-            <div class="grid-card-footer">
-              <span class="grid-card-price">3,90 €</span>
-              <button class="grid-add-btn">+</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div class="pills-row" id="carte-pills"></div>
+      <div class="count-text" id="carte-count"></div>
+      <div class="product-grid" id="carte-grid"></div>
+      <div style="height:24px"></div>
     </div>
 
-    <div class="tab-bar">
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
-        Accueil
-      </div>
-      <div class="tab-item active">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
-        Carte
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
-        Panier
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
-        Blog
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-        Profil
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════ -->
-<!-- SCREEN 3: PANIER                       -->
-<!-- ═══════════════════════════════════════ -->
-<div style="position:relative; margin-top: 40px;">
-  <div class="screen-label">Panier</div>
-  <div class="phone">
-    <div class="phone-inner" style="padding-bottom: 170px;">
-      <div class="status-bar">
-        <span>17:34</span>
-        <div class="status-bar-right">5G ■■□</div>
-      </div>
-
+    <!-- ════════════════ PANIER ════════════════ -->
+    <div class="screen-content" id="screen-panier">
       <div class="panier-header">
-        <div class="back-btn">
-          <svg width="20" height="20" fill="none" stroke="#2A2A2A" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        <div class="spacer"></div>
+        <h2>Votre panier</h2>
+        <div class="spacer"></div>
+      </div>
+      <div class="section-label">ARTICLES</div>
+      <div id="panier-items"></div>
+
+      <div class="collect-card">
+        <div class="collect-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4A6B50" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          Click & Collect
         </div>
-        <div class="panier-header-title">Votre panier</div>
-        <div class="header-spacer"></div>
+        <div class="collect-address">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A8A82" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          12 rue de la Gare, 95130 Franconville
+        </div>
+        <div class="collect-slot">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A8A82" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Aujourd'hui, 14:30 - 15:00 &rsaquo;
+        </div>
       </div>
 
-      <div class="section-px">
-        <div class="section-label" style="margin-top:8px;">ARTICLES</div>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          <div class="article-item">
-            <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=520&h=360&fit=crop" alt=""/>
-            <div class="article-item-info">
-              <div class="article-item-name">Zen Buddha Bowl</div>
-              <div class="article-item-price">14,50 €</div>
-            </div>
-            <div class="qty-area">
-              <div class="qty-selector">
-                <button class="qty-btn">−</button>
-                <span class="qty-value">1</span>
-                <button class="qty-btn">+</button>
-              </div>
-              <svg width="14" height="14" fill="none" stroke="#D4544A" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-            </div>
+      <div class="loyalty-toggle">
+        <div class="loyalty-left">
+          <div class="loyalty-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#6B8F71" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </div>
-          <div class="article-item">
-            <img src="https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=400&h=520&fit=crop" alt=""/>
-            <div class="article-item-info">
-              <div class="article-item-name">Matcha Zen Latte Glacé</div>
-              <div class="article-item-price">6,50 €</div>
-            </div>
-            <div class="qty-area">
-              <div class="qty-selector">
-                <button class="qty-btn">−</button>
-                <span class="qty-value">2</span>
-                <button class="qty-btn">+</button>
-              </div>
-              <svg width="14" height="14" fill="none" stroke="#D4544A" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-            </div>
+          <div>
+            <div class="loyalty-title">Points de fidelite</div>
+            <div class="loyalty-balance">Solde : 1 240 pts</div>
           </div>
         </div>
-
-        <div class="collect-card">
-          <div class="collect-header">
-            <svg width="14" height="14" fill="none" stroke="#4A6B50" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-            <span class="collect-title">Click & Collect</span>
-          </div>
-          <div class="collect-address">
-            <svg width="12" height="12" fill="none" stroke="#8A8A82" stroke-width="1.8" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            12 rue de la Gare, 95130 Franconville
-          </div>
-          <div class="collect-slot">
-            <svg width="12" height="12" fill="none" stroke="#8A8A82" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Aujourd'hui, 14:30 – 15:00 ›
-          </div>
-        </div>
-
-        <div class="loyalty-card-panier">
-          <div class="loyalty-left">
-            <div class="loyalty-icon">⭐</div>
-            <div>
-              <div class="loyalty-title-small">Points de fidélité</div>
-              <div class="loyalty-balance-small">Solde : 1 240 pts</div>
-            </div>
-          </div>
-          <div class="toggle-track">
-            <div class="toggle-thumb"></div>
-          </div>
-        </div>
-
-        <div class="recap">
-          <div class="recap-row">
-            <span class="recap-label">Sous-total</span>
-            <span class="recap-value">27,50 €</span>
-          </div>
-          <div class="recap-row">
-            <span class="recap-label">TVA (5,5%)</span>
-            <span class="recap-value">1,51 €</span>
-          </div>
-          <div class="recap-row">
-            <span class="recap-label recap-discount">Remise fidélité</span>
-            <span class="recap-value recap-discount">-2,75 €</span>
-          </div>
-          <div class="recap-divider"></div>
-          <div class="recap-row">
-            <span class="recap-total-label">Total</span>
-            <span class="recap-total-value">26,26 €</span>
-          </div>
-        </div>
-
-        <div class="section-label">PAIEMENT</div>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          <div class="payment-option selected">
-            <div class="radio selected"><div class="radio-dot"></div></div>
-            <span class="payment-label selected">Carte bancaire</span>
-          </div>
-          <div class="payment-option">
-            <div class="radio"></div>
-            <span class="payment-label">Wallet Teaven</span>
-          </div>
-          <div class="payment-option">
-            <div class="radio"></div>
-            <span class="payment-label">Mixte (Points + Carte)</span>
-          </div>
-        </div>
+        <div class="toggle" id="loyalty-toggle" onclick="toggleLoyalty()"></div>
       </div>
+
+      <div class="recap" id="panier-recap"></div>
+      <div class="section-label" style="margin-top:var(--lg)">PAIEMENT</div>
+      <div id="panier-payment"></div>
+      <div style="height:24px"></div>
     </div>
 
-    <div class="cta-bar">
-      <button class="cta-button">Valider ma commande — 26,26 €</button>
-      <div class="cta-disclaimer">En validant, vous acceptez nos conditions générales de vente.</div>
-    </div>
-
-    <div class="tab-bar">
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
-        Accueil
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
-        Carte
-      </div>
-      <div class="tab-item active">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
-        Panier
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
-        Blog
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-        Profil
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════ -->
-<!-- SCREEN 4: BLOG                         -->
-<!-- ═══════════════════════════════════════ -->
-<div style="position:relative; margin-top: 40px;">
-  <div class="screen-label">Blog / Atmosphère</div>
-  <div class="phone">
-    <div class="phone-inner">
-      <div class="status-bar">
-        <span>17:34</span>
-        <div class="status-bar-right">5G ■■□</div>
-      </div>
-
+    <!-- ════════════════ BLOG ════════════════ -->
+    <div class="screen-content" id="screen-blog">
       <div class="blog-header">
         <div>
-          <div class="blog-title">Atmosphère</div>
+          <div class="blog-title">Atmosphere</div>
           <div class="blog-sub">Prenez soin de vous</div>
         </div>
-        <svg width="20" height="20" fill="none" stroke="#8A8A82" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      </div>
-
-      <div class="pill-row">
-        <span class="pill active">Tout</span>
-        <span class="pill">Nutrition</span>
-        <span class="pill">Bien-être</span>
-        <span class="pill">Lifestyle</span>
-      </div>
-
-      <div class="featured-card">
-        <img src="https://images.unsplash.com/photo-1544025162-d76694265947?w=800&h=500&fit=crop" alt="Featured article"/>
-        <div class="featured-overlay">
-          <div class="featured-label">À LA UNE · NUTRITION</div>
-          <div class="featured-title">Les bienfaits du thé vert sur la concentration</div>
-          <div class="featured-meta">Par Sophie Martin · 5 min de lecture</div>
+        <div class="search-circle">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8A8A82" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </div>
       </div>
-
-      <div class="recent-label">ARTICLES RÉCENTS</div>
-
-      <div class="article-list">
-        <div class="article-card">
-          <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&h=500&fit=crop" alt=""/>
-          <div class="article-cat-row">
-            <span class="article-category">BIEN-ÊTRE</span>
-            <span class="article-date">12 mars 2026</span>
-          </div>
-          <div class="article-title">5 rituels matinaux pour commencer la journée zen</div>
-          <div class="article-excerpt">Découvrez des habitudes simples qui transformeront vos matins et boosteront votre énergie...</div>
-          <span class="read-more">Lire la suite</span>
-        </div>
-        <div class="article-card">
-          <img src="https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800&h=500&fit=crop" alt=""/>
-          <div class="article-cat-row">
-            <span class="article-category">NUTRITION</span>
-            <span class="article-date">8 mars 2026</span>
-          </div>
-          <div class="article-title">Superaliments : mythe ou réalité ?</div>
-          <div class="article-excerpt">Un tour d'horizon des aliments dits "super" et ce que la science en dit réellement...</div>
-          <span class="read-more">Lire la suite</span>
-        </div>
-      </div>
+      <div class="pills-row" id="blog-pills"></div>
+      <div id="blog-featured"></div>
+      <div class="recent-label">ARTICLES RECENTS</div>
+      <div class="blog-articles" id="blog-articles"></div>
+      <div style="height:24px"></div>
     </div>
 
-    <div class="tab-bar">
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
-        Accueil
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
-        Carte
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
-        Panier
-      </div>
-      <div class="tab-item active">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
-        Blog
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-        Profil
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════ -->
-<!-- SCREEN 5: PROFIL                       -->
-<!-- ═══════════════════════════════════════ -->
-<div style="position:relative; margin-top: 40px;">
-  <div class="screen-label">Profil</div>
-  <div class="phone">
-    <div class="phone-inner">
-      <div class="status-bar">
-        <span>17:34</span>
-        <div class="status-bar-right">5G ■■□</div>
-      </div>
-
+    <!-- ════════════════ PROFIL ════════════════ -->
+    <div class="screen-content" id="screen-profil">
       <div class="profil-header">
-        <span class="profil-title">Mon Profil</span>
-        <svg width="20" height="20" fill="none" stroke="#8A8A82" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.26.4.4.87.4 1.36V11"/></svg>
+        <div class="profil-header-title">Mon Profil</div>
+        <div class="search-circle">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8A8A82" stroke-width="1.8"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
       </div>
 
       <div class="identity">
-        <div class="avatar-large">J</div>
+        <div class="identity-avatar">J</div>
         <div>
-          <div class="user-name">Johan</div>
+          <div class="identity-name">Johan</div>
           <div class="premium-row">
-            <svg width="12" height="12" fill="none" stroke="#6B8F71" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B8F71" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             <span class="premium-label">Membre Premium</span>
           </div>
         </div>
@@ -1143,130 +637,440 @@ body {
         <div class="loyalty-club">TEAVEN CLUB</div>
         <div class="loyalty-name">Johan</div>
         <div class="points-row">
-          <span class="points-value">1 250</span>
+          <span class="points-value" id="points-counter">0</span>
           <span class="points-unit">pts</span>
         </div>
         <div class="loyalty-level">NIVEAU OR</div>
         <div class="progress-track">
-          <div class="progress-fill"></div>
+          <div class="progress-fill" id="progress-fill"></div>
         </div>
         <div class="progress-info">
           <span class="progress-text">Prochain : Boisson offerte</span>
-          <span class="progress-text">75%</span>
+          <span class="progress-text" style="font-family:var(--mono)">75%</span>
         </div>
       </div>
 
       <div class="wallet-card">
-        <div class="wallet-header">
-          <div>
-            <div class="wallet-label">PORTE-MONNAIE</div>
-            <div class="wallet-balance">42,50 €</div>
-          </div>
-          <button class="recharge-btn">Recharger</button>
+        <div>
+          <div class="wallet-label">PORTE-MONNAIE</div>
+          <div class="wallet-balance" id="wallet-balance">42,50 &euro;</div>
         </div>
+        <button class="recharge-btn">Recharger</button>
       </div>
 
       <div class="rewards-header">
-        <span class="rewards-title">Récompenses</span>
-        <span class="rewards-see-all">Tout voir</span>
+        <div class="rewards-title">Recompenses</div>
+        <div class="rewards-see-all">Tout voir</div>
       </div>
-
-      <div class="rewards-scroll">
-        <div class="reward-card">
-          <div class="reward-icon">☕</div>
-          <div class="reward-name">Boisson offerte</div>
-          <div class="reward-sub">500 pts</div>
-          <span class="reward-cta">Utiliser</span>
-        </div>
-        <div class="reward-card">
-          <div class="reward-icon">🎁</div>
-          <div class="reward-name">Dessert offert</div>
-          <div class="reward-sub">750 pts</div>
-          <span class="reward-cta">Utiliser</span>
-        </div>
-        <div class="reward-card">
-          <div class="reward-icon">%</div>
-          <div class="reward-name">-20% sur carte</div>
-          <div class="reward-sub">1000 pts</div>
-          <span class="reward-cta">Utiliser</span>
-        </div>
-      </div>
+      <div class="rewards-scroll" id="rewards-scroll"></div>
 
       <div class="orders-header">
-        <span class="orders-title">Mes commandes</span>
-        <span class="orders-see-all">Tout voir</span>
+        <div class="orders-title">Mes commandes</div>
+        <div class="orders-see-all">Tout voir</div>
       </div>
-
-      <div class="orders-list">
-        <div class="order-card">
-          <div class="order-info">
-            <div class="order-icon">📋</div>
-            <div>
-              <div class="order-name">Zen Buddha Bowl, Matcha Latte</div>
-              <div class="order-meta">14 mars · 21,00 €</div>
-            </div>
-          </div>
-          <div class="reorder-btn">↻</div>
-        </div>
-        <div class="order-card">
-          <div class="order-info">
-            <div class="order-icon">📋</div>
-            <div>
-              <div class="order-name">Salade Printanière, Earl Grey</div>
-              <div class="order-meta">10 mars · 17,70 €</div>
-            </div>
-          </div>
-          <div class="reorder-btn">↻</div>
-        </div>
-        <div class="order-card">
-          <div class="order-info">
-            <div class="order-icon">📋</div>
-            <div>
-              <div class="order-name">Poke Bowl Saumon</div>
-              <div class="order-meta">7 mars · 15,90 €</div>
-            </div>
-          </div>
-          <div class="reorder-btn">↻</div>
-        </div>
-      </div>
+      <div id="orders-list"></div>
 
       <div class="menu-section">
         <div class="menu-item">
-          <svg width="18" height="18" fill="none" stroke="#6B8F71" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          Aide & FAQ
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B8F71" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Aide & FAQ</span>
         </div>
         <div class="menu-sep"></div>
-        <div class="menu-item danger">
-          <svg width="18" height="18" fill="none" stroke="#D4544A" stroke-width="1.6" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          Déconnexion
+        <div class="menu-item" style="color:var(--error)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D4544A" stroke-width="1.6"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>Deconnexion</span>
+        </div>
+      </div>
+      <div style="height:24px"></div>
+    </div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <button class="tab active" onclick="switchTab(0)">
+      <svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Accueil</span>
+    </button>
+    <button class="tab" onclick="switchTab(1)">
+      <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span>Carte</span>
+    </button>
+    <button class="tab" onclick="switchTab(2)">
+      <svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+      <span>Panier</span>
+    </button>
+    <button class="tab" onclick="switchTab(3)">
+      <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <span>Blog</span>
+    </button>
+    <button class="tab" onclick="switchTab(4)">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Profil</span>
+    </button>
+  </div>
+
+  <!-- CTA BAR for Panier -->
+  <div class="cta-bar" id="panier-cta" style="display:none">
+    <button class="cta-btn" id="cta-btn-text">Valider ma commande</button>
+    <div class="cta-disclaimer">En validant, vous acceptez nos conditions generales de vente.</div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════
+const products = [
+  {id:'1',name:'Zen Buddha Bowl',desc:'Quinoa, avocat, pois chiches, legumes de saison',price:1450,image:'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=520&h=360&fit=crop',category:'nourrir',rating:4.8,kcal:520,prepTime:15,tags:['Vegan','Bio']},
+  {id:'2',name:'Matcha Zen Latte Glace',desc:'The matcha de ceremonie, lait d\'avoine, sirop d\'erable bio',price:650,image:'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=400&h=520&fit=crop',category:'savourer',rating:4.8,kcal:580,prepTime:15,tags:['Vegan','Bio']},
+  {id:'3',name:'Salade Printaniere',desc:'Mesclun, chevre frais, noix, vinaigrette miel',price:1290,image:'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=520&h=360&fit=crop',category:'nourrir',rating:4.6,kcal:380,prepTime:10,tags:['Bio']},
+  {id:'4',name:'Earl Grey Bio',desc:'The noir bergamote, notes florales delicates',price:480,image:'https://images.unsplash.com/photo-1571934811356-5cc061b6821f?w=400&h=500&fit=crop',category:'savourer',rating:4.5,kcal:0,prepTime:5,tags:['Bio']},
+  {id:'5',name:'Smoothie Vert Detox',desc:'Epinards, pomme, gingembre, citron',price:650,image:'https://images.unsplash.com/photo-1638176066666-ffb2f013c7dd?w=400&h=400&fit=crop',category:'savourer',rating:4.7,kcal:180,prepTime:5,tags:['Vegan','Bio']},
+  {id:'6',name:'Sencha Japon',desc:'The vert japonais, notes vegetales fraiches',price:450,image:'https://images.unsplash.com/photo-1556881286-fc6915169721?w=400&h=500&fit=crop',category:'savourer',rating:4.4,kcal:0,prepTime:5,tags:['Bio']},
+  {id:'7',name:'Carrot Cake Maison',desc:'Gateau aux carottes, noix de pecan, glacage cream cheese',price:590,image:'https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=520&h=360&fit=crop',category:'patisseries',rating:4.9,kcal:340,prepTime:0,tags:['Fait maison']},
+  {id:'8',name:'Cookie Chocolat Noir',desc:'Cookie moelleux au chocolat noir 70%, pepites',price:390,image:'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=520&h=360&fit=crop',category:'patisseries',rating:4.7,kcal:280,prepTime:0,tags:['Fait maison']},
+  {id:'9',name:'Banana Bread Vegan',desc:'Banana bread aux noix, sans beurre ni oeufs',price:490,image:'https://images.unsplash.com/photo-1605090930601-71c4b981c2ac?w=520&h=360&fit=crop',category:'patisseries',rating:4.6,kcal:260,prepTime:0,tags:['Vegan','Fait maison']},
+  {id:'10',name:'Wrap Avocat Poulet',desc:'Tortilla complete, poulet roti, avocat, crudites',price:1090,image:'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=520&h=360&fit=crop',category:'emporter',rating:4.5,kcal:480,prepTime:8,tags:['Fait maison']},
+  {id:'11',name:'Poke Bowl Saumon',desc:'Riz vinagre, saumon marine, edamame, avocat, mangue',price:1590,image:'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=520&h=360&fit=crop',category:'emporter',rating:4.8,kcal:550,prepTime:12,tags:['Frais']},
+  {id:'12',name:'Granola Bowl',desc:'Granola maison, yaourt grec, fruits frais de saison',price:850,image:'https://images.unsplash.com/photo-1590301157890-4810ed352733?w=520&h=360&fit=crop',category:'nourrir',rating:4.6,kcal:420,prepTime:5,tags:['Bio','Fait maison']},
+];
+
+const categories = [
+  {id:'all',label:'Tout'},{id:'nourrir',label:'Nourrir'},{id:'savourer',label:'Savourer'},
+  {id:'patisseries',label:'Patisseries'},{id:'emporter',label:'Emporter'},
+];
+
+const blogCategories = [
+  {id:'all',label:'Tout'},{id:'nutrition',label:'Nutrition'},
+  {id:'bien-etre',label:'Bien-etre'},{id:'lifestyle',label:'Lifestyle'},
+];
+
+const articles = [
+  {id:'1',title:'Les bienfaits du matcha sur la concentration',excerpt:'Decouvrez comment le matcha peut ameliorer votre focus et votre energie au quotidien.',category:'bien-etre',author:'Eleonore V.',readTime:5,image:'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?w=600&h=400&fit=crop',date:'15 mars 2026',featured:true},
+  {id:'2',title:'Meal prep : organiser ses repas healthy',excerpt:'Nos conseils pour preparer vos repas de la semaine en toute serenite.',category:'nutrition',author:'Sophie M.',readTime:7,image:'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&h=400&fit=crop',date:'10 mars 2026',featured:false},
+  {id:'3',title:'5 rituels du matin pour demarrer en douceur',excerpt:'Des habitudes simples pour des matins sereins qui transforment votre journee.',category:'lifestyle',author:'Camille D.',readTime:4,image:'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&h=400&fit=crop',date:'5 mars 2026',featured:false},
+  {id:'4',title:'Le guide complet des super-aliments',excerpt:'Quels sont les vrais super-aliments et comment les integrer facilement.',category:'nutrition',author:'Hugo L.',readTime:8,image:'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600&h=400&fit=crop',date:'1 mars 2026',featured:false},
+  {id:'5',title:'Digital detox : retrouver le calme interieur',excerpt:'Comment reduire le temps d\'ecran et reconnecter avec l\'essentiel.',category:'bien-etre',author:'Eleonore V.',readTime:6,image:'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?w=600&h=400&fit=crop',date:'25 fev. 2026',featured:false},
+];
+
+const catLabels = {'bien-etre':'BIEN-ETRE','nutrition':'NUTRITION','lifestyle':'LIFESTYLE'};
+
+const orders = [
+  {id:'ORD-001',date:'15 mars 2026',items:'Zen Buddha Bowl, Matcha x2',total:2750},
+  {id:'ORD-002',date:'12 mars 2026',items:'Smoothie Vert Detox',total:650},
+  {id:'ORD-003',date:'8 mars 2026',items:'Salade Printaniere, Earl Grey',total:1770},
+];
+
+const rewards = [
+  {icon:'&#9749;',name:'Boisson offerte',sub:'500 pts'},
+  {icon:'&#127873;',name:'Dessert offert',sub:'750 pts'},
+  {icon:'&#37;',name:'-20% sur carte',sub:'1000 pts'},
+];
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let currentTab = 0;
+let homeCategory = 'all';
+let carteCategory = 'all';
+let blogCategory = 'all';
+let cart = [
+  {product: products[0], quantity: 1},
+  {product: products[1], quantity: 2},
+  {product: products[6], quantity: 1},
+];
+let useLoyalty = false;
+let paymentMethod = 'card';
+
+// ═══════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════
+const fmt = (c) => (c/100).toFixed(2).replace('.',',') + ' \u20AC';
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function switchTab(idx) {
+  currentTab = idx;
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+  document.querySelectorAll('.screen-content').forEach((s,i) => s.classList.toggle('active', i===idx));
+  // Show/hide panier CTA and tab bar
+  const ctaEl = document.getElementById('panier-cta');
+  const tabBar = document.querySelector('.tab-bar');
+  if (idx === 2 && cart.length > 0) {
+    ctaEl.style.display = 'block';
+    tabBar.style.display = 'none';
+  } else {
+    ctaEl.style.display = 'none';
+    tabBar.style.display = 'flex';
+  }
+  document.getElementById('screen').scrollTop = 0;
+  if (idx === 4) animatePoints();
+}
+
+// ═══════════════════════════════════════════════
+// RENDER: HOME
+// ═══════════════════════════════════════════════
+function renderHome() {
+  const h = new Date().getHours();
+  const g = h>=6&&h<12?'Bonjour':h>=12&&h<18?'Bon apres-midi':'Bonsoir';
+  document.getElementById('greeting').textContent = g + ' Johan';
+
+  const filtered = homeCategory==='all' ? products : products.filter(p=>p.category===homeCategory);
+
+  document.getElementById('home-pills').innerHTML = categories.map(cat =>
+    `<div class="pill ${homeCategory===cat.id?'active':''}" onclick="homeCategory='${cat.id}';renderHome()">${cat.label}</div>`
+  ).join('');
+
+  document.getElementById('home-carousel').innerHTML = filtered.map(p => `
+    <div class="carousel-card">
+      <img src="${p.image}" alt="${p.name}" loading="lazy">
+      <div class="carousel-card-body">
+        <div class="carousel-card-tags">${p.tags.map(t=>`<span class="carousel-card-tag">${t}</span>`).join('')}</div>
+        <div class="carousel-card-name">${p.name}</div>
+        <div class="carousel-card-desc">${p.desc}</div>
+        <div class="carousel-card-footer">
+          <span class="carousel-card-price">${fmt(p.price)}</span>
+          <span class="carousel-card-meta">${p.kcal?p.kcal+'kcal':''}${p.prepTime?' \u00B7 '+p.prepTime+'min':''}</span>
         </div>
       </div>
     </div>
+  `).join('');
 
-    <div class="tab-bar">
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
-        Accueil
+  document.getElementById('home-dots').innerHTML = filtered.slice(0,6).map((_,i) =>
+    `<div class="dot ${i===0?'active':''}"></div>`
+  ).join('');
+
+  const favs = [...products].sort((a,b)=>b.rating-a.rating).slice(0,3);
+  document.getElementById('home-favorites').innerHTML = favs.map(p => `
+    <div class="fav-item">
+      <img class="fav-thumb" src="${p.image}" alt="${p.name}" loading="lazy">
+      <div class="fav-content">
+        <div class="fav-name">${p.name}</div>
+        <div class="fav-desc">${p.desc}</div>
       </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
-        Carte
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
-        Panier
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
-        Blog
-      </div>
-      <div class="tab-item active">
-        <div class="tab-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-        Profil
+      <div class="fav-price">${fmt(p.price)}</div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════
+// RENDER: CARTE
+// ═══════════════════════════════════════════════
+function renderCarte() {
+  const filtered = carteCategory==='all' ? products : products.filter(p=>p.category===carteCategory);
+
+  document.getElementById('carte-pills').innerHTML = categories.map(cat =>
+    `<div class="pill ${carteCategory===cat.id?'active':''}" onclick="carteCategory='${cat.id}';renderCarte()">${cat.label}</div>`
+  ).join('');
+
+  document.getElementById('carte-count').textContent = filtered.length + ' PRODUITS';
+
+  document.getElementById('carte-grid').innerHTML = filtered.map(p => `
+    <div class="grid-card">
+      <img src="${p.image}" alt="${p.name}" loading="lazy">
+      <div class="grid-card-body">
+        <div class="grid-card-name">${p.name}</div>
+        <div class="grid-card-desc">${p.desc}</div>
+        <div class="grid-card-footer">
+          <div>
+            <div class="grid-card-price">${fmt(p.price)}</div>
+            <div class="grid-card-rating">\u2605 ${p.rating}</div>
+          </div>
+          <button class="grid-card-add" onclick="event.stopPropagation();addToCart('${p.id}')">+</button>
+        </div>
       </div>
     </div>
-  </div>
-</div>
+  `).join('');
+}
 
+// ═══════════════════════════════════════════════
+// RENDER: PANIER
+// ═══════════════════════════════════════════════
+function addToCart(pid) {
+  const p = products.find(x=>x.id===pid);
+  if (!p) return;
+  const ex = cart.find(c=>c.product.id===pid);
+  if (ex) ex.quantity++;
+  else cart.push({product:p, quantity:1});
+  showToast(p.name + ' ajoute au panier');
+  renderPanier();
+}
+
+function updateQty(pid, delta) {
+  const item = cart.find(c=>c.product.id===pid);
+  if (!item) return;
+  item.quantity += delta;
+  if (item.quantity <= 0) cart = cart.filter(c=>c.product.id!==pid);
+  renderPanier();
+}
+
+function removeFromCart(pid) {
+  cart = cart.filter(c=>c.product.id!==pid);
+  renderPanier();
+}
+
+function toggleLoyalty() {
+  useLoyalty = !useLoyalty;
+  document.getElementById('loyalty-toggle').classList.toggle('on', useLoyalty);
+  renderPanierRecap();
+}
+
+function renderPanier() {
+  document.getElementById('panier-items').innerHTML = cart.map(item => `
+    <div class="article-card">
+      <img src="${item.product.image}" alt="${item.product.name}" loading="lazy">
+      <div class="article-info">
+        <div class="article-name">${item.product.name}</div>
+        <div class="article-price">${fmt(item.product.price)}</div>
+      </div>
+      <div class="qty-area">
+        <div class="qty-selector">
+          <button class="qty-btn" onclick="updateQty('${item.product.id}',-1)">&minus;</button>
+          <span class="qty-val">${item.quantity}</span>
+          <button class="qty-btn" onclick="updateQty('${item.product.id}',1)">+</button>
+        </div>
+        <span class="delete-btn" onclick="removeFromCart('${item.product.id}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D4544A" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </span>
+      </div>
+    </div>
+  `).join('');
+  renderPanierRecap();
+  renderPanierPayment();
+}
+
+function renderPanierRecap() {
+  const subtotal = cart.reduce((s,i) => s + i.product.price * i.quantity, 0);
+  const tax = Math.round(subtotal * 0.055);
+  const loyaltyDiscount = useLoyalty ? Math.min(500, subtotal) : 0;
+  const total = subtotal + tax - loyaltyDiscount;
+
+  document.getElementById('panier-recap').innerHTML = `
+    <div class="recap-row"><span class="recap-label">Sous-total</span><span class="recap-value">${fmt(subtotal)}</span></div>
+    <div class="recap-row"><span class="recap-label">TVA (5,5%)</span><span class="recap-value">${fmt(tax)}</span></div>
+    ${useLoyalty ? `<div class="recap-row"><span class="recap-label recap-discount">Remise fidelite</span><span class="recap-value recap-discount">-${fmt(loyaltyDiscount)}</span></div>` : ''}
+    <div class="recap-divider"></div>
+    <div class="recap-row"><span class="recap-total-label">Total</span><span class="recap-total-value">${fmt(total)}</span></div>
+  `;
+  document.getElementById('cta-btn-text').textContent = 'Valider ma commande \u2014 ' + fmt(total);
+}
+
+function renderPanierPayment() {
+  const opts = [{id:'card',label:'Carte bancaire'},{id:'wallet',label:'Wallet Teaven'},{id:'mixed',label:'Mixte (Points + Carte)'}];
+  document.getElementById('panier-payment').innerHTML = opts.map(o => `
+    <div class="payment-card ${paymentMethod===o.id?'selected':''}" onclick="paymentMethod='${o.id}';renderPanierPayment()">
+      <div class="radio"><div class="radio-dot"></div></div>
+      <span class="payment-label">${o.label}</span>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════
+// RENDER: BLOG
+// ═══════════════════════════════════════════════
+function renderBlog() {
+  document.getElementById('blog-pills').innerHTML = blogCategories.map(cat =>
+    `<div class="pill ${blogCategory===cat.id?'active':''}" onclick="blogCategory='${cat.id}';renderBlog()">${cat.label}</div>`
+  ).join('');
+
+  const featured = articles.find(a=>a.featured) || articles[0];
+  document.getElementById('blog-featured').innerHTML = `
+    <div class="featured-card">
+      <img src="${featured.image}" alt="${featured.title}" loading="lazy">
+      <div class="featured-overlay">
+        <div class="featured-label">A LA UNE &middot; ${(catLabels[featured.category]||'').toUpperCase()}</div>
+        <div class="featured-title">${featured.title}</div>
+        <div class="featured-meta">Par ${featured.author} &middot; ${featured.readTime} min de lecture</div>
+      </div>
+    </div>
+  `;
+
+  const recent = blogCategory==='all'
+    ? articles.filter(a=>a.id!==featured.id)
+    : articles.filter(a=>a.category===blogCategory && a.id!==featured.id);
+
+  document.getElementById('blog-articles').innerHTML = recent.map(a => `
+    <div class="blog-article">
+      <img src="${a.image}" alt="${a.title}" loading="lazy">
+      <div class="blog-cat-row">
+        <span class="blog-cat">${(catLabels[a.category]||'').toUpperCase()}</span>
+        <span class="blog-date">${a.date}</span>
+      </div>
+      <div class="blog-article-title">${a.title}</div>
+      <div class="blog-excerpt">${a.excerpt}</div>
+      <span class="blog-read-more">Lire la suite</span>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════
+// RENDER: PROFIL
+// ═══════════════════════════════════════════════
+function renderProfil() {
+  document.getElementById('rewards-scroll').innerHTML = rewards.map(r => `
+    <div class="reward-card">
+      <div class="reward-icon">${r.icon}</div>
+      <div class="reward-name">${r.name}</div>
+      <div class="reward-sub">${r.sub}</div>
+      <span class="reward-cta">Utiliser</span>
+    </div>
+  `).join('');
+
+  document.getElementById('orders-list').innerHTML = orders.map(o => `
+    <div class="order-card">
+      <div class="order-info">
+        <div class="order-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B8F71" stroke-width="1.8"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+        </div>
+        <div class="order-details">
+          <div class="order-name">${o.items}</div>
+          <div class="order-meta">${o.date} &middot; ${fmt(o.total)}</div>
+        </div>
+      </div>
+      <div class="reorder-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B8F71" stroke-width="1.8"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      </div>
+    </div>
+  `).join('');
+}
+
+let pointsAnimated = false;
+function animatePoints() {
+  if (pointsAnimated) return;
+  pointsAnimated = true;
+  const target = 1250;
+  const duration = 1500;
+  const start = performance.now();
+  const counter = document.getElementById('points-counter');
+  const fill = document.getElementById('progress-fill');
+
+  function tick(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    counter.textContent = Math.round(target * eased).toLocaleString('fr-FR');
+    fill.style.width = (75 * eased) + '%';
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+renderHome();
+renderCarte();
+renderPanier();
+renderBlog();
+renderProfil();
+</script>
 </body>
 </html>
