@@ -32,6 +32,9 @@ jobs:
 
       - run: npx expo export --platform web
 
+      - name: Fix script type for import.meta compatibility
+        run: sed -i 's/<script src=/<script type="module" src=/g' dist/index.html
+
       - name: Add SPA fallback
         run: cp dist/index.html dist/200.html
 
