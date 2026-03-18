@@ -1,15 +1,7 @@
 // Carte produit avec micro-interaction "+" → "AJOUTÉ"
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
 import { Image } from 'expo-image';
-import * as Haptics from 'expo-haptics';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withDelay,
-  withTiming,
-  runOnJS,
-} from 'react-native-reanimated';
 import { Plus } from 'lucide-react-native';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
 import type { Product } from '@/lib/types';
@@ -20,43 +12,50 @@ interface ProductCardProps {
   onPress: () => void;
 }
 
-const SPRING_CONFIG = {
-  damping: 18,
-  stiffness: 200,
-  mass: 0.8,
-};
-
 export function ProductCard({ product, onPress }: ProductCardProps) {
   const addItem = useCartStore((s) => s.addItem);
-  const buttonWidth = useSharedValue(28);
-  const textOpacity = useSharedValue(0);
+  const buttonWidth = useRef(new Animated.Value(28)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
 
   const formatPrice = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
 
-  const animatedButtonStyle = useAnimatedStyle(() => ({
-    width: buttonWidth.value,
-  }));
-
-  const animatedTextStyle = useAnimatedStyle(() => ({
-    opacity: textOpacity.value,
-  }));
-
-  const handleAdd = () => {
-    // Retour haptique
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // Ajouter au panier
-    runOnJS(addItem)(product);
+  const handleAdd = useCallback(() => {
+    addItem(product);
 
     // Animation : étirer le bouton
-    buttonWidth.value = withSpring(76, SPRING_CONFIG);
-    textOpacity.value = withDelay(100, withTiming(1, { duration: 200 }));
+    Animated.spring(buttonWidth, {
+      toValue: 76,
+      damping: 18,
+      stiffness: 200,
+      mass: 0.8,
+      useNativeDriver: false,
+    }).start();
+
+    Animated.timing(textOpacity, {
+      toValue: 1,
+      duration: 200,
+      delay: 100,
+      useNativeDriver: false,
+    }).start();
 
     // Refermer après 1.4s
-    buttonWidth.value = withDelay(1400, withSpring(28, SPRING_CONFIG));
-    textOpacity.value = withDelay(1200, withTiming(0, { duration: 200 }));
-  };
+    setTimeout(() => {
+      Animated.spring(buttonWidth, {
+        toValue: 28,
+        damping: 18,
+        stiffness: 200,
+        mass: 0.8,
+        useNativeDriver: false,
+      }).start();
+
+      Animated.timing(textOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }).start();
+    }, 1400);
+  }, [addItem, product, buttonWidth, textOpacity]);
 
   return (
     <Pressable onPress={onPress} style={styles.card}>
@@ -79,9 +78,9 @@ export function ProductCard({ product, onPress }: ProductCardProps) {
         <View style={styles.footer}>
           <Text style={styles.price}>{formatPrice(product.price)}</Text>
           <Pressable onPress={handleAdd}>
-            <Animated.View style={[styles.addButton, animatedButtonStyle]}>
+            <Animated.View style={[styles.addButton, { width: buttonWidth }]}>
               <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
-              <Animated.Text style={[styles.addedText, animatedTextStyle]}>
+              <Animated.Text style={[styles.addedText, { opacity: textOpacity }]}>
                 AJOUTÉ
               </Animated.Text>
             </Animated.View>

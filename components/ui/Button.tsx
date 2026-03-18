@@ -1,6 +1,5 @@
 // Bouton principal réutilisable
 import { Pressable, Text, StyleSheet, type ViewStyle, type TextStyle } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { colors, fonts, radii, spacing } from '@/constants/theme';
 
 interface ButtonProps {
@@ -20,14 +19,9 @@ export function Button({
   disabled = false,
   style,
 }: ButtonProps) {
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress();
-  };
-
   return (
     <Pressable
-      onPress={handlePress}
+      onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [
         styles.base,

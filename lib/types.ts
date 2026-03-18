@@ -11,10 +11,11 @@ export interface Product {
   kcal: number;
   prepTime: number; // en minutes
   tags: string[];
+  location: string;
   available: boolean;
 }
 
-export type ProductCategory = 'nourrir' | 'savourer' | 'emporter';
+export type ProductCategory = 'nourrir' | 'savourer' | 'emporter' | 'patisseries';
 
 export interface Category {
   id: string;

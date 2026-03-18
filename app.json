@@ -3,6 +3,7 @@
     "name": "Teaven",
     "slug": "teaven-app",
     "version": "1.0.0",
+    "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,8 +24,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.teaven.app",
-      "predictiveBackGestureEnabled": false
+      "package": "com.teaven.app"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -32,8 +32,7 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font",
-      "expo-haptics"
+      "expo-font"
     ]
   }
 }

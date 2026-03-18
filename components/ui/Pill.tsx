@@ -1,6 +1,5 @@
 // Pill — filtre catégorie (hauteur 32px, radius 50px)
 import { Pressable, Text, StyleSheet } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { colors, fonts, radii, spacing, typography } from '@/constants/theme';
 
 interface PillProps {
@@ -10,14 +9,9 @@ interface PillProps {
 }
 
 export function Pill({ label, active = false, onPress }: PillProps) {
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress();
-  };
-
   return (
     <Pressable
-      onPress={handlePress}
+      onPress={onPress}
       style={[styles.pill, active && styles.pillActive]}
     >
       <Text style={[styles.label, active && styles.labelActive]}>

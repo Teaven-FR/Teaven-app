@@ -1,22 +1,21 @@
-// Carte produit carrousel — format horizontal (260px large, 180px image)
-// Badge rating en haut à droite, bouton "+" radius 8px
-// Micro-interaction "+" → "AJOUTÉ" (30px → 76px)
+// Carte produit grille — format 2 colonnes (photo ratio 4/5)
+// Bouton "+" 28px radius 8px avec micro-interaction expand "AJOUTÉ"
 import { useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
 import { Image } from 'expo-image';
-import { Plus, Star } from 'lucide-react-native';
-import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
+import { Plus } from 'lucide-react-native';
+import { colors, fonts, radii, spacing } from '@/constants/theme';
 import type { Product } from '@/lib/types';
 import { useCartStore } from '@/stores/cartStore';
 
-interface ProductCardCarouselProps {
+interface ProductGridCardProps {
   product: Product;
   onPress: () => void;
 }
 
-export function ProductCardCarousel({ product, onPress }: ProductCardCarouselProps) {
+export function ProductGridCard({ product, onPress }: ProductGridCardProps) {
   const addItem = useCartStore((s) => s.addItem);
-  const buttonWidth = useRef(new Animated.Value(30)).current;
+  const buttonWidth = useRef(new Animated.Value(28)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
 
   const formatPrice = (cents: number) =>
@@ -25,7 +24,7 @@ export function ProductCardCarousel({ product, onPress }: ProductCardCarouselPro
   const handleAdd = useCallback(() => {
     addItem(product);
 
-    // Animation : étirer le bouton de 30px à 76px
+    // Animation : étirer le bouton de 28px à 76px
     Animated.spring(buttonWidth, {
       toValue: 76,
       damping: 18,
@@ -44,7 +43,7 @@ export function ProductCardCarousel({ product, onPress }: ProductCardCarouselPro
     // Refermer après 1.4s
     setTimeout(() => {
       Animated.spring(buttonWidth, {
-        toValue: 30,
+        toValue: 28,
         damping: 18,
         stiffness: 200,
         mass: 0.8,
@@ -61,28 +60,33 @@ export function ProductCardCarousel({ product, onPress }: ProductCardCarouselPro
 
   return (
     <Pressable onPress={onPress} style={styles.card}>
-      {/* Image avec badge rating */}
-      <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: product.image }}
-          style={styles.image}
-          contentFit="cover"
-          transition={300}
-        />
-        <View style={styles.ratingBadge}>
-          <Star size={10} color="#FFFFFF" fill="#FFFFFF" strokeWidth={1.5} />
-          <Text style={styles.ratingText}>{product.rating}</Text>
-        </View>
-      </View>
+      {/* Photo ratio 4/5 */}
+      <Image
+        source={{ uri: product.image }}
+        style={styles.image}
+        contentFit="cover"
+        transition={300}
+      />
 
       <View style={styles.content}>
+        {/* Tags */}
+        <View style={styles.tags}>
+          {product.tags.map((tag) => (
+            <View key={tag} style={styles.tag}>
+              <Text style={styles.tagText}>{tag.toUpperCase()}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Nom */}
         <Text style={styles.name} numberOfLines={1}>{product.name}</Text>
-        <Text style={styles.description} numberOfLines={2}>{product.description}</Text>
+
+        {/* Prix + bouton "+" */}
         <View style={styles.footer}>
           <Text style={styles.price}>{formatPrice(product.price)}</Text>
           <Pressable onPress={handleAdd}>
             <Animated.View style={[styles.addButton, { width: buttonWidth }]}>
-              <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+              <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
               <Animated.Text style={[styles.addedText, { opacity: textOpacity }]}>
                 AJOUTÉ
               </Animated.Text>
@@ -96,52 +100,49 @@ export function ProductCardCarousel({ product, onPress }: ProductCardCarouselPro
 
 const styles = StyleSheet.create({
   card: {
-    width: 260,
     backgroundColor: colors.surface,
-    borderRadius: radii.xl,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.03)',
     overflow: 'hidden',
-    ...shadows.card,
-  },
-  imageContainer: {
-    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   image: {
     width: '100%',
-    height: 180,
-  },
-  ratingBadge: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  ratingText: {
-    fontFamily: fonts.bold,
-    fontSize: 11,
-    color: '#FFFFFF',
+    aspectRatio: 0.8,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   content: {
-    padding: spacing.md,
+    padding: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  tags: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  tag: {
+    backgroundColor: colors.greenLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  tagText: {
+    fontFamily: fonts.bold,
+    fontSize: 9.5,
+    letterSpacing: 0.5,
+    color: colors.green,
   },
   name: {
     fontFamily: fonts.bold,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.text,
-    letterSpacing: -0.2,
-    marginBottom: 3,
-  },
-  description: {
-    fontFamily: fonts.regular,
-    fontSize: 11.5,
-    color: colors.textSecondary,
-    lineHeight: 16,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   footer: {
     flexDirection: 'row',
@@ -149,17 +150,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   price: {
-    ...typography.price,
+    fontFamily: fonts.mono,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.green,
   },
   addButton: {
-    height: 30,
+    height: 28,
     backgroundColor: colors.green,
     borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    gap: 4,
+    gap: 3,
   },
   addedText: {
     color: '#FFFFFF',
