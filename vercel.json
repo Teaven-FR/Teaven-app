@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx expo export --platform web && sed -i 's/<script src=/<script type=\"module\" src=/g' dist/index.html",
+  "buildCommand": "npx expo export --platform web && node scripts/patch-web.js",
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": null,
