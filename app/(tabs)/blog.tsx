@@ -1,13 +1,20 @@
-// Écran Blog Atmosphère — article à la une + articles récents + navigation
-import { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+// Écran Blog Atmosphère — article à la une + articles récents + pull-to-refresh
+import { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  RefreshControl,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
 import { Pill } from '@/components/ui/Pill';
-import { mockArticles, type BlogArticleFull } from '@/constants/mockArticles';
+import { useBlog } from '@/hooks/useBlog';
 import { colors, fonts, spacing } from '@/constants/theme';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -26,24 +33,38 @@ const blogCategories = [
 export default function BlogScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const {
+    articles,
+    featuredArticle,
+    selectedCategory,
+    setSelectedCategory,
+    refresh,
+    isLoading,
+  } = useBlog();
 
-  // Article à la une (toujours featured)
-  const featured = mockArticles.find((a) => a.featured) || mockArticles[0];
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Articles récents filtrés (excluant le featured)
-  const recentArticles =
-    selectedCategory === 'all'
-      ? mockArticles.filter((a) => a.id !== featured.id)
-      : mockArticles.filter(
-          (a) => a.category === selectedCategory && a.id !== featured.id,
-        );
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    refresh();
+    setTimeout(() => setRefreshing(false), 1000);
+  }, [refresh]);
+
+  const featured = featuredArticle;
 
   return (
     <ScrollView
       style={[styles.container, { paddingTop: insets.top }]}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.green}
+          colors={[colors.green]}
+        />
+      }
     >
       {/* ──── Header ──── */}
       <View style={styles.header}>
@@ -51,7 +72,10 @@ export default function BlogScreen() {
           <Text style={styles.title}>Atmosphère</Text>
           <Text style={styles.subtitle}>Prenez soin de vous</Text>
         </View>
-        <Pressable accessibilityLabel="Rechercher un article">
+        <Pressable
+          accessibilityLabel="Rechercher un article"
+          accessibilityRole="button"
+        >
           <Search size={20} color={colors.textSecondary} strokeWidth={1.8} />
         </Pressable>
       </View>
@@ -73,45 +97,49 @@ export default function BlogScreen() {
       </ScrollView>
 
       {/* ──── Article à la une ──── */}
-      <View style={styles.featuredWrapper}>
-        <Pressable
-          style={styles.featuredCard}
-          onPress={() => router.push(`/article/${featured.id}`)}
-          accessibilityLabel={`Article à la une : ${featured.title}`}
-        >
-          <Image
-            source={{ uri: featured.imageUrl }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            transition={400}
-            placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
-          />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.55)']}
-            style={styles.featuredOverlay}
+      {featured && (
+        <View style={styles.featuredWrapper}>
+          <Pressable
+            style={styles.featuredCard}
+            onPress={() => router.push(`/article/${featured.id}`)}
+            accessibilityLabel={`Article à la une : ${featured.title}`}
+            accessibilityRole="button"
           >
-            <Text style={styles.featuredLabel}>
-              À LA UNE · {(CATEGORY_LABELS[featured.category] || featured.category).toUpperCase()}
-            </Text>
-            <Text style={styles.featuredTitle}>{featured.title}</Text>
-            <Text style={styles.featuredMeta}>
-              Par {featured.author} · {featured.readTime} min de lecture
-            </Text>
-          </LinearGradient>
-        </Pressable>
-      </View>
+            <Image
+              source={{ uri: featured.imageUrl }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={400}
+              placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
+            />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.55)']}
+              style={styles.featuredOverlay}
+            >
+              <Text style={styles.featuredLabel}>
+                À LA UNE · {(CATEGORY_LABELS[featured.category] || featured.category).toUpperCase()}
+              </Text>
+              <Text style={styles.featuredTitle}>{featured.title}</Text>
+              <Text style={styles.featuredMeta}>
+                Par {featured.author} · {featured.readTime} min de lecture
+              </Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      )}
 
       {/* ──── Label articles récents ──── */}
       <Text style={styles.recentLabel}>ARTICLES RÉCENTS</Text>
 
       {/* ──── Cards articles ──── */}
       <View style={styles.articles}>
-        {recentArticles.map((article) => (
+        {articles.map((article) => (
           <Pressable
             key={article.id}
-            style={styles.articleCard}
+            style={({ pressed }) => [styles.articleCard, pressed && { opacity: 0.7 }]}
             onPress={() => router.push(`/article/${article.id}`)}
             accessibilityLabel={article.title}
+            accessibilityRole="button"
           >
             <Image
               source={{ uri: article.imageUrl }}

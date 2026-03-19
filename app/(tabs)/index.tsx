@@ -18,7 +18,7 @@ import { Pill } from '@/components/ui/Pill';
 import { ProductCardCarousel } from '@/components/ui/ProductCardCarousel';
 import { SearchModal } from '@/components/ui/SearchModal';
 import { useCatalog } from '@/hooks/useCatalog';
-import { mockUser, mockProducts } from '@/constants/mockData';
+import { useUser } from '@/hooks/useUser';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
 
 // Largeur d'une card carrousel + gap
@@ -37,7 +37,8 @@ function getGreeting(): string {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { products, categories, selectedCategory, setSelectedCategory } = useCatalog();
+  const { products, allProducts, categories, selectedCategory, setSelectedCategory, refetch } = useCatalog();
+  const { user, isGuest } = useUser();
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
@@ -49,7 +50,7 @@ export default function HomeScreen() {
   const carouselProducts = products;
 
   // Coups de cœur (top 3 par note)
-  const favorites = [...mockProducts]
+  const favorites = [...allProducts]
     .sort((a, b) => b.rating - a.rating)
     .slice(0, 3);
 
@@ -63,11 +64,12 @@ export default function HomeScreen() {
     [],
   );
 
-  // Pull-to-refresh simulé
+  // Pull-to-refresh
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    refetch();
     setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+  }, [refetch]);
 
   return (
     <>
@@ -89,12 +91,12 @@ export default function HomeScreen() {
           <View style={styles.headerLeft}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
-                {mockUser.name.charAt(0)}
+                {(isGuest ? 'I' : user.fullName.charAt(0))}
               </Text>
             </View>
             <View>
               <Text style={styles.greeting}>
-                {getGreeting()} {mockUser.name}
+                {getGreeting()} {isGuest ? '' : user.fullName}
               </Text>
               <Text style={styles.subtitle}>
                 Qu'est-ce qui vous ferait du bien ?
