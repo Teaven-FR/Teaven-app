@@ -180,10 +180,15 @@ export const mockCategories: Category[] = [
   { id: 'emporter', label: 'Emporter' },
 ];
 
-export const mockUser: Omit<User, 'id'> = {
-  name: 'Johan',
+export const mockUser: User = {
+  id: 'mock-user-001',
+  fullName: 'Johan',
   phone: '+33612345678',
+  email: 'johan@teaven.fr',
+  dietaryPreferences: ['Bio'],
   loyaltyPoints: 1250,
   loyaltyLevel: 'Or',
   walletBalance: 4250,
+  createdAt: '2025-01-15T10:00:00Z',
+  updatedAt: '2026-03-19T12:00:00Z',
 };
