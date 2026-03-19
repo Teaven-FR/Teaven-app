@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx expo export --platform web",
+  "buildCommand": "mkdir -p dist && cp preview.html dist/index.html",
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": null,
