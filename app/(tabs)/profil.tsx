@@ -1,4 +1,4 @@
-// Écran Profil — animations compteur, wallet modal, historique commandes
+// Écran Profil — animations compteur, wallet, historique, navigation sous-pages
 import { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Pressable,
   Animated,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -21,12 +22,19 @@ import {
   HelpCircle,
   LogOut,
   RotateCcw,
+  User,
+  MapPin,
+  CreditCard,
+  FileText,
+  ChevronRight,
+  LogIn,
 } from 'lucide-react-native';
 import { RechargeModal } from '@/components/ui/RechargeModal';
 import { useToast } from '@/contexts/ToastContext';
 import { useCartStore } from '@/stores/cartStore';
-import { mockUser } from '@/constants/mockData';
-import { mockOrders } from '@/constants/mockOrders';
+import { useAuthStore } from '@/stores/authStore';
+import { useUser } from '@/hooks/useUser';
+import { useOrderStore } from '@/stores/orderStore';
 import { colors, fonts, spacing, shadows } from '@/constants/theme';
 
 // Mock récompenses
@@ -36,13 +44,24 @@ const rewards = [
   { id: '3', icon: Percent, name: '-20% sur carte', sub: '1000 pts', cta: 'Utiliser' },
 ];
 
+// Liens du menu paramètres
+const SETTINGS_LINKS = [
+  { id: 'info', label: 'Informations personnelles', icon: User, route: '/profil/informations' },
+  { id: 'addresses', label: 'Mes adresses', icon: MapPin, route: '/profil/adresses' },
+  { id: 'payment', label: 'Modes de paiement', icon: CreditCard, route: '/profil/paiement' },
+  { id: 'cgu', label: 'CGU & Confidentialité', icon: FileText, route: '/profil/cgu' },
+] as const;
+
 export default function ProfilScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showToast } = useToast();
   const addItem = useCartStore((s) => s.addItem);
+  const { user, isGuest, loyalty, wallet, rechargeWallet } = useUser();
+  const signOut = useAuthStore((s) => s.signOut);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const orderHistory = useOrderStore((s) => s.orderHistory);
 
-  const [walletBalance, setWalletBalance] = useState(mockUser.walletBalance);
   const [rechargeVisible, setRechargeVisible] = useState(false);
 
   // Animation compteur points
@@ -51,49 +70,58 @@ export default function ProfilScreen() {
   const [displayedPoints, setDisplayedPoints] = useState(0);
 
   useEffect(() => {
-    // Animation counting 0 → 1250
     Animated.timing(pointsAnim, {
-      toValue: mockUser.loyaltyPoints,
+      toValue: loyalty.points,
       duration: 1500,
       useNativeDriver: false,
     }).start();
 
-    // Mettre à jour le texte affiché
     const listenerId = pointsAnim.addListener(({ value }) => {
       setDisplayedPoints(Math.round(value));
     });
 
-    // Barre de progression 0% → 75%
     Animated.timing(progressAnim, {
-      toValue: 75,
+      toValue: loyalty.progressPercent,
       duration: 1500,
       useNativeDriver: false,
     }).start();
 
     return () => pointsAnim.removeListener(listenerId);
-  }, [pointsAnim, progressAnim]);
+  }, [pointsAnim, progressAnim, loyalty.points, loyalty.progressPercent]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 100],
     outputRange: ['0%', '100%'],
   });
 
-  const formatWallet = (cents: number) =>
-    (cents / 100).toFixed(2).replace('.', ',') + ' €';
-
   const formatPrice = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
 
-  // Recommander une commande
-  const handleReorder = (orderId: string) => {
-    const order = mockOrders.find((o) => o.id === orderId);
-    if (!order) return;
-    order.items.forEach(({ product, quantity }) => {
-      for (let i = 0; i < quantity; i++) addItem(product);
-    });
-    showToast('Articles ajoutés au panier');
-    router.push('/panier');
+  // Déconnexion avec confirmation
+  const handleLogout = () => {
+    Alert.alert(
+      'Déconnexion',
+      'Voulez-vous vraiment vous déconnecter ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Se déconnecter',
+          style: 'destructive',
+          onPress: async () => {
+            await signOut();
+            router.replace('/auth/login');
+          },
+        },
+      ],
+    );
   };
+
+  // Connexion pour les invités
+  const handleLogin = () => {
+    router.push('/auth/login');
+  };
+
+  const displayName = isGuest ? 'Invité' : user.fullName || 'Utilisateur';
 
   return (
     <>
@@ -105,7 +133,11 @@ export default function ProfilScreen() {
         {/* ──── Header ──── */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Mon Profil</Text>
-          <Pressable accessibilityLabel="Paramètres">
+          <Pressable
+            onPress={() => router.push('/profil/informations')}
+            accessibilityLabel="Paramètres"
+            accessibilityRole="button"
+          >
             <Settings size={20} color={colors.textSecondary} strokeWidth={1.8} />
           </Pressable>
         </View>
@@ -114,15 +146,22 @@ export default function ProfilScreen() {
         <View style={styles.identity}>
           <LinearGradient colors={['#2C4A32', '#4A6B50']} style={styles.avatar}>
             <Text style={styles.avatarInitial}>
-              {mockUser.name.charAt(0).toUpperCase()}
+              {displayName.charAt(0).toUpperCase()}
             </Text>
           </LinearGradient>
           <View>
-            <Text style={styles.userName}>{mockUser.name}</Text>
-            <View style={styles.premiumRow}>
-              <CheckCircle size={12} color={colors.green} strokeWidth={2} />
-              <Text style={styles.premiumLabel}>Membre Premium</Text>
-            </View>
+            <Text style={styles.userName}>{displayName}</Text>
+            {isGuest ? (
+              <Pressable onPress={handleLogin} style={styles.loginLink}>
+                <LogIn size={12} color={colors.green} strokeWidth={2} />
+                <Text style={styles.loginText}>Se connecter</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.premiumRow}>
+                <CheckCircle size={12} color={colors.green} strokeWidth={2} />
+                <Text style={styles.premiumLabel}>Membre Premium</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -136,7 +175,7 @@ export default function ProfilScreen() {
           >
             <View style={styles.decorCircle} />
             <Text style={styles.loyaltyClub}>TEAVEN CLUB</Text>
-            <Text style={styles.loyaltyName}>{mockUser.name}</Text>
+            <Text style={styles.loyaltyName}>{displayName}</Text>
 
             <View style={styles.pointsRow}>
               <Text style={styles.pointsValue}>
@@ -146,18 +185,18 @@ export default function ProfilScreen() {
             </View>
 
             <Text style={styles.loyaltyLevel}>
-              NIVEAU {mockUser.loyaltyLevel.toUpperCase()}
+              NIVEAU {loyalty.level.toUpperCase()}
             </Text>
 
             <View style={styles.progressTrack}>
               <Animated.View
-                style={[styles.progressFill, { width: progressWidth as any }]}
+                style={[styles.progressFill, { width: progressWidth as unknown as number }]}
               />
             </View>
 
             <View style={styles.progressInfo}>
-              <Text style={styles.progressText}>Prochain : Boisson offerte</Text>
-              <Text style={styles.progressPercent}>75%</Text>
+              <Text style={styles.progressText}>{loyalty.nextReward}</Text>
+              <Text style={styles.progressPercent}>{loyalty.progressPercent}%</Text>
             </View>
           </LinearGradient>
         </View>
@@ -167,12 +206,13 @@ export default function ProfilScreen() {
           <View style={styles.walletHeader}>
             <View>
               <Text style={styles.walletLabel}>PORTE-MONNAIE</Text>
-              <Text style={styles.walletBalance}>{formatWallet(walletBalance)}</Text>
+              <Text style={styles.walletBalance}>{formatPrice(wallet.balance)}</Text>
             </View>
             <Pressable
               style={styles.rechargeButton}
               onPress={() => setRechargeVisible(true)}
               accessibilityLabel="Recharger le porte-monnaie"
+              accessibilityRole="button"
             >
               <Text style={styles.rechargeText}>Recharger</Text>
             </Pressable>
@@ -182,7 +222,7 @@ export default function ProfilScreen() {
         {/* ──── Récompenses ──── */}
         <View style={styles.rewardsHeader}>
           <Text style={styles.rewardsTitle}>Récompenses</Text>
-          <Pressable>
+          <Pressable accessibilityRole="button">
             <Text style={styles.rewardsSeeAll}>Tout voir</Text>
           </Pressable>
         </View>
@@ -201,7 +241,7 @@ export default function ProfilScreen() {
                 </View>
                 <Text style={styles.rewardName}>{reward.name}</Text>
                 <Text style={styles.rewardSub}>{reward.sub}</Text>
-                <Pressable accessibilityLabel={`Utiliser ${reward.name}`}>
+                <Pressable accessibilityLabel={`Utiliser ${reward.name}`} accessibilityRole="button">
                   <Text style={styles.rewardCta}>{reward.cta}</Text>
                 </Pressable>
               </View>
@@ -210,53 +250,77 @@ export default function ProfilScreen() {
         </ScrollView>
 
         {/* ──── Historique commandes ──── */}
-        <View style={styles.ordersHeader}>
-          <Text style={styles.ordersTitle}>Mes commandes</Text>
-          <Pressable>
-            <Text style={styles.ordersSeeAll}>Tout voir</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.ordersList}>
-          {mockOrders.slice(0, 3).map((order) => (
-            <View key={order.id} style={styles.orderCard}>
-              <View style={styles.orderInfo}>
-                <View style={styles.orderIconWrap}>
-                  <ClipboardList size={16} color={colors.green} strokeWidth={1.8} />
-                </View>
-                <View style={styles.orderDetails}>
-                  <Text style={styles.orderName} numberOfLines={1}>
-                    {order.items.map((i) => i.product.name).join(', ')}
-                  </Text>
-                  <Text style={styles.orderMeta}>
-                    {order.date} · {formatPrice(order.total)}
-                  </Text>
-                </View>
-              </View>
-              <Pressable
-                onPress={() => handleReorder(order.id)}
-                style={styles.reorderButton}
-                accessibilityLabel="Recommander cette commande"
-              >
-                <RotateCcw size={16} color={colors.green} strokeWidth={1.8} />
-              </Pressable>
+        {orderHistory.length > 0 && (
+          <>
+            <View style={styles.ordersHeader}>
+              <Text style={styles.ordersTitle}>Mes commandes</Text>
             </View>
-          ))}
+
+            <View style={styles.ordersList}>
+              {orderHistory.slice(0, 3).map((order) => (
+                <View key={order.id} style={styles.orderCard}>
+                  <View style={styles.orderInfo}>
+                    <View style={styles.orderIconWrap}>
+                      <ClipboardList size={16} color={colors.green} strokeWidth={1.8} />
+                    </View>
+                    <View style={styles.orderDetails}>
+                      <Text style={styles.orderName} numberOfLines={1}>
+                        {order.items.map((i) => i.name).join(', ')}
+                      </Text>
+                      <Text style={styles.orderMeta}>
+                        {order.id} · {formatPrice(order.total)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* ──── Menu paramètres ──── */}
+        <View style={styles.menu}>
+          {SETTINGS_LINKS.map((link, index) => {
+            const Icon = link.icon;
+            return (
+              <View key={link.id}>
+                {index > 0 && <View style={styles.menuSep} />}
+                <Pressable
+                  style={styles.menuItem}
+                  onPress={() => router.push(link.route)}
+                  accessibilityRole="button"
+                  accessibilityLabel={link.label}
+                >
+                  <Icon size={18} color={colors.green} strokeWidth={1.6} />
+                  <Text style={styles.menuItemText}>{link.label}</Text>
+                  <View style={styles.menuItemSpacer} />
+                  <ChevronRight size={16} color={colors.textMuted} strokeWidth={1.5} />
+                </Pressable>
+              </View>
+            );
+          })}
         </View>
 
-        {/* ──── Menu ──── */}
-        <View style={styles.menu}>
-          <Pressable style={styles.menuItem}>
+        {/* ──── Aide & Déconnexion ──── */}
+        <View style={[styles.menu, { marginTop: spacing.md }]}>
+          <Pressable style={styles.menuItem} accessibilityRole="button">
             <HelpCircle size={18} color={colors.green} strokeWidth={1.6} />
             <Text style={styles.menuItemText}>Aide & FAQ</Text>
           </Pressable>
           <View style={styles.menuSep} />
-          <Pressable style={styles.menuItem}>
-            <LogOut size={18} color={colors.error} strokeWidth={1.6} />
-            <Text style={[styles.menuItemText, { color: colors.error }]}>
-              Déconnexion
-            </Text>
-          </Pressable>
+          {isAuthenticated ? (
+            <Pressable style={styles.menuItem} onPress={handleLogout} accessibilityRole="button">
+              <LogOut size={18} color={colors.error} strokeWidth={1.6} />
+              <Text style={[styles.menuItemText, { color: colors.error }]}>
+                Déconnexion
+              </Text>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.menuItem} onPress={handleLogin} accessibilityRole="button">
+              <LogIn size={18} color={colors.green} strokeWidth={1.6} />
+              <Text style={styles.menuItemText}>Se connecter</Text>
+            </Pressable>
+          )}
         </View>
       </ScrollView>
 
@@ -265,7 +329,7 @@ export default function ProfilScreen() {
         visible={rechargeVisible}
         onClose={() => setRechargeVisible(false)}
         onRecharge={(amount) => {
-          setWalletBalance((prev) => prev + amount);
+          rechargeWallet(amount);
           showToast('Porte-monnaie rechargé !');
         }}
       />
@@ -332,6 +396,17 @@ const styles = StyleSheet.create({
   },
   premiumLabel: {
     fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.green,
+  },
+  loginLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  loginText: {
+    fontFamily: fonts.bold,
     fontSize: 12,
     color: colors.green,
   },
@@ -532,11 +607,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
   },
-  ordersSeeAll: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    color: colors.green,
-  },
   ordersList: {
     paddingHorizontal: spacing.xl,
     gap: spacing.sm,
@@ -580,15 +650,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
   },
-  reorderButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.greenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.sm,
-  },
 
   // Menu
   menu: {
@@ -607,6 +668,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 15,
     color: colors.text,
+  },
+  menuItemSpacer: {
+    flex: 1,
   },
   menuSep: {
     height: 0.5,
