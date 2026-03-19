@@ -1,6 +1,6 @@
 // Contexte Toast — notifications éphémères globales
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, AlertCircle } from 'lucide-react-native';
 import { colors, fonts, spacing } from '@/constants/theme';
@@ -48,12 +48,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           toValue: 0,
           tension: 60,
           friction: 9,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(opacityAnim, {
           toValue: 1,
           duration: 200,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start();
 
@@ -63,12 +63,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           Animated.timing(slideAnim, {
             toValue: -100,
             duration: 300,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== 'web',
           }),
           Animated.timing(opacityAnim, {
             toValue: 0,
             duration: 300,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== 'web',
           }),
         ]).start(() => setToast(null));
       }, 2000);

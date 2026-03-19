@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Pressable,
   Animated,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -162,7 +163,7 @@ export default function ProductScreen() {
       toValue: 0.97,
       damping: 15,
       stiffness: 300,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
 
@@ -171,7 +172,7 @@ export default function ProductScreen() {
       toValue: 1,
       damping: 15,
       stiffness: 300,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
 
@@ -183,7 +184,7 @@ export default function ProductScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true },
+          { useNativeDriver: Platform.OS !== 'web' },
         )}
         scrollEventThrottle={16}
       >

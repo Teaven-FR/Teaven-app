@@ -1,6 +1,6 @@
 // Skeleton shimmer — placeholder de chargement
 import { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated, Platform } from 'react-native';
 
 interface SkeletonProps {
   width: number | string;
@@ -17,7 +17,7 @@ export function Skeleton({ width, height, borderRadius = 8, style }: SkeletonPro
       Animated.timing(shimmer, {
         toValue: 1,
         duration: 1200,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
     );
     loop.start();
