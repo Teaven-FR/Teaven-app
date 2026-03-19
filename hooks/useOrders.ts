@@ -1,4 +1,4 @@
-// Hook commandes — gestion complète des commandes
+// Hook commandes — gestion complète des commandes avec Square
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { createOrder, processPayment } from '@/lib/square';
@@ -42,17 +42,38 @@ export function useOrders() {
     }
   }, [user?.id]);
 
-  /** Passer une nouvelle commande */
+  /** Passer une nouvelle commande — envoie les Square variation IDs */
   const placeOrder = useCallback(
     async (items: CartItem[], pickupTime?: string) => {
       setIsLoading(true);
       try {
-        const squareItems = items.map((item) => ({
-          catalogObjectId: item.product.id,
-          quantity: item.quantity,
-          name: item.product.name,
-          price: item.product.price,
-        }));
+        // Mapper les items du panier vers le format Square
+        const squareItems = items.map((item) => {
+          // Square attend le variation ID comme catalog_object_id
+          const catalogObjectId =
+            item.selectedVariation?.squareVariationId ??
+            item.product.squareId ??
+            item.product.id;
+
+          // Mapper les modificateurs sélectionnés
+          const modifiers = (item.selectedModifiers ?? []).flatMap((sel) => {
+            const group = item.product.modifiers?.find((g) => g.id === sel.groupId);
+            if (!group) return [];
+            return sel.optionIds
+              .map((optId) => {
+                const opt = group.options.find((o) => o.id === optId);
+                return opt ? { squareModifierId: opt.squareModifierId } : undefined;
+              })
+              .filter((m): m is { squareModifierId: string } => m !== undefined);
+          });
+
+          return {
+            catalogObjectId,
+            quantity: item.quantity,
+            name: item.product.name,
+            ...(modifiers.length > 0 ? { modifiers } : {}),
+          };
+        });
 
         const result = await createOrder(squareItems);
 
@@ -104,7 +125,6 @@ export function useOrders() {
           return { success: false, error: result.error };
         }
 
-        // Mettre à jour le statut localement
         setOrders((prev) =>
           prev.map((o) =>
             o.id === orderId ? { ...o, status: 'confirmed' as const } : o,

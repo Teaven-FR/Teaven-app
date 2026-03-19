@@ -1,4 +1,4 @@
-// Fiche produit — hero parallax + modificateurs + suggestions
+// Fiche produit — hero parallax + modificateurs dynamiques + suggestions
 import { useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -23,59 +23,15 @@ import {
   Plus,
   Star,
 } from 'lucide-react-native';
-import { ModifierSelector, type ModifierGroup } from '@/components/features/ModifierSelector';
+import { ModifierSelector } from '@/components/features/ModifierSelector';
 import { ProductMiniCard } from '@/components/features/ProductMiniCard';
 import { useCartStore } from '@/stores/cartStore';
 import { useToast } from '@/contexts/ToastContext';
+import { useProduct, useCatalog } from '@/hooks/useCatalog';
 import { mockProducts } from '@/constants/mockData';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 
 const HERO_HEIGHT = 340;
-
-// Modificateurs par produit
-const productModifiers: Record<string, ModifierGroup[]> = {
-  '2': [ // Matcha Zen Latte
-    {
-      id: 'size',
-      label: 'Personnaliser — Taille',
-      type: 'single',
-      options: [
-        { id: 'small', label: 'Petit', price: 0 },
-        { id: 'medium', label: 'Moyen', price: 0 },
-        { id: 'large', label: 'Grand', price: 100 },
-      ],
-    },
-    {
-      id: 'extras',
-      label: 'Suppléments',
-      type: 'multiple',
-      options: [
-        { id: 'oat', label: "Lait d'avoine", price: 50 },
-        { id: 'maple', label: "Sirop d'érable", price: 30 },
-      ],
-    },
-  ],
-  '1': [ // Zen Buddha Bowl
-    {
-      id: 'size',
-      label: 'Personnaliser — Taille',
-      type: 'single',
-      options: [
-        { id: 'regular', label: 'Normal', price: 0 },
-        { id: 'xl', label: 'XL', price: 200 },
-      ],
-    },
-    {
-      id: 'extras',
-      label: 'Suppléments',
-      type: 'multiple',
-      options: [
-        { id: 'avocado', label: 'Avocat extra', price: 150 },
-        { id: 'tofu', label: 'Tofu grillé', price: 100 },
-      ],
-    },
-  ],
-};
 
 export default function ProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -83,10 +39,13 @@ export default function ProductScreen() {
   const insets = useSafeAreaInsets();
   const addItem = useCartStore((s) => s.addItem);
   const { showToast } = useToast();
+  const { product, isUsingMockData } = useProduct(id);
+  const { allProducts } = useCatalog();
 
   const [quantity, setQuantity] = useState(1);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [selectedModifiers, setSelectedModifiers] = useState<Record<string, string[]>>({});
+  const [selectedVariationId, setSelectedVariationId] = useState<string | undefined>();
 
   // Parallax scroll
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -100,9 +59,10 @@ export default function ProductScreen() {
   const addScale = useRef(new Animated.Value(1)).current;
   const orderScale = useRef(new Animated.Value(1)).current;
 
-  const product = mockProducts.find((p) => p.id === id);
+  // Fallback : essayer aussi dans les mockProducts si pas trouvé
+  const resolvedProduct = product ?? (isUsingMockData ? mockProducts.find((p) => p.id === id) : undefined);
 
-  if (!product) {
+  if (!resolvedProduct) {
     return (
       <View style={styles.notFound}>
         <Text style={typography.h3}>Produit introuvable</Text>
@@ -110,8 +70,15 @@ export default function ProductScreen() {
     );
   }
 
+  // Modificateurs : depuis Square (dynamiques) ou fallback vide
+  const modifiers = resolvedProduct.modifiers ?? [];
+  const variations = resolvedProduct.variations ?? [];
+
+  // Variation sélectionnée (ou première par défaut)
+  const activeVariation = variations.find((v) => v.id === selectedVariationId) ?? variations[0];
+  const basePrice = activeVariation?.price ?? resolvedProduct.price;
+
   // Calcul du prix avec modificateurs
-  const modifiers = productModifiers[product.id] || [];
   const extraPrice = Object.entries(selectedModifiers).reduce((sum, [groupId, ids]) => {
     const group = modifiers.find((g) => g.id === groupId);
     if (!group) return sum;
@@ -121,11 +88,11 @@ export default function ProductScreen() {
     }, 0);
   }, 0);
 
-  const unitPrice = product.price + extraPrice;
+  const unitPrice = basePrice + extraPrice;
 
   // Suggestions : même catégorie, produit différent
-  const suggestions = mockProducts
-    .filter((p) => p.category === product.category && p.id !== product.id)
+  const suggestions = allProducts
+    .filter((p) => p.category === resolvedProduct.category && p.id !== resolvedProduct.id)
     .slice(0, 3);
 
   const formatPrice = (cents: number) =>
@@ -140,21 +107,20 @@ export default function ProductScreen() {
       if (group.type === 'single') {
         return { ...prev, [groupId]: [modifierId] };
       }
-      // multiple toggle
       if (current.includes(modifierId)) {
-        return { ...prev, [groupId]: current.filter((id) => id !== modifierId) };
+        return { ...prev, [groupId]: current.filter((mid) => mid !== modifierId) };
       }
       return { ...prev, [groupId]: [...current, modifierId] };
     });
   };
 
   const handleAddToCart = () => {
-    for (let i = 0; i < quantity; i++) addItem(product);
+    addItem(resolvedProduct, quantity, activeVariation, selectedModifiers);
     showToast('Ajouté au panier');
   };
 
   const handleOrder = () => {
-    for (let i = 0; i < quantity; i++) addItem(product);
+    addItem(resolvedProduct, quantity, activeVariation, selectedModifiers);
     router.push('/(tabs)/panier');
   };
 
@@ -200,7 +166,7 @@ export default function ProductScreen() {
             style={StyleSheet.absoluteFill}
           />
           <Image
-            source={{ uri: product.image }}
+            source={{ uri: resolvedProduct.image }}
             style={styles.heroImage}
             contentFit="contain"
             transition={400}
@@ -229,10 +195,10 @@ export default function ProductScreen() {
         <View style={styles.details}>
           {/* Nom + rating */}
           <View style={styles.nameRow}>
-            <Text style={styles.name}>{product.name}</Text>
+            <Text style={styles.name}>{resolvedProduct.name}</Text>
             <View style={styles.ratingBadge}>
               <Star size={11} color="#F5C542" fill="#F5C542" strokeWidth={0} />
-              <Text style={styles.ratingText}>{product.rating}</Text>
+              <Text style={styles.ratingText}>{resolvedProduct.rating}</Text>
             </View>
           </View>
 
@@ -240,17 +206,17 @@ export default function ProductScreen() {
           <View style={styles.infoBadges}>
             <View style={styles.infoBadge}>
               <MapPin size={12} color={colors.textSecondary} strokeWidth={1.8} />
-              <Text style={styles.infoBadgeText}>{product.location}</Text>
+              <Text style={styles.infoBadgeText}>{resolvedProduct.location}</Text>
             </View>
-            {product.kcal > 0 && (
+            {resolvedProduct.kcal > 0 && (
               <View style={styles.infoBadge}>
                 <Flame size={12} color={colors.textSecondary} strokeWidth={1.8} />
-                <Text style={styles.infoBadgeText}>{product.kcal} Kcal</Text>
+                <Text style={styles.infoBadgeText}>{resolvedProduct.kcal} Kcal</Text>
               </View>
             )}
             <View style={styles.infoBadge}>
               <Clock size={12} color={colors.textSecondary} strokeWidth={1.8} />
-              <Text style={styles.infoBadgeText}>{product.prepTime} min</Text>
+              <Text style={styles.infoBadgeText}>{resolvedProduct.prepTime} min</Text>
             </View>
           </View>
 
@@ -259,7 +225,7 @@ export default function ProductScreen() {
             style={styles.description}
             numberOfLines={showFullDescription ? undefined : 4}
           >
-            {product.description}
+            {resolvedProduct.description}
           </Text>
           {!showFullDescription && (
             <Pressable onPress={() => setShowFullDescription(true)}>
@@ -267,7 +233,30 @@ export default function ProductScreen() {
             </Pressable>
           )}
 
-          {/* Modificateurs */}
+          {/* Sélecteur de variation (tailles) */}
+          {variations.length > 1 && (
+            <View style={styles.modifiersSection}>
+              <Text style={styles.variationTitle}>Taille</Text>
+              <View style={styles.variationChips}>
+                {variations.map((v) => {
+                  const isActive = (activeVariation?.id ?? variations[0]?.id) === v.id;
+                  return (
+                    <Pressable
+                      key={v.id}
+                      onPress={() => setSelectedVariationId(v.id)}
+                      style={[styles.variationChip, isActive && styles.variationChipActive]}
+                    >
+                      <Text style={[styles.variationChipText, isActive && styles.variationChipTextActive]}>
+                        {v.name} — {formatPrice(v.price)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Modificateurs dynamiques (depuis Square) */}
           {modifiers.length > 0 && (
             <View style={styles.modifiersSection}>
               {modifiers.map((group) => (
@@ -283,7 +272,7 @@ export default function ProductScreen() {
 
           {/* Tags */}
           <View style={styles.tags}>
-            {product.tags.map((tag) => (
+            {resolvedProduct.tags.map((tag) => (
               <View key={tag} style={styles.tag}>
                 <Text style={styles.tagText}>{tag.toUpperCase()}</Text>
               </View>
@@ -481,6 +470,40 @@ const styles = StyleSheet.create({
   // Modificateurs
   modifiersSection: {
     marginBottom: spacing.sm,
+  },
+
+  // Variations (tailles)
+  variationTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  variationChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  variationChip: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 17,
+    backgroundColor: '#F5F5F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  variationChipActive: {
+    backgroundColor: colors.green,
+  },
+  variationChipText: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  variationChipTextActive: {
+    fontFamily: fonts.bold,
+    color: '#FFFFFF',
   },
 
   // Tags

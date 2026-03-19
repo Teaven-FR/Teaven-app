@@ -1,5 +1,5 @@
-// Edge Function — Créer une commande Square
-// Déployée séparément via : supabase functions deploy create-order
+// Edge Function — Créer une commande Square avec variations et modificateurs
+// Déployée via : supabase functions deploy create-order
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -8,6 +8,13 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+interface OrderLineItem {
+  catalogObjectId: string; // Square variation ID (pas l'item ID)
+  quantity: number;
+  name: string;
+  modifiers?: { squareModifierId: string }[];
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -32,23 +39,31 @@ serve(async (req) => {
     const locationId = Deno.env.get('SQUARE_LOCATION_ID');
 
     // Construire les line items Square
-    const lineItems = items.map((item: { catalogObjectId: string; quantity: number; name: string; price: number }) => ({
-      catalog_object_id: item.catalogObjectId,
-      quantity: String(item.quantity),
-      item_type: 'ITEM',
-      ...(item.price ? {
-        base_price_money: {
-          amount: item.price,
-          currency: 'EUR',
-        },
-      } : {}),
-    }));
+    // Square résout le prix depuis le catalog_object_id (variation ID)
+    const lineItems = (items as OrderLineItem[]).map((item) => {
+      const lineItem: Record<string, unknown> = {
+        catalog_object_id: item.catalogObjectId,
+        quantity: String(item.quantity),
+        item_type: 'ITEM',
+      };
+
+      // Ajouter les modificateurs sélectionnés
+      if (item.modifiers && item.modifiers.length > 0) {
+        lineItem.modifiers = item.modifiers.map((mod) => ({
+          catalog_object_id: mod.squareModifierId,
+        }));
+      }
+
+      return lineItem;
+    });
 
     // Créer la commande via Square Orders API
+    const scheduledPickup = pickupTime ?? new Date(Date.now() + 20 * 60 * 1000).toISOString();
+
     const orderResponse = await fetch(`${squareBaseUrl}/v2/orders`, {
       method: 'POST',
       headers: {
-        'Square-Version': '2024-01-18',
+        'Square-Version': '2025-01-23',
         'Authorization': `Bearer ${squareAccessToken}`,
         'Content-Type': 'application/json',
       },
@@ -61,7 +76,7 @@ serve(async (req) => {
             state: 'PROPOSED',
             pickup_details: {
               schedule_type: 'SCHEDULED',
-              pickup_at: pickupTime ?? new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+              pickup_at: scheduledPickup,
               recipient: {
                 display_name: 'Client Teaven',
               },
@@ -98,7 +113,7 @@ serve(async (req) => {
         status: 'pending',
         total_amount: squareOrder.total_money?.amount ?? 0,
         items: items,
-        pickup_time: pickupTime ?? null,
+        pickup_time: scheduledPickup,
         created_at: new Date().toISOString(),
       })
       .select()
@@ -113,7 +128,7 @@ serve(async (req) => {
         success: true,
         orderId: squareOrder.id,
         totalAmount: squareOrder.total_money?.amount,
-        estimatedPickup: pickupTime ?? new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+        estimatedPickup: scheduledPickup,
         dbOrder,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
