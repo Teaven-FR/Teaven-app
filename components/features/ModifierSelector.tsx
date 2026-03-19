@@ -1,19 +1,10 @@
 // Sélecteur de modificateurs — taille et suppléments
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { colors, fonts, spacing } from '@/constants/theme';
+import type { ModifierGroup } from '@/lib/types';
 
-export interface Modifier {
-  id: string;
-  label: string;
-  price: number; // supplément en centimes (0 = gratuit)
-}
-
-export interface ModifierGroup {
-  id: string;
-  label: string;
-  type: 'single' | 'multiple';
-  options: Modifier[];
-}
+// Re-export pour compatibilité
+export type { ModifierGroup, ModifierOption } from '@/lib/types';
 
 interface ModifierSelectorProps {
   group: ModifierGroup;

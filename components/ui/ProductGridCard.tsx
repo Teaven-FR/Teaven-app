@@ -150,9 +150,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   price: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.monoSemiBold,
     fontSize: 13,
-    fontWeight: '600',
     color: colors.green,
   },
   addButton: {

@@ -23,14 +23,23 @@ async function callEdgeFunction<T>(
   return { data: data as T, error: null };
 }
 
-/** Synchroniser le catalogue Square */
+/** Synchroniser le catalogue Square → Supabase */
 export async function syncCatalog() {
   return callEdgeFunction('sync-catalog', {});
 }
 
-/** Créer une commande Square */
-export async function createOrder(items: { catalogObjectId: string; quantity: number }[]) {
-  return callEdgeFunction('create-order', { items });
+/** Créer une commande Square avec variations et modificateurs */
+export async function createOrder(
+  items: {
+    catalogObjectId: string;
+    quantity: number;
+    name: string;
+    modifiers?: { squareModifierId: string }[];
+  }[],
+  userId?: string,
+  pickupTime?: string,
+) {
+  return callEdgeFunction('create-order', { items, userId, pickupTime });
 }
 
 /** Traiter un paiement */

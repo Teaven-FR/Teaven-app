@@ -54,9 +54,8 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   price: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.monoSemiBold,
     fontSize: 11,
-    fontWeight: '600',
     color: colors.green,
     paddingHorizontal: spacing.sm,
     paddingBottom: spacing.sm,

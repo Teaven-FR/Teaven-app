@@ -18,6 +18,7 @@ export const fonts = {
   regular: 'BwModelica-Regular',
   bold: 'BwModelica-Bold',
   mono: 'JetBrains Mono',
+  monoSemiBold: 'JetBrains Mono SemiBold',
 } as const;
 
 export const spacing = {
@@ -83,8 +84,8 @@ export const typography = {
   },
 
   // Prix
-  price: { fontFamily: 'JetBrains Mono', fontSize: 14, fontWeight: '600' as const, color: '#6B8F71' },
-  priceLarge: { fontFamily: 'JetBrains Mono', fontSize: 24, fontWeight: '700' as const, color: '#2A2A2A' },
+  price: { fontFamily: 'JetBrains Mono SemiBold', fontSize: 14, color: '#6B8F71' },
+  priceLarge: { fontFamily: 'JetBrains Mono SemiBold', fontSize: 24, color: '#2A2A2A' },
 
   // Pills
   pill: { fontFamily: 'BwModelica-Regular', fontSize: 12.5, letterSpacing: 0.3 },

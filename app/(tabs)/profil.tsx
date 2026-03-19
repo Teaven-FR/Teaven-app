@@ -376,9 +376,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   pointsValue: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.monoSemiBold,
     fontSize: 36,
-    fontWeight: '700',
     color: '#FFFFFF',
   },
   pointsUnit: {
@@ -444,9 +443,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   walletBalance: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.monoSemiBold,
     fontSize: 20,
-    fontWeight: '700',
     color: colors.text,
   },
   rechargeButton: {
