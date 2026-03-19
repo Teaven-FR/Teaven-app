@@ -1,26 +1,36 @@
-// Hook d'authentification — gère login OTP via Supabase
+// Hook d'authentification — wrapper autour de authStore
+// Conservé pour compatibilité, authStore est maintenant le source of truth
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 
 export function useAuth() {
-  const { user, isAuthenticated, isLoading, setUser, setLoading, logout } = useAuthStore();
+  const { user, isAuthenticated, isLoading } = useAuthStore();
+  const { setUser, setLoading } = useAuthStore.getState();
 
   useEffect(() => {
     // Vérifier la session active au montage
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          name: session.user.user_metadata?.name ?? '',
-          phone: session.user.phone ?? '',
-          loyaltyPoints: 0,
-          loyaltyLevel: 'Bronze',
-          walletBalance: 0,
-        });
-      } else {
-        setUser(null);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUser({
+            id: session.user.id,
+            fullName: session.user.user_metadata?.full_name ?? '',
+            phone: session.user.phone ?? '',
+            email: session.user.email,
+            dietaryPreferences: [],
+            loyaltyPoints: 0,
+            loyaltyLevel: 'Bronze',
+            walletBalance: 0,
+            createdAt: session.user.created_at,
+            updatedAt: new Date().toISOString(),
+          });
+        } else if (!user) {
+          setLoading(false);
+        }
+      } catch {
+        setLoading(false);
       }
     };
 
@@ -31,11 +41,15 @@ export function useAuth() {
       if (session?.user) {
         setUser({
           id: session.user.id,
-          name: session.user.user_metadata?.name ?? '',
+          fullName: session.user.user_metadata?.full_name ?? '',
           phone: session.user.phone ?? '',
+          email: session.user.email,
+          dietaryPreferences: [],
           loyaltyPoints: 0,
           loyaltyLevel: 'Bronze',
           walletBalance: 0,
+          createdAt: session.user.created_at,
+          updatedAt: new Date().toISOString(),
         });
       } else {
         setUser(null);
@@ -43,28 +57,21 @@ export function useAuth() {
     });
 
     return () => subscription.unsubscribe();
-  }, [setUser]);
+  }, [setUser, setLoading, user]);
 
   /** Envoyer un OTP par SMS */
   const sendOtp = async (phone: string) => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ phone });
-    setLoading(false);
-    return { error };
+    return useAuthStore.getState().signInWithPhone(phone);
   };
 
   /** Vérifier le code OTP */
   const verifyOtp = async (phone: string, token: string) => {
-    setLoading(true);
-    const { error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
-    setLoading(false);
-    return { error };
+    return useAuthStore.getState().verifyOtp(phone, token);
   };
 
   /** Déconnexion */
   const signOut = async () => {
-    await supabase.auth.signOut();
-    logout();
+    await useAuthStore.getState().signOut();
   };
 
   return { user, isAuthenticated, isLoading, sendOtp, verifyOtp, signOut };

@@ -3,7 +3,42 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { createOrder, processPayment } from '@/lib/square';
 import { useAuthStore } from '@/stores/authStore';
-import type { Order, CartItem } from '@/lib/types';
+import { getItemUnitPrice } from '@/stores/cartStore';
+import type { Order, OrderItem, CartItem, SelectedModifier } from '@/lib/types';
+
+/** Transforme des CartItems en OrderItems */
+function cartItemsToOrderItems(items: CartItem[]): OrderItem[] {
+  return items.map((item) => {
+    const unitPrice = getItemUnitPrice(item);
+    const modifiers: SelectedModifier[] = [];
+
+    (item.selectedModifiers ?? []).forEach((sel) => {
+      const group = item.product.modifiers?.find((g) => g.id === sel.groupId);
+      if (!group) return;
+      sel.optionIds.forEach((optId) => {
+        const opt = group.options.find((o) => o.id === optId);
+        if (opt) {
+          modifiers.push({
+            groupId: group.id,
+            groupName: group.label,
+            optionId: opt.id,
+            optionName: opt.label,
+            priceAdjustment: opt.price,
+          });
+        }
+      });
+    });
+
+    return {
+      productId: item.product.id,
+      name: item.product.name,
+      quantity: item.quantity,
+      unitPrice,
+      totalPrice: unitPrice * item.quantity,
+      modifiers,
+    };
+  });
+}
 
 export function useOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -18,7 +53,7 @@ export function useOrders() {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select('*, order_items(*)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20);
@@ -27,11 +62,27 @@ export function useOrders() {
         setOrders(
           data.map((o: Record<string, unknown>) => ({
             id: o.id as string,
-            items: (o.items as CartItem[]) ?? [],
-            totalAmount: o.total_amount as number,
+            userId: o.user_id as string,
+            squareOrderId: o.square_order_id as string | undefined,
             status: o.status as Order['status'],
+            mode: (o.mode as Order['mode']) ?? 'pickup',
+            items: ((o.order_items as Record<string, unknown>[]) ?? []).map((item) => ({
+              productId: item.product_id as string,
+              name: item.name as string,
+              quantity: item.quantity as number,
+              unitPrice: item.unit_price as number,
+              totalPrice: item.total_price as number,
+              modifiers: (item.modifiers as SelectedModifier[]) ?? [],
+            })),
+            subtotal: (o.subtotal as number) ?? 0,
+            tax: (o.tax as number) ?? 0,
+            loyaltyDiscount: (o.loyalty_discount as number) ?? 0,
+            total: (o.total_amount as number) ?? 0,
+            pickupTime: o.pickup_time as string | undefined,
+            paymentMethod: (o.payment_method as Order['paymentMethod']) ?? 'card',
+            squarePaymentId: o.square_payment_id as string | undefined,
             createdAt: o.created_at as string,
-            estimatedReadyAt: (o.pickup_time as string) ?? '',
+            updatedAt: (o.updated_at as string) ?? (o.created_at as string),
           })),
         );
       }
@@ -45,17 +96,16 @@ export function useOrders() {
   /** Passer une nouvelle commande — envoie les Square variation IDs */
   const placeOrder = useCallback(
     async (items: CartItem[], pickupTime?: string) => {
+      if (!user?.id) return { success: false, error: 'Utilisateur non connecté' };
       setIsLoading(true);
       try {
         // Mapper les items du panier vers le format Square
         const squareItems = items.map((item) => {
-          // Square attend le variation ID comme catalog_object_id
           const catalogObjectId =
             item.selectedVariation?.squareVariationId ??
             item.product.squareId ??
             item.product.id;
 
-          // Mapper les modificateurs sélectionnés
           const modifiers = (item.selectedModifiers ?? []).flatMap((sel) => {
             const group = item.product.modifiers?.find((g) => g.id === sel.groupId);
             if (!group) return [];
@@ -87,13 +137,26 @@ export function useOrders() {
           estimatedPickup: string;
         };
 
+        // Convertir CartItem[] en OrderItem[]
+        const orderItems = cartItemsToOrderItems(items);
+        const subtotal = orderItems.reduce((sum, i) => sum + i.totalPrice, 0);
+        const tax = Math.round(subtotal * 0.055);
+
         const newOrder: Order = {
           id: orderData.orderId,
-          items,
-          totalAmount: orderData.totalAmount,
-          status: 'pending',
+          userId: user.id,
+          squareOrderId: orderData.orderId,
+          status: 'payment_pending',
+          mode: 'pickup',
+          items: orderItems,
+          subtotal,
+          tax,
+          loyaltyDiscount: 0,
+          total: orderData.totalAmount,
+          pickupTime: orderData.estimatedPickup || pickupTime,
+          paymentMethod: 'card',
           createdAt: new Date().toISOString(),
-          estimatedReadyAt: orderData.estimatedPickup,
+          updatedAt: new Date().toISOString(),
         };
 
         setCurrentOrder(newOrder);
@@ -107,7 +170,7 @@ export function useOrders() {
         setIsLoading(false);
       }
     },
-    [],
+    [user?.id],
   );
 
   /** Payer une commande */
@@ -127,7 +190,9 @@ export function useOrders() {
 
         setOrders((prev) =>
           prev.map((o) =>
-            o.id === orderId ? { ...o, status: 'confirmed' as const } : o,
+            o.id === orderId
+              ? { ...o, status: 'payment_confirmed' as const, updatedAt: new Date().toISOString() }
+              : o,
           ),
         );
 
@@ -161,7 +226,7 @@ export function useOrders() {
           setOrders((prev) =>
             prev.map((o) =>
               o.id === updated.id
-                ? { ...o, status: updated.status as Order['status'] }
+                ? { ...o, status: updated.status as Order['status'], updatedAt: new Date().toISOString() }
                 : o,
             ),
           );
