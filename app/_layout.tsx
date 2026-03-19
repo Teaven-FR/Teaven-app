@@ -42,6 +42,8 @@ export default function RootLayout() {
     'BwModelica-Thin': require('@/assets/fonts/BwModelica-Thin.otf'),
     'BwModelica-Regular': require('@/assets/fonts/BwModelica-Regular.otf'),
     'BwModelica-Bold': require('@/assets/fonts/BwModelica-Bold.otf'),
+    'JetBrains Mono': require('@/assets/fonts/JetBrainsMono-Regular.ttf'),
+    'JetBrains Mono SemiBold': require('@/assets/fonts/JetBrainsMono-SemiBold.ttf'),
   });
 
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);

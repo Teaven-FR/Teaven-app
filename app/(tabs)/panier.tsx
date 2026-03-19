@@ -473,9 +473,8 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   recapTotalValue: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.monoSemiBold,
     fontSize: 18,
-    fontWeight: '700',
     color: colors.green,
   },
 

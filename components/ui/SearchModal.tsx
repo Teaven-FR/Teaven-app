@@ -196,9 +196,8 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   resultPrice: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.monoSemiBold,
     fontSize: 13,
-    fontWeight: '600',
     color: colors.green,
   },
   empty: {

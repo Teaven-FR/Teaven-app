@@ -389,8 +389,8 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   heroImage: {
-    width: '70%',
-    height: 260,
+    width: '100%',
+    height: 280,
   },
   navButton: {
     position: 'absolute',
@@ -400,12 +400,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
 
   // Détails
   details: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxl,
+    backgroundColor: colors.bg,
+    position: 'relative',
+    zIndex: 5,
   },
   nameRow: {
     flexDirection: 'row',
@@ -507,10 +511,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   price: {
-    fontFamily: fonts.mono,
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
+    ...typography.priceLarge,
   },
   quantitySelector: {
     flexDirection: 'row',
