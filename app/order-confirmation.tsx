@@ -63,7 +63,7 @@ export default function OrderConfirmationScreen() {
           style={[styles.checkCircle, { transform: [{ scale: checkScale }] }]}
         >
           <LinearGradient
-            colors={['#4A6B50', '#6B8F71']}
+            colors={['#4A6B50', '#75967F']}
             style={styles.checkGradient}
           >
             <CheckCircle size={48} color="#FFFFFF" strokeWidth={1.5} />

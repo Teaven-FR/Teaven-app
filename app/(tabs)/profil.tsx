@@ -28,6 +28,10 @@ import {
   FileText,
   ChevronRight,
   LogIn,
+  Users,
+  Flame,
+  Trophy,
+  Share2,
 } from 'lucide-react-native';
 import { RechargeModal } from '@/components/ui/RechargeModal';
 import { useToast } from '@/contexts/ToastContext';
@@ -49,7 +53,10 @@ const SETTINGS_LINKS = [
   { id: 'info', label: 'Informations personnelles', icon: User, route: '/profil/informations' },
   { id: 'addresses', label: 'Mes adresses', icon: MapPin, route: '/profil/adresses' },
   { id: 'payment', label: 'Modes de paiement', icon: CreditCard, route: '/profil/paiement' },
-  { id: 'cgu', label: 'CGU & Confidentialité', icon: FileText, route: '/profil/cgu' },
+  { id: 'referral', label: 'Parrainage', icon: Users, route: '/referral' },
+  { id: 'gift', label: 'Carte cadeau', icon: Gift, route: '/gift' },
+  { id: 'settings', label: 'Paramètres', icon: Settings, route: '/settings' },
+  { id: 'cgu', label: 'Mentions légales', icon: FileText, route: '/legal' },
 ] as const;
 
 export default function ProfilScreen() {
@@ -218,6 +225,39 @@ export default function ProfilScreen() {
             </Pressable>
           </View>
         </View>
+
+        {/* ──── Mes défis ──── */}
+        <View style={styles.rewardsHeader}>
+          <Text style={styles.rewardsTitle}>Mes défis</Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.rewardsScroll}
+        >
+          <View style={styles.streakCard}>
+            <View style={styles.streakIconWrap}>
+              <Flame size={18} color="#E8A849" strokeWidth={1.3} />
+            </View>
+            <Text style={styles.streakTitle}>Série en cours</Text>
+            <Text style={styles.streakDesc}>3/5 jours consécutifs</Text>
+            <View style={styles.streakBar}>
+              <View style={[styles.streakFill, { width: '60%' }]} />
+            </View>
+            <Text style={styles.streakReward}>500 pts bonus</Text>
+          </View>
+          <View style={styles.streakCard}>
+            <View style={styles.streakIconWrap}>
+              <Trophy size={18} color={colors.gold} strokeWidth={1.3} />
+            </View>
+            <Text style={styles.streakTitle}>Challenge Mars</Text>
+            <Text style={styles.streakDesc}>4/10 commandes</Text>
+            <View style={styles.streakBar}>
+              <View style={[styles.streakFill, { width: '40%' }]} />
+            </View>
+            <Text style={styles.streakReward}>Dessert offert</Text>
+          </View>
+        </ScrollView>
 
         {/* ──── Récompenses ──── */}
         <View style={styles.rewardsHeader}>
@@ -591,6 +631,54 @@ const styles = StyleSheet.create({
   rewardCta: {
     fontFamily: fonts.bold,
     fontSize: 12,
+    color: colors.green,
+  },
+
+  // Streaks / Défis
+  streakCard: {
+    width: 200,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+  },
+  streakIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FFF8EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  streakTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  streakDesc: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  streakBar: {
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+  },
+  streakFill: {
+    height: 4,
+    backgroundColor: colors.green,
+    borderRadius: 2,
+  },
+  streakReward: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
     color: colors.green,
   },
 

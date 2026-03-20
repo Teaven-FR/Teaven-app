@@ -122,6 +122,26 @@ function RootNavigator() {
         name="profil/cgu"
         options={{ animation: 'slide_from_right' }}
       />
+      <Stack.Screen
+        name="notifications"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="referral"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="gift"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="legal"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="settings"
+        options={{ animation: 'slide_from_right' }}
+      />
     </Stack>
   );
 }
@@ -160,14 +180,14 @@ export default function RootLayout() {
 const loadingStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F1EA',
+    backgroundColor: '#F0F0E5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   text: {
     fontSize: 32,
     letterSpacing: 6,
-    color: '#6B8F71',
+    color: '#75967F',
   },
 });
 

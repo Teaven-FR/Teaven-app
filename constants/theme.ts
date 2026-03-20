@@ -1,9 +1,10 @@
 // Design tokens Teaven — système de design unifié
 
 export const colors = {
-  bg: '#F2F1EA',
+  bg: '#F0F0E5',
   surface: '#FFFFFF',
-  green: '#6B8F71',
+  green: '#75967F',
+  greenSecondary: '#738478',
   greenDark: '#4A6B50',
   greenLight: '#E8F0EA',
   text: '#2A2A2A',
@@ -11,6 +12,9 @@ export const colors = {
   textMuted: '#B0AFA8',
   border: '#E8E7E2',
   error: '#D4544A',
+  gold: '#C4A962',
+  orange: '#E8A849',
+  violet: '#8B7EC8',
 } as const;
 
 export const fonts = {
@@ -32,12 +36,16 @@ export const spacing = {
 } as const;
 
 export const radii = {
+  tag: 4,
+  badge: 6,
   sm: 8,
+  card: 10,
+  loyalty: 12,
   md: 12,
   lg: 14,
   xl: 16,
-  pill: 50,
-  card: 20,
+  pill: 20,
+  full: 50,
 } as const;
 
 export const shadows = {
@@ -84,7 +92,7 @@ export const typography = {
   },
 
   // Prix
-  price: { fontFamily: 'JetBrains Mono SemiBold', fontSize: 14, color: '#6B8F71' },
+  price: { fontFamily: 'JetBrains Mono SemiBold', fontSize: 14, color: '#75967F' },
   priceLarge: { fontFamily: 'JetBrains Mono SemiBold', fontSize: 24, color: '#2A2A2A' },
 
   // Pills

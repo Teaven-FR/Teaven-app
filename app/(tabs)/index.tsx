@@ -1,5 +1,5 @@
-// Écran Accueil — salutation dynamique, bannière promo, pull-to-refresh
-import { useState, useRef, useCallback } from 'react';
+// Écran Accueil — salutation dynamique, bannière promo, pull-to-refresh, favoris, badges
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,18 +7,22 @@ import {
   Pressable,
   StyleSheet,
   RefreshControl,
+  Animated,
+  Platform,
 } from 'react-native';
 import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Bell, Search, Leaf } from 'lucide-react-native';
+import { Bell, Search, Leaf, Flame, ShoppingBag } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pill } from '@/components/ui/Pill';
 import { ProductCardCarousel } from '@/components/ui/ProductCardCarousel';
 import { SearchModal } from '@/components/ui/SearchModal';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useUser } from '@/hooks/useUser';
+import { useCartStore } from '@/stores/cartStore';
+import { useToast } from '@/contexts/ToastContext';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
 
 // Largeur d'une card carrousel + gap
@@ -106,8 +110,10 @@ export default function HomeScreen() {
           <Pressable
             style={styles.notifButton}
             accessibilityLabel="Notifications"
+            onPress={() => router.push('/notifications')}
           >
-            <Bell size={20} color={colors.textSecondary} strokeWidth={1.5} />
+            <Bell size={20} color={colors.textSecondary} strokeWidth={1.3} />
+            <View style={styles.notifBadge} />
           </Pressable>
         </View>
 
@@ -123,26 +129,45 @@ export default function HomeScreen() {
           </View>
         </Pressable>
 
-        {/* Bannière promotionnelle */}
-        <View style={styles.promoWrapper}>
-          <LinearGradient
-            colors={['#E8F0EA', '#D4E5D7']}
-            style={styles.promoCard}
-          >
+        {/* Bannières promotionnelles — carrousel */}
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={styles.promosContainer}
+          contentContainerStyle={styles.promosContent}
+        >
+          <LinearGradient colors={['#E8F0EA', '#D4E5D7']} style={styles.promoCard}>
             <View style={styles.promoContent}>
               <Text style={styles.promoTitle}>Première commande ?</Text>
-              <Text style={styles.promoSubtitle}>
-                Profitez de -15% avec le code BIENVENUE
-              </Text>
-              <Pressable>
-                <Text style={styles.promoCta}>En profiter</Text>
-              </Pressable>
+              <Text style={styles.promoSubtitle}>-15% avec le code BIENVENUE</Text>
+              <Pressable><Text style={styles.promoCta}>En profiter</Text></Pressable>
             </View>
             <View style={styles.promoIconWrap}>
               <Leaf size={36} color={colors.green} strokeWidth={1} />
             </View>
           </LinearGradient>
-        </View>
+
+          <LinearGradient colors={['#F5EFDF', '#EDE4CC']} style={styles.promoCard}>
+            <View style={styles.promoContent}>
+              <Text style={styles.promoTitle}>Parrainez un ami</Text>
+              <Text style={styles.promoSubtitle}>Gagnez 200 pts de fidélité</Text>
+              <Pressable onPress={() => router.push('/referral')}>
+                <Text style={[styles.promoCta, { color: colors.gold }]}>Parrainer</Text>
+              </Pressable>
+            </View>
+          </LinearGradient>
+
+          <LinearGradient colors={['#2C4A32', '#4A6B50']} style={styles.promoCard}>
+            <View style={styles.promoContent}>
+              <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Nouveau</Text>
+              <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
+                Matcha Zen Latte Glacé
+              </Text>
+              <Pressable><Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Découvrir</Text></Pressable>
+            </View>
+          </LinearGradient>
+        </ScrollView>
 
         {/* Pills catégorie */}
         <ScrollView
@@ -192,6 +217,31 @@ export default function HomeScreen() {
             />
           ))}
         </View>
+
+        {/* Section "Nouveautés" si des produits récents */}
+        {allProducts.some((p) => p.isNew) && (
+          <>
+            <View style={styles.favoritesHeader}>
+              <View style={styles.sectionTitleRow}>
+                <Text style={styles.favoritesTitle}>Nouveautés</Text>
+                <View style={styles.newBadge}><Text style={styles.newBadgeText}>NEW</Text></View>
+              </View>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newProductsScroll}>
+              {allProducts.filter((p) => p.isNew).map((product) => (
+                <Pressable
+                  key={product.id}
+                  onPress={() => router.push(`/produit/${product.id}`)}
+                  style={styles.newProductCard}
+                >
+                  <Image source={{ uri: product.image }} style={styles.newProductImage} contentFit="cover" transition={200} />
+                  <Text style={styles.newProductName} numberOfLines={1}>{product.name}</Text>
+                  <Text style={styles.newProductPrice}>{formatPrice(product.price)}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        )}
 
         {/* Section "Nos coups de cœur" */}
         <View style={styles.favoritesHeader}>
@@ -320,14 +370,29 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
-  // Bannière promo
-  promoWrapper: {
-    paddingHorizontal: spacing.xl,
+  // Badge notification
+  notifBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.error,
+  },
+
+  // Bannières promos carrousel
+  promosContainer: {
     marginBottom: spacing.sm,
   },
+  promosContent: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.md,
+  },
   promoCard: {
-    borderRadius: 16,
-    height: 100,
+    borderRadius: radii.card,
+    height: 120,
+    width: 300,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
@@ -463,5 +528,55 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.green,
     marginRight: spacing.xs,
+  },
+
+  // Nouveautés
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  newBadge: {
+    backgroundColor: colors.green,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.tag,
+  },
+  newBadgeText: {
+    fontFamily: fonts.bold,
+    fontSize: 9,
+    letterSpacing: 1,
+    color: '#FFFFFF',
+  },
+  newProductsScroll: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  newProductCard: {
+    width: 140,
+    backgroundColor: colors.surface,
+    borderRadius: radii.sm,
+    overflow: 'hidden',
+    ...shadows.subtle,
+  },
+  newProductImage: {
+    width: 140,
+    height: 100,
+  },
+  newProductName: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.text,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+  },
+  newProductPrice: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 12,
+    color: colors.green,
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    paddingTop: 2,
   },
 });

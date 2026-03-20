@@ -50,7 +50,7 @@ const slides: Slide[] = [
     title: 'Partager le bien-être',
     subtitle: 'Un programme fidélité généreux, Click & Collect simple, et une communauté bienveillante.',
     image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=800&h=1200&fit=crop',
-    gradient: ['#4A6B50', '#6B8F71'],
+    gradient: ['#4A6B50', '#75967F'],
   },
 ];
 

@@ -41,6 +41,10 @@ export interface Product {
   tags: string[];
   location: string;
   available: boolean;
+  isNew?: boolean;
+  isSeasonal?: boolean;
+  isPopular?: boolean;
+  orderedToday?: number;
   variations?: ProductVariation[];
   modifiers?: ModifierGroup[];
 }

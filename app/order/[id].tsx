@@ -154,7 +154,7 @@ export default function OrderTrackingScreen() {
           ]}
         >
           <LinearGradient
-            colors={isReady ? ['#2C8B3D', '#6B8F71'] : ['#4A6B50', '#6B8F71']}
+            colors={isReady ? ['#2C8B3D', '#75967F'] : ['#4A6B50', '#75967F']}
             style={styles.checkGradient}
           >
             <Check size={48} color="#FFFFFF" strokeWidth={1.5} />
