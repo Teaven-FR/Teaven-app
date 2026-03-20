@@ -186,31 +186,37 @@ export const useAuthStore = create<AuthState>()(
         } catch {}
         try {
           const { data: { session } } = await supabase.auth.getSession();
+          const persistedUser = get().user;
+
           if (session?.user) {
-            set({
-              user: {
-                id: session.user.id,
-                fullName: session.user.user_metadata?.full_name ?? '',
-                phone: session.user.phone ?? '',
-                email: session.user.email,
-                dietaryPreferences: [],
-                loyaltyPoints: 0,
-                loyaltyLevel: 'Bronze',
-                walletBalance: 0,
-                createdAt: session.user.created_at,
-                updatedAt: new Date().toISOString(),
-              },
-              isAuthenticated: true,
-              isLoading: false,
+            // Fusionner avec les données persistées (ne pas écraser loyaltyPoints etc.)
+            const baseUser: User = {
+              id: session.user.id,
+              fullName: persistedUser?.fullName || session.user.user_metadata?.full_name || '',
+              phone: session.user.phone ?? persistedUser?.phone ?? '',
+              email: session.user.email || persistedUser?.email,
+              dietaryPreferences: persistedUser?.dietaryPreferences ?? [],
+              loyaltyPoints: persistedUser?.loyaltyPoints ?? 0,
+              loyaltyLevel: persistedUser?.loyaltyLevel ?? 'Bronze',
+              walletBalance: persistedUser?.walletBalance ?? 0,
+              squareCustomerId: persistedUser?.squareCustomerId,
+              squareGiftCardId: persistedUser?.squareGiftCardId,
+              createdAt: session.user.created_at,
+              updatedAt: new Date().toISOString(),
+            };
+            set({ user: baseUser, isAuthenticated: true, isLoading: false });
+            // Rafraîchir les données Square en arrière-plan
+            enrichWithSquareData(baseUser).then((enriched) => {
+              set({ user: enriched });
+            });
+          } else if (persistedUser) {
+            // Pas de session Supabase mais un user persisté → rafraîchir Square
+            set({ isLoading: false });
+            enrichWithSquareData(persistedUser).then((enriched) => {
+              set({ user: enriched });
             });
           } else {
-            // Vérifier si on a un user persisté
-            const state = get();
-            if (!state.user) {
-              set({ isLoading: false });
-            } else {
-              set({ isLoading: false });
-            }
+            set({ isLoading: false });
           }
         } catch {
           // Supabase non configuré : garder l'état existant
