@@ -12,10 +12,12 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   isGuest: boolean;
+  onboardingCompleted: boolean;
 
   // Actions
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
+  completeOnboarding: () => Promise<void>;
   signInWithPhone: (phone: string) => Promise<{ error: string | null }>;
   verifyOtp: (phone: string, otp: string) => Promise<boolean>;
   signOut: () => Promise<void>;
@@ -63,6 +65,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: true,
       isGuest: false,
+      onboardingCompleted: false,
 
       setUser: (user: User | null) =>
         set({
@@ -73,6 +76,11 @@ export const useAuthStore = create<AuthState>()(
         }),
 
       setLoading: (isLoading: boolean) => set({ isLoading }),
+
+      completeOnboarding: async () => {
+        await AsyncStorage.setItem('@teaven/onboarding_completed', 'true');
+        set({ onboardingCompleted: true });
+      },
 
       // Envoyer un OTP par téléphone
       signInWithPhone: async (phone: string) => {
@@ -171,6 +179,11 @@ export const useAuthStore = create<AuthState>()(
       // Charger la session depuis AsyncStorage / Supabase
       loadSession: async () => {
         set({ isLoading: true });
+        // Charger le flag onboarding
+        try {
+          const onboarding = await AsyncStorage.getItem('@teaven/onboarding_completed');
+          if (onboarding === 'true') set({ onboardingCompleted: true });
+        } catch {}
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
@@ -233,6 +246,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         isAuthenticated: state.isAuthenticated,
         isGuest: state.isGuest,
+        onboardingCompleted: state.onboardingCompleted,
       }),
     },
   ),

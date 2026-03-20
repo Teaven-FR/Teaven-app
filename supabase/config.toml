@@ -1,5 +1,24 @@
 # Configuration Supabase pour Teaven
-# Déclaration des Edge Functions pour le déploiement automatique via Git Integration
+
+# === Auth ===
+[auth]
+enabled = true
+site_url = "http://localhost:8081"
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+template = "Votre code Teaven : {{ .Code }}"
+max_frequency = "60s"
+
+# En local, utiliser le mode "test" (les OTP sont logués dans la console)
+# En production, configurer Twilio dans le Dashboard Supabase :
+#   Authentication → Providers → Phone → Twilio
+[auth.sms.test_otp]
+# Numéros de test pour le développement local (code = 123456)
+# "+33612345678" = "123456"
+
+# === Edge Functions ===
 
 [functions.sync-catalog]
 verify_jwt = false # Appelée par cron / webhook Square

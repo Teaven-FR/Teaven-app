@@ -13,11 +13,9 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Leaf, Coffee, Heart } from 'lucide-react-native';
+import { useAuthStore } from '@/stores/authStore';
 import { colors, fonts, spacing } from '@/constants/theme';
-
-const ONBOARDING_KEY = '@teaven/onboarding_completed';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface Slide {
@@ -61,10 +59,16 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const completeOnboarding = useAuthStore((s) => s.completeOnboarding);
 
   const handleStart = async () => {
-    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-    router.replace('/(tabs)');
+    await completeOnboarding();
+    // La redirection vers /auth/login se fait automatiquement via _layout.tsx
+  };
+
+  const handleLogin = async () => {
+    await completeOnboarding();
+    router.replace('/auth/login');
   };
 
   const handleNext = () => {
@@ -185,7 +189,7 @@ export default function OnboardingScreen() {
             <Text style={styles.skipLink}>Passer</Text>
           </Pressable>
         ) : (
-          <Pressable onPress={handleStart} style={styles.skipButton}>
+          <Pressable onPress={handleLogin} style={styles.skipButton}>
             <Text style={styles.skipLink}>
               Déjà un compte ?{' '}
               <Text style={styles.skipLinkBold}>Se connecter</Text>

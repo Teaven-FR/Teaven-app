@@ -1,16 +1,13 @@
 // Root layout — chargement des fonts, auth flow, providers
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Platform, View, Text, StyleSheet } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from '@/components/layout/StatusBar';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { useAuthStore } from '@/stores/authStore';
 import { syncCatalog } from '@/lib/square';
-
-const ONBOARDING_KEY = '@teaven/onboarding_completed';
 
 // Error boundary pour afficher les erreurs runtime sur web
 class ErrorBoundary extends React.Component<
@@ -43,15 +40,7 @@ class ErrorBoundary extends React.Component<
 function RootNavigator() {
   const router = useRouter();
   const segments = useSegments();
-  const { isAuthenticated, isGuest, isLoading } = useAuthStore();
-  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
-
-  // Vérifier si l'onboarding a été fait
-  useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_KEY)
-      .then((val) => setOnboardingDone(val === 'true'))
-      .catch(() => setOnboardingDone(false));
-  }, []);
+  const { isAuthenticated, isGuest, isLoading, onboardingCompleted } = useAuthStore();
 
   // Charger la session au lancement
   useEffect(() => {
@@ -71,20 +60,19 @@ function RootNavigator() {
 
   // Redirection conditionnelle basée sur l'état auth
   useEffect(() => {
-    if (onboardingDone === null || isLoading) return;
+    if (isLoading) return;
 
     const inAuthGroup = segments[0] === 'auth';
     const inOnboarding = segments[0] === 'onboarding';
-    const inTabs = segments[0] === '(tabs)';
 
     // Si onboarding pas vu → /onboarding
-    if (!onboardingDone && !inOnboarding) {
+    if (!onboardingCompleted && !inOnboarding) {
       router.replace('/onboarding');
       return;
     }
 
     // Si pas authentifié et pas invité → /auth/login
-    if (onboardingDone && !isAuthenticated && !isGuest && !inAuthGroup) {
+    if (onboardingCompleted && !isAuthenticated && !isGuest && !inAuthGroup) {
       router.replace('/auth/login');
       return;
     }
@@ -93,7 +81,7 @@ function RootNavigator() {
     if ((isAuthenticated || isGuest) && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isGuest, isLoading, onboardingDone, segments, router]);
+  }, [isAuthenticated, isGuest, isLoading, onboardingCompleted, segments, router]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
