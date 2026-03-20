@@ -31,19 +31,59 @@ async function squareFetch(path: string, method: string, body?: Record<string, u
   return res.json();
 }
 
+/** Vérifie le JWT Supabase et retourne l'utilisateur authentifié */
+async function authenticateUser(req: Request) {
+  const authHeader = req.headers.get('authorization') ?? '';
+  if (!authHeader.startsWith('Bearer ')) return null;
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return user;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Méthode non autorisée' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
   try {
-    // Extraire le JWT Supabase pour identifier l'utilisateur
-    const authHeader = req.headers.get('authorization') ?? '';
+    // Authentification requise
+    const authUser = await authenticateUser(req);
+    if (!authUser) {
+      return new Response(
+        JSON.stringify({ error: 'Authentification requise' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { phone } = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'JSON invalide' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    const { phone } = body;
 
     if (!phone) {
       return new Response(
@@ -58,7 +98,7 @@ serve(async (req) => {
       const searchResult = await squareFetch('/v2/customers/search', 'POST', {
         query: {
           filter: {
-            phone_number: { exact: phone },
+            phone_number: { exact: phone as string },
           },
         },
       });
@@ -74,7 +114,7 @@ serve(async (req) => {
       try {
         const createResult = await squareFetch('/v2/customers', 'POST', {
           idempotency_key: crypto.randomUUID(),
-          phone_number: phone,
+          phone_number: phone as string,
         });
         if (createResult.customer) {
           squareCustomer = createResult.customer;
@@ -85,27 +125,19 @@ serve(async (req) => {
     }
 
     // 3. Mettre à jour le profil Supabase avec le Square Customer ID
+    // Only update the authenticated user's own profile
     if (squareCustomer) {
-      // Chercher l'utilisateur Supabase par téléphone
-      const { data: profiles } = await supabase
+      await supabase
         .from('profiles')
-        .select('id')
-        .eq('phone', phone)
-        .limit(1);
-
-      if (profiles && profiles.length > 0) {
-        await supabase
-          .from('profiles')
-          .update({
-            square_customer_id: squareCustomer.id,
-            full_name: squareCustomer.given_name
-              ? `${squareCustomer.given_name} ${squareCustomer.family_name ?? ''}`.trim()
-              : undefined,
-            email: squareCustomer.email_address ?? undefined,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', profiles[0].id);
-      }
+        .update({
+          square_customer_id: squareCustomer.id,
+          full_name: squareCustomer.given_name
+            ? `${squareCustomer.given_name} ${squareCustomer.family_name ?? ''}`.trim()
+            : undefined,
+          email: squareCustomer.email_address ?? undefined,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', authUser.id);
     }
 
     // 4. Retourner les données client
@@ -124,7 +156,7 @@ serve(async (req) => {
             }
           : null,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
     console.error('fetch-customer error:', err);

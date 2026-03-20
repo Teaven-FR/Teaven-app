@@ -10,12 +10,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mapping des catégories Square vers Teaven
+// Mapping des catégories Square vers Teaven (case-insensitive)
 const CATEGORY_MAP: Record<string, string> = {
-  'Nourrir': 'nourrir',
-  'Savourer': 'savourer',
-  'Emporter': 'emporter',
-  'Pâtisseries': 'patisseries',
+  'nourrir': 'nourrir',
+  'savourer': 'savourer',
+  'emporter': 'emporter',
+  'pâtisseries': 'patisseries',
+  'patisseries': 'patisseries',
 };
 
 interface SquareObject {
@@ -55,9 +56,21 @@ async function fetchAllSquareObjects(
   return all;
 }
 
+/** Résout le slug de catégorie depuis un nom Square (case-insensitive) */
+function resolveCategory(name: string): string {
+  return CATEGORY_MAP[name.toLowerCase().trim()] ?? name.toLowerCase().replace(/\s+/g, '-');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Méthode non autorisée' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 
   try {
@@ -106,7 +119,7 @@ serve(async (req) => {
         const name = c.category_data?.name ?? 'unknown';
         return {
           square_category_id: c.id,
-          slug: CATEGORY_MAP[name] ?? name.toLowerCase().replace(/\s+/g, '-'),
+          slug: resolveCategory(name),
           label: name,
           ordinal: i + 1,
         };
@@ -147,7 +160,7 @@ serve(async (req) => {
             name: itemData.name ?? 'Sans nom',
             description: itemData.description ?? '',
             price: firstPrice,
-            category: categoryName ? (CATEGORY_MAP[categoryName] ?? 'savourer') : 'savourer',
+            category: categoryName ? resolveCategory(categoryName) : 'savourer',
             image: imageUrl,
             square_image_url: imageUrl,
             available: true,
@@ -169,14 +182,8 @@ serve(async (req) => {
 
       const productId = dbProduct.id;
 
-      // 6. Upsert les variations
+      // 6. Upsert les variations (upsert au lieu de delete + insert)
       if (variations.length > 0) {
-        // Supprimer les anciennes variations pour ce produit
-        await supabase
-          .from('product_variations')
-          .delete()
-          .eq('product_id', productId);
-
         const variationRows = variations.map((v: SquareObject, i: number) => ({
           product_id: productId,
           square_variation_id: v.id,
@@ -193,12 +200,6 @@ serve(async (req) => {
       // 7. Upsert les modificateurs
       const modifierListInfo = itemData.modifier_list_info ?? [];
 
-      // Supprimer les anciens modifier_groups (cascade supprime les options)
-      await supabase
-        .from('modifier_groups')
-        .delete()
-        .eq('product_id', productId);
-
       for (const mlInfo of modifierListInfo) {
         const mlId = mlInfo.modifier_list_id;
         const ml = modifierListMap.get(mlId);
@@ -207,27 +208,30 @@ serve(async (req) => {
         const mlData = ml.modifier_list_data;
         if (!mlData) continue;
 
-        // Déterminer le type : single si selection_type === 'SINGLE', sinon multiple
         const selectionType = mlData.selection_type === 'SINGLE' ? 'single' : 'multiple';
 
+        // Upsert le modifier_group
         const { data: dbGroup, error: groupError } = await supabase
           .from('modifier_groups')
-          .insert({
-            product_id: productId,
-            square_modifier_list_id: mlId,
-            label: mlData.name ?? 'Options',
-            type: selectionType,
-            ordinal: 0,
-          })
+          .upsert(
+            {
+              product_id: productId,
+              square_modifier_list_id: mlId,
+              label: mlData.name ?? 'Options',
+              type: selectionType,
+              ordinal: 0,
+            },
+            { onConflict: 'square_modifier_list_id' },
+          )
           .select('id')
           .single();
 
         if (groupError || !dbGroup) {
-          console.error('Modifier group insert error:', groupError);
+          console.error('Modifier group upsert error:', groupError);
           continue;
         }
 
-        // Insérer les options du modifier
+        // Upsert les options du modifier
         const modifiers = mlData.modifiers ?? [];
         const optionRows = modifiers.map((mod: SquareObject, i: number) => ({
           group_id: dbGroup.id,
@@ -257,7 +261,7 @@ serve(async (req) => {
           modifierLists: modifierLists.length,
         },
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
     console.error('sync-catalog error:', err);

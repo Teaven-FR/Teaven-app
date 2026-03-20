@@ -88,7 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_product_variations_square ON product_variations(s
 CREATE TABLE IF NOT EXISTS modifier_groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id UUID REFERENCES products(id) ON DELETE CASCADE,
-  square_modifier_list_id TEXT,
+  square_modifier_list_id TEXT UNIQUE,
   label TEXT NOT NULL,
   type TEXT NOT NULL DEFAULT 'single',
   ordinal INTEGER DEFAULT 0,
@@ -290,6 +290,8 @@ ALTER TABLE wallet_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blog_articles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE addresses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalog_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE deliveries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE order_status_log ENABLE ROW LEVEL SECURITY;
 
 -- Lecture publique : catalogue
 DO $$ BEGIN
@@ -351,6 +353,42 @@ DO $$ BEGIN
   -- Adresses
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can manage own addresses' AND tablename = 'addresses') THEN
     CREATE POLICY "Users can manage own addresses" ON addresses FOR ALL USING (auth.uid() = user_id);
+  END IF;
+
+  -- Orders : UPDATE (pour les mises à jour de statut via webhook/payment — service role bypass RLS)
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can update their own orders' AND tablename = 'orders') THEN
+    CREATE POLICY "Users can update their own orders" ON orders FOR UPDATE USING (auth.uid() = user_id);
+  END IF;
+
+  -- Order items : INSERT (pour les Edge Functions — service role bypass RLS)
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert own order items' AND tablename = 'order_items') THEN
+    CREATE POLICY "Users can insert own order items" ON order_items FOR INSERT WITH CHECK (
+      order_id IN (SELECT id FROM orders WHERE user_id = auth.uid())
+    );
+  END IF;
+
+  -- Wallet transactions : INSERT
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert own wallet transactions' AND tablename = 'wallet_transactions') THEN
+    CREATE POLICY "Users can insert own wallet transactions" ON wallet_transactions FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  -- Loyalty transactions : INSERT
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert own loyalty transactions' AND tablename = 'loyalty_transactions') THEN
+    CREATE POLICY "Users can insert own loyalty transactions" ON loyalty_transactions FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  -- Deliveries : SELECT
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view own deliveries' AND tablename = 'deliveries') THEN
+    CREATE POLICY "Users can view own deliveries" ON deliveries FOR SELECT USING (
+      order_id IN (SELECT id FROM orders WHERE user_id = auth.uid())
+    );
+  END IF;
+
+  -- Order status log : SELECT
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view own order status log' AND tablename = 'order_status_log') THEN
+    CREATE POLICY "Users can view own order status log" ON order_status_log FOR SELECT USING (
+      order_id IN (SELECT id FROM orders WHERE user_id = auth.uid())
+    );
   END IF;
 END $$;
 
@@ -438,5 +476,15 @@ BEGIN
     CREATE TRIGGER deliveries_updated_at BEFORE UPDATE ON deliveries
       FOR EACH ROW EXECUTE FUNCTION update_updated_at();
   END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'profiles_updated_at') THEN
+    CREATE TRIGGER profiles_updated_at BEFORE UPDATE ON profiles
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
 END;
 $$;
+
+-- Index supplémentaires pour les requêtes fréquentes
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_profiles_square_customer_id ON profiles(square_customer_id);
+CREATE INDEX IF NOT EXISTS idx_order_status_log_order_id ON order_status_log(order_id);
