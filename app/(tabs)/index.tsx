@@ -340,7 +340,7 @@ export default function HomeScreen() {
           <View style={styles.favoritesHeader}>
             <Text style={styles.favoritesTitle}>Nos coups de cœur</Text>
             <Pressable
-              onPress={() => router.push('/carte')}
+              onPress={() => router.push('/(tabs)/carte')}
               accessibilityLabel="Voir tous les coups de cœur"
             >
               <Text style={styles.seeAll}>Voir tout</Text>

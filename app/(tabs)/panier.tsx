@@ -90,7 +90,7 @@ export default function PanierScreen() {
           title="Votre panier est vide"
           subtitle="Découvrez notre carte pour trouver votre bonheur"
           ctaLabel="Explorer la carte"
-          onCtaPress={() => router.push('/carte')}
+          onCtaPress={() => router.push('/(tabs)/carte')}
         />
       </View>
     );
