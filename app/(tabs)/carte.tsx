@@ -17,10 +17,10 @@ export default function CarteScreen() {
   const { products, categories, selectedCategory, setSelectedCategory, refetch } = useCatalog();
   const [refreshing, setRefreshing] = useState(false);
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    refetch();
-    setTimeout(() => setRefreshing(false), 1000);
+    await refetch();
+    setRefreshing(false);
   }, [refetch]);
 
   // En-tête de la grille (header + pills sticky + compteur)
