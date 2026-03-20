@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCartStore, getItemUnitPrice } from '@/stores/cartStore';
+import { useAuthStore } from '@/stores/authStore';
 import type { Order, OrderStatus, CartItem, SelectedModifier } from '@/lib/types';
 
 interface OrderState {
@@ -39,6 +40,10 @@ export const useOrderStore = create<OrderState>()(
       createOrder: async (cartItems, paymentMethod, usePoints) => {
         set({ isProcessing: true });
 
+        // Récupérer le vrai userId depuis l'auth store
+        const authUser = useAuthStore.getState().user;
+        const userId = authUser?.id ?? 'guest';
+
         // Transformer les items du panier en OrderItems
         const orderItems = cartItems.map((item) => {
           const unitPrice = getItemUnitPrice(item);
@@ -74,13 +79,14 @@ export const useOrderStore = create<OrderState>()(
 
         const subtotal = orderItems.reduce((sum, i) => sum + i.totalPrice, 0);
         const tax = Math.round(subtotal * 0.055);
-        const loyaltyDiscount = usePoints ? 200 : 0;
+        const loyaltyPoints = authUser?.loyaltyPoints ?? 0;
+        const loyaltyDiscount = useCartStore.getState().getLoyaltyDiscount(usePoints, loyaltyPoints);
         const total = subtotal + tax - loyaltyDiscount;
 
         const order: Order = {
           id: generateOrderId(),
-          userId: 'mock-user-001',
-          status: 'payment_confirmed',
+          userId,
+          status: 'payment_pending',
           mode: 'pickup',
           items: orderItems,
           subtotal,

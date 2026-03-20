@@ -13,18 +13,62 @@ const corsHeaders = {
 
 type WalletAction = 'balance' | 'recharge' | 'pay';
 
+/** Vérifie le JWT Supabase et retourne l'utilisateur authentifié */
+async function authenticateUser(req: Request) {
+  const authHeader = req.headers.get('authorization') ?? '';
+  if (!authHeader.startsWith('Bearer ')) return null;
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return user;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Méthode non autorisée' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
   try {
-    const { action, amount, giftCardId, userId } = await req.json() as {
+    // Authentification requise
+    const authUser = await authenticateUser(req);
+    if (!authUser) {
+      return new Response(
+        JSON.stringify({ error: 'Authentification requise' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'JSON invalide' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    const { action, amount, giftCardId } = body as {
       action: WalletAction;
       amount?: number;
       giftCardId?: string;
-      userId?: string;
     };
+
+    // L'userId vient du JWT, pas du body client (ownership enforced)
+    const userId = authUser.id;
 
     if (!action) {
       return new Response(
@@ -38,19 +82,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // TODO: Appeler Square Gift Cards API
-    // const squareAccessToken = Deno.env.get('SQUARE_ACCESS_TOKEN');
-
     switch (action) {
       case 'balance': {
-        // Pour l'instant : retourne le solde depuis Supabase
-        if (!userId) {
-          return new Response(
-            JSON.stringify({ error: 'userId est requis pour balance' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-          );
-        }
-
         const { data: profile } = await supabase
           .from('profiles')
           .select('wallet_balance')
@@ -62,36 +95,31 @@ serve(async (req) => {
             success: true,
             balance: profile?.wallet_balance ?? 0,
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
 
       case 'recharge': {
-        if (!amount || amount <= 0) {
+        if (!amount || !Number.isInteger(amount) || amount <= 0 || amount > 50000) {
           return new Response(
-            JSON.stringify({ error: 'amount positif requis pour recharge' }),
+            JSON.stringify({ error: 'amount doit être un entier positif en centimes (max 500€)' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
           );
         }
 
-        // Simuler le rechargement
         const transactionId = crypto.randomUUID();
 
-        // Mettre à jour le solde dans Supabase
-        if (userId) {
-          await supabase.rpc('increment_wallet', {
-            user_id: userId,
-            add_amount: amount,
-          });
+        await supabase.rpc('increment_wallet', {
+          user_id: userId,
+          add_amount: amount,
+        });
 
-          // Logger la transaction
-          await supabase.from('wallet_transactions').insert({
-            user_id: userId,
-            type: 'credit',
-            amount,
-            description: `Rechargement ${(amount / 100).toFixed(2)} €`,
-          });
-        }
+        await supabase.from('wallet_transactions').insert({
+          user_id: userId,
+          type: 'credit',
+          amount,
+          description: `Rechargement ${(amount / 100).toFixed(2)} €`,
+        });
 
         return new Response(
           JSON.stringify({
@@ -99,48 +127,45 @@ serve(async (req) => {
             transactionId,
             amount,
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
 
       case 'pay': {
-        if (!amount || amount <= 0) {
+        if (!amount || !Number.isInteger(amount) || amount <= 0 || amount > 50000) {
           return new Response(
-            JSON.stringify({ error: 'amount positif requis pour pay' }),
+            JSON.stringify({ error: 'amount doit être un entier positif en centimes (max 500€)' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
           );
         }
 
-        // Simuler le paiement depuis le wallet
+        // Vérifier le solde
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('wallet_balance')
+          .eq('id', userId)
+          .single();
+
+        if ((profile?.wallet_balance ?? 0) < amount) {
+          return new Response(
+            JSON.stringify({ error: 'Solde insuffisant' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+
         const payTransactionId = crypto.randomUUID();
 
-        if (userId) {
-          // Vérifier le solde
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('wallet_balance')
-            .eq('id', userId)
-            .single();
+        await supabase.rpc('decrement_wallet', {
+          user_id: userId,
+          sub_amount: amount,
+        });
 
-          if ((profile?.wallet_balance ?? 0) < amount) {
-            return new Response(
-              JSON.stringify({ error: 'Solde insuffisant' }),
-              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-            );
-          }
-
-          await supabase.rpc('decrement_wallet', {
-            user_id: userId,
-            sub_amount: amount,
-          });
-
-          await supabase.from('wallet_transactions').insert({
-            user_id: userId,
-            type: 'debit',
-            amount,
-            description: `Paiement ${(amount / 100).toFixed(2)} €`,
-          });
-        }
+        await supabase.from('wallet_transactions').insert({
+          user_id: userId,
+          type: 'debit',
+          amount,
+          description: `Paiement ${(amount / 100).toFixed(2)} €`,
+        });
 
         return new Response(
           JSON.stringify({
@@ -148,7 +173,7 @@ serve(async (req) => {
             transactionId: payTransactionId,
             amount,
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
 

@@ -16,13 +16,55 @@ interface OrderLineItem {
   modifiers?: { squareModifierId: string }[];
 }
 
+/** Vérifie le JWT Supabase et retourne l'utilisateur authentifié */
+async function authenticateUser(req: Request) {
+  const authHeader = req.headers.get('authorization') ?? '';
+  if (!authHeader.startsWith('Bearer ')) return null;
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return user;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Méthode non autorisée' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
   try {
-    const { items, userId, pickupTime } = await req.json();
+    // Authentification requise
+    const authUser = await authenticateUser(req);
+    if (!authUser) {
+      return new Response(
+        JSON.stringify({ error: 'Authentification requise' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'JSON invalide' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    const { items, pickupTime } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return new Response(
@@ -39,7 +81,6 @@ serve(async (req) => {
     const locationId = Deno.env.get('SQUARE_LOCATION_ID');
 
     // Construire les line items Square
-    // Square résout le prix depuis le catalog_object_id (variation ID)
     const lineItems = (items as OrderLineItem[]).map((item) => {
       const lineItem: Record<string, unknown> = {
         catalog_object_id: item.catalogObjectId,
@@ -47,7 +88,6 @@ serve(async (req) => {
         item_type: 'ITEM',
       };
 
-      // Ajouter les modificateurs sélectionnés
       if (item.modifiers && item.modifiers.length > 0) {
         lineItem.modifiers = item.modifiers.map((mod) => ({
           catalog_object_id: mod.squareModifierId,
@@ -58,7 +98,7 @@ serve(async (req) => {
     });
 
     // Créer la commande via Square Orders API
-    const scheduledPickup = pickupTime ?? new Date(Date.now() + 20 * 60 * 1000).toISOString();
+    const scheduledPickup = (pickupTime as string) ?? new Date(Date.now() + 20 * 60 * 1000).toISOString();
 
     const orderResponse = await fetch(`${squareBaseUrl}/v2/orders`, {
       method: 'POST',
@@ -99,7 +139,7 @@ serve(async (req) => {
 
     const squareOrder = orderData.order;
 
-    // Sauvegarder dans Supabase
+    // Sauvegarder dans Supabase (service role pour bypass RLS)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -108,9 +148,9 @@ serve(async (req) => {
     const { data: dbOrder, error: dbError } = await supabase
       .from('orders')
       .insert({
-        user_id: userId ?? null,
+        user_id: authUser.id,
         square_order_id: squareOrder.id,
-        status: 'pending',
+        status: 'payment_pending',
         total_amount: squareOrder.total_money?.amount ?? 0,
         items: items,
         pickup_time: scheduledPickup,
@@ -131,7 +171,7 @@ serve(async (req) => {
         estimatedPickup: scheduledPickup,
         dbOrder,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
     console.error('create-order error:', err);

@@ -57,13 +57,55 @@ async function squareFetch(path: string, method = 'GET', body?: Record<string, u
   return res.json();
 }
 
+/** Vérifie le JWT Supabase et retourne l'utilisateur authentifié */
+async function authenticateUser(req: Request) {
+  const authHeader = req.headers.get('authorization') ?? '';
+  if (!authHeader.startsWith('Bearer ')) return null;
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return user;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Méthode non autorisée' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
   try {
-    const { customerId } = await req.json();
+    // Authentification requise
+    const authUser = await authenticateUser(req);
+    if (!authUser) {
+      return new Response(
+        JSON.stringify({ error: 'Authentification requise' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'JSON invalide' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    const { customerId } = body;
 
     if (!customerId) {
       return new Response(
@@ -97,7 +139,7 @@ serve(async (req) => {
               idempotency_key: crypto.randomUUID(),
               loyalty_account: {
                 program_id: programResult.program.id,
-                mapping: { phone_number: customerId }, // fallback
+                mapping: { phone_number: authUser.phone ?? '' },
               },
             });
             if (createResult.loyalty_account) {
@@ -143,9 +185,9 @@ serve(async (req) => {
         level,
         progress,
         loyaltyAccountId,
-        rewards: rewards.filter((r) => r.pointsCost <= points + 500), // Montrer les prochaines récompenses
+        rewards: rewards.filter((r) => r.pointsCost <= points + 500),
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
     console.error('get-loyalty error:', err);

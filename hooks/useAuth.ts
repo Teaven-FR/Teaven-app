@@ -6,7 +6,8 @@ import { useAuthStore } from '@/stores/authStore';
 
 export function useAuth() {
   const { user, isAuthenticated, isLoading } = useAuthStore();
-  const { setUser, setLoading } = useAuthStore.getState();
+  const setUser = useAuthStore((s) => s.setUser);
+  const setLoading = useAuthStore((s) => s.setLoading);
 
   useEffect(() => {
     // Vérifier la session active au montage
@@ -26,7 +27,7 @@ export function useAuth() {
             createdAt: session.user.created_at,
             updatedAt: new Date().toISOString(),
           });
-        } else if (!user) {
+        } else {
           setLoading(false);
         }
       } catch {
@@ -57,7 +58,9 @@ export function useAuth() {
     });
 
     return () => subscription.unsubscribe();
-  }, [setUser, setLoading, user]);
+    // Only run once on mount — setUser/setLoading are stable store refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Envoyer un OTP par SMS */
   const sendOtp = async (phone: string) => {

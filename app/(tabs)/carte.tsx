@@ -7,6 +7,7 @@ import { ScrollView } from 'react-native';
 import { Search } from 'lucide-react-native';
 import { Pill } from '@/components/ui/Pill';
 import { ProductGridCard } from '@/components/ui/ProductGridCard';
+import { SearchModal } from '@/components/ui/SearchModal';
 import { useCatalog } from '@/hooks/useCatalog';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 import type { Product } from '@/lib/types';
@@ -16,6 +17,7 @@ export default function CarteScreen() {
   const router = useRouter();
   const { products, categories, selectedCategory, setSelectedCategory, refetch } = useCatalog();
   const [refreshing, setRefreshing] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -32,7 +34,7 @@ export default function CarteScreen() {
           <Text style={styles.title}>Notre carte</Text>
           <Text style={styles.subtitle}>Fait maison, chaque jour.</Text>
         </View>
-        <Pressable style={styles.searchButton}>
+        <Pressable style={styles.searchButton} onPress={() => setSearchVisible(true)}>
           <Search size={17} color={colors.textSecondary} strokeWidth={1.6} />
         </Pressable>
       </View>
@@ -57,6 +59,14 @@ export default function CarteScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <SearchModal
+        visible={searchVisible}
+        onClose={() => setSearchVisible(false)}
+        onSelect={(product) => {
+          setSearchVisible(false);
+          router.push(`/produit/${product.id}`);
+        }}
+      />
       <FlatList
         data={products}
         renderItem={renderItem}

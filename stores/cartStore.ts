@@ -23,6 +23,17 @@ function cartItemKey(
   return parts.join('::');
 }
 
+/** Génère la clé d'un CartItem déjà dans le panier */
+function existingItemKey(item: CartItem): string {
+  return cartItemKey(
+    item.product.id,
+    item.selectedVariation,
+    Object.fromEntries(
+      (item.selectedModifiers ?? []).map((s) => [s.groupId, s.optionIds]),
+    ),
+  );
+}
+
 /** Calcule le prix unitaire d'un CartItem (variation + modifiers) */
 export function getItemUnitPrice(item: CartItem): number {
   const basePrice = item.selectedVariation?.price ?? item.product.price;
@@ -45,17 +56,25 @@ interface CartState {
     variation?: ProductVariation,
     modifiers?: Record<string, string[]>,
   ) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  removeItem: (itemKey: string) => void;
+  updateQuantity: (itemKey: string, quantity: number) => void;
   clearCart: () => void;
   getTotal: () => number;
   getSubtotal: () => number;
   getTax: () => number;
   getItemCount: () => number;
-  getLoyaltyDiscount: (usePoints: boolean) => number;
+  getLoyaltyDiscount: (usePoints: boolean, loyaltyPoints: number) => number;
   totalItems: () => number;
   totalPrice: () => number;
+  getItemKey: (item: CartItem) => string;
 }
+
+// Seuils de fidélité pour le calcul du discount
+const LOYALTY_DISCOUNTS: { minPoints: number; discount: number }[] = [
+  { minPoints: 1000, discount: 500 }, // Platine: 5€
+  { minPoints: 500, discount: 300 },  // Or: 3€
+  { minPoints: 200, discount: 200 },  // Argent: 2€
+];
 
 export const useCartStore = create<CartState>()(
   persist(
@@ -73,14 +92,7 @@ export const useCartStore = create<CartState>()(
 
           // Chercher un item existant avec la même combinaison
           const existingIdx = state.items.findIndex(
-            (item) =>
-              cartItemKey(
-                item.product.id,
-                item.selectedVariation,
-                Object.fromEntries(
-                  (item.selectedModifiers ?? []).map((s) => [s.groupId, s.optionIds]),
-                ),
-              ) === key,
+            (item) => existingItemKey(item) === key,
           );
 
           if (existingIdx >= 0) {
@@ -113,20 +125,20 @@ export const useCartStore = create<CartState>()(
         });
       },
 
-      removeItem: (productId: string) => {
+      removeItem: (itemKey: string) => {
         set((state) => ({
-          items: state.items.filter((item) => item.product.id !== productId),
+          items: state.items.filter((item) => existingItemKey(item) !== itemKey),
         }));
       },
 
-      updateQuantity: (productId: string, quantity: number) => {
+      updateQuantity: (itemKey: string, quantity: number) => {
         if (quantity <= 0) {
-          get().removeItem(productId);
+          get().removeItem(itemKey);
           return;
         }
         set((state) => ({
           items: state.items.map((item) =>
-            item.product.id === productId ? { ...item, quantity } : item,
+            existingItemKey(item) === itemKey ? { ...item, quantity } : item,
           ),
         }));
       },
@@ -142,10 +154,17 @@ export const useCartStore = create<CartState>()(
 
       getItemCount: () => get().items.reduce((sum, item) => sum + item.quantity, 0),
 
-      getLoyaltyDiscount: (usePoints: boolean) => (usePoints ? 200 : 0),
+      getLoyaltyDiscount: (usePoints: boolean, loyaltyPoints: number) => {
+        if (!usePoints) return 0;
+        for (const tier of LOYALTY_DISCOUNTS) {
+          if (loyaltyPoints >= tier.minPoints) return tier.discount;
+        }
+        return 0;
+      },
 
       totalItems: () => get().getItemCount(),
       totalPrice: () => get().getSubtotal(),
+      getItemKey: (item: CartItem) => existingItemKey(item),
     }),
     {
       name: '@teaven/cart',

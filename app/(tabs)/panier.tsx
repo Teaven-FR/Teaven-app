@@ -24,6 +24,7 @@ import {
 } from 'lucide-react-native';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useCart } from '@/hooks/useCart';
+import { useUser } from '@/hooks/useUser';
 import { useOrderStore } from '@/stores/orderStore';
 import { useCartStore } from '@/stores/cartStore';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
@@ -42,8 +43,10 @@ export default function PanierScreen() {
     removeItem,
     formatPrice,
     getLoyaltyDiscount,
+    getItemKey,
   } = useCart();
 
+  const { loyalty } = useUser();
   const [useLoyalty, setUseLoyalty] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
   const [isOrdering, setIsOrdering] = useState(false);
@@ -51,7 +54,7 @@ export default function PanierScreen() {
   const cartItems = useCartStore((s) => s.items);
 
   // Calculs récap
-  const loyaltyDiscount = getLoyaltyDiscount(useLoyalty);
+  const loyaltyDiscount = getLoyaltyDiscount(useLoyalty, loyalty.points);
   const total = subtotal + tax - loyaltyDiscount;
 
   const paymentOptions: { id: PaymentMethod; label: string }[] = [
@@ -99,48 +102,51 @@ export default function PanierScreen() {
         {/* ──── ARTICLES ──── */}
         <Text style={styles.sectionLabel}>ARTICLES</Text>
         <View style={styles.section}>
-          {items.map((item) => (
-            <View key={item.product.id} style={styles.articleCard}>
-              <Image
-                source={{ uri: item.product.image }}
-                style={styles.articleImage}
-                contentFit="cover"
-                placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
-              />
-              <View style={styles.articleInfo}>
-                <Text style={styles.articleName}>{item.product.name}</Text>
-                <Text style={styles.articlePrice}>
-                  {formatPrice(item.product.price)}
-                </Text>
-              </View>
-              <View style={styles.qtyArea}>
-                <View style={styles.qtySelector}>
+          {items.map((item) => {
+            const key = getItemKey(item);
+            return (
+              <View key={key} style={styles.articleCard}>
+                <Image
+                  source={{ uri: item.product.image }}
+                  style={styles.articleImage}
+                  contentFit="cover"
+                  placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
+                />
+                <View style={styles.articleInfo}>
+                  <Text style={styles.articleName}>{item.product.name}</Text>
+                  <Text style={styles.articlePrice}>
+                    {formatPrice(item.product.price)}
+                  </Text>
+                </View>
+                <View style={styles.qtyArea}>
+                  <View style={styles.qtySelector}>
+                    <Pressable
+                      onPress={() => updateQuantity(key, item.quantity - 1)}
+                      style={styles.qtyButton}
+                      accessibilityLabel="Réduire la quantité"
+                    >
+                      <Minus size={12} color={colors.textSecondary} strokeWidth={2} />
+                    </Pressable>
+                    <Text style={styles.qtyValue}>{item.quantity}</Text>
+                    <Pressable
+                      onPress={() => updateQuantity(key, item.quantity + 1)}
+                      style={styles.qtyButton}
+                      accessibilityLabel="Augmenter la quantité"
+                    >
+                      <Plus size={12} color={colors.textSecondary} strokeWidth={2} />
+                    </Pressable>
+                  </View>
                   <Pressable
-                    onPress={() => updateQuantity(item.product.id, item.quantity - 1)}
-                    style={styles.qtyButton}
-                    accessibilityLabel="Réduire la quantité"
+                    onPress={() => removeItem(key)}
+                    style={styles.deleteButton}
+                    accessibilityLabel="Supprimer l'article"
                   >
-                    <Minus size={12} color={colors.textSecondary} strokeWidth={2} />
-                  </Pressable>
-                  <Text style={styles.qtyValue}>{item.quantity}</Text>
-                  <Pressable
-                    onPress={() => updateQuantity(item.product.id, item.quantity + 1)}
-                    style={styles.qtyButton}
-                    accessibilityLabel="Augmenter la quantité"
-                  >
-                    <Plus size={12} color={colors.textSecondary} strokeWidth={2} />
+                    <Trash2 size={14} color={colors.error} strokeWidth={1.8} />
                   </Pressable>
                 </View>
-                <Pressable
-                  onPress={() => removeItem(item.product.id)}
-                  style={styles.deleteButton}
-                  accessibilityLabel="Supprimer l'article"
-                >
-                  <Trash2 size={14} color={colors.error} strokeWidth={1.8} />
-                </Pressable>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         {/* ──── CLICK & COLLECT ──── */}
@@ -169,7 +175,7 @@ export default function PanierScreen() {
             </View>
             <View>
               <Text style={styles.loyaltyTitle}>Points de fidélité</Text>
-              <Text style={styles.loyaltyBalance}>Solde : 1 240 pts</Text>
+              <Text style={styles.loyaltyBalance}>Solde : {loyalty.points.toLocaleString('fr-FR')} pts</Text>
             </View>
           </View>
           <Switch

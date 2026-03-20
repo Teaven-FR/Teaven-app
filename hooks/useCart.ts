@@ -20,8 +20,9 @@ export function useCart() {
     subtotal: store.getSubtotal(),
     tax: store.getTax(),
     total: store.getTotal(),
-    formattedTotal: formatPrice(store.getSubtotal()),
+    formattedTotal: formatPrice(store.getTotal()),
     formatPrice,
     getLoyaltyDiscount: store.getLoyaltyDiscount,
+    getItemKey: store.getItemKey,
   };
 }
