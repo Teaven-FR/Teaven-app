@@ -136,7 +136,7 @@ serve(async (req) => {
           const programResult = await squareFetch('/v2/loyalty/programs/main', 'GET');
           if (programResult.program) {
             const createResult = await squareFetch('/v2/loyalty/accounts', 'POST', {
-              idempotency_key: crypto.randomUUID(),
+              idempotency_key: `loyalty-create-${customerId}`,
               loyalty_account: {
                 program_id: programResult.program.id,
                 mapping: { phone_number: authUser.phone ?? '' },

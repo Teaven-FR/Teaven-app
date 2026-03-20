@@ -103,10 +103,12 @@ export function useCatalog() {
   const [remoteProducts, setRemoteProducts] = useState<Product[] | null>(null);
   const [remoteCategories, setRemoteCategories] = useState<Category[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   /** Charge les produits depuis Supabase, puis synchronise Square si nécessaire */
   const fetchProducts = useCallback(async (forceSync = false) => {
     setIsLoading(true);
+    setSyncError(null);
     try {
       // 1. Fetch depuis Supabase (données en cache)
       const [productsRes, categoriesRes] = await Promise.all([
@@ -139,7 +141,11 @@ export function useCatalog() {
       if (shouldSync) {
         const syncResult = await sharedSyncCatalog();
 
-        if (!syncResult.error) {
+        if (syncResult.error) {
+          const msg = `Sync catalogue Square échouée : ${syncResult.error}`;
+          console.warn(msg);
+          setSyncError(msg);
+        } else {
           // 3. Re-fetch après sync pour récupérer les données fraîches
           const [freshProducts, freshCategories] = await Promise.all([
             queryProducts(),
@@ -160,8 +166,11 @@ export function useCatalog() {
           }
         }
       }
-    } catch {
+    } catch (err) {
       // En cas d'erreur réseau, on garde les données existantes ou mock
+      const msg = `Erreur chargement catalogue : ${err instanceof Error ? err.message : String(err)}`;
+      console.warn(msg);
+      setSyncError(msg);
       if (!remoteProducts) setRemoteProducts(null);
     } finally {
       setIsLoading(false);
@@ -191,18 +200,19 @@ export function useCatalog() {
     setSelectedCategory,
     isLoading,
     refetch,
+    syncError,
     isUsingMockData: remoteProducts === null,
   };
 }
 
 /** Hook pour un produit unique par ID (avec variations & modificateurs) */
 export function useProduct(id: string | undefined) {
-  const { allProducts, isLoading, isUsingMockData } = useCatalog();
+  const { allProducts, isLoading, isUsingMockData, syncError } = useCatalog();
 
   const product = useMemo(() => {
     if (!id) return undefined;
     return allProducts.find((p) => p.id === id || p.squareId === id);
   }, [id, allProducts]);
 
-  return { product, isLoading, isUsingMockData };
+  return { product, isLoading, isUsingMockData, syncError };
 }

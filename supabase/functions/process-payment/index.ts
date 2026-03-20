@@ -155,11 +155,95 @@ serve(async (req) => {
       })
       .eq('square_order_id', orderId);
 
+    // --- Loyalty: attribuer des points après paiement réussi ---
+    let pointsEarned = 0;
+    try {
+      // 1. Récupérer le profil utilisateur avec son square_customer_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, square_customer_id, loyalty_points')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profile) {
+        // 2. Calculer les points : 1 point par 100 centimes (1€) dépensés
+        pointsEarned = Math.floor(amount / 100);
+
+        if (pointsEarned > 0) {
+          // 3. Mettre à jour les loyalty_points du profil
+          const newTotal = (profile.loyalty_points ?? 0) + pointsEarned;
+          await supabase
+            .from('profiles')
+            .update({ loyalty_points: newTotal })
+            .eq('id', authUser.id);
+
+          // 4. Insérer une transaction de fidélité
+          await supabase
+            .from('loyalty_transactions')
+            .insert({
+              user_id: authUser.id,
+              points: pointsEarned,
+              type: 'earn',
+              reason: `Commande ${orderId}`,
+              order_id: orderId,
+            });
+
+          // 5. Tenter d'accumuler les points dans Square Loyalty API
+          if (profile.square_customer_id) {
+            try {
+              // Chercher le compte loyalty Square du client
+              const loyaltySearchRes = await fetch(`${squareBaseUrl}/v2/loyalty/accounts/search`, {
+                method: 'POST',
+                headers: {
+                  'Square-Version': '2025-01-23',
+                  'Authorization': `Bearer ${squareAccessToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  query: {
+                    customer_ids: [profile.square_customer_id],
+                  },
+                }),
+              });
+
+              const loyaltySearchData = await loyaltySearchRes.json();
+              const loyaltyAccountId = loyaltySearchData.loyalty_accounts?.[0]?.id;
+
+              if (loyaltyAccountId) {
+                await fetch(`${squareBaseUrl}/v2/loyalty/accounts/${loyaltyAccountId}/accumulate`, {
+                  method: 'POST',
+                  headers: {
+                    'Square-Version': '2025-01-23',
+                    'Authorization': `Bearer ${squareAccessToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    accumulate_points: {
+                      order_id: orderId,
+                    },
+                    idempotency_key: crypto.randomUUID(),
+                    location_id: Deno.env.get('SQUARE_LOCATION_ID'),
+                  }),
+                });
+              }
+            } catch (loyaltySquareErr) {
+              // Ne pas faire échouer le paiement si Square Loyalty échoue
+              console.error('Square Loyalty accumulate error (non-fatal):', loyaltySquareErr);
+            }
+          }
+        }
+      }
+    } catch (loyaltyErr) {
+      // Ne pas faire échouer le paiement si l'attribution de points échoue
+      console.error('Loyalty points error (non-fatal):', loyaltyErr);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         paymentId: paymentData.payment?.id,
         orderId,
+        pointsEarned,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
