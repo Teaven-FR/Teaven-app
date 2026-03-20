@@ -1,11 +1,6 @@
 # Configuration Supabase pour Teaven
 # Déclaration des Edge Functions pour le déploiement automatique via Git Integration
 
-[project]
-id = "" # Renseigné via SUPABASE_PROJECT_ID dans les secrets GitHub
-
-# === Edge Functions ===
-
 [functions.sync-catalog]
 verify_jwt = false # Appelée par cron / webhook Square
 
