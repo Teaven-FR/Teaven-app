@@ -292,58 +292,67 @@ ALTER TABLE addresses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalog_cache ENABLE ROW LEVEL SECURITY;
 
 -- Lecture publique : catalogue
-CREATE POLICY "Products are viewable by everyone"
-  ON products FOR SELECT USING (true);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Products are viewable by everyone' AND tablename = 'products') THEN
+    CREATE POLICY "Products are viewable by everyone" ON products FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Categories are viewable by everyone' AND tablename = 'categories') THEN
+    CREATE POLICY "Categories are viewable by everyone" ON categories FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Variations are viewable by everyone' AND tablename = 'product_variations') THEN
+    CREATE POLICY "Variations are viewable by everyone" ON product_variations FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Modifier groups are viewable by everyone' AND tablename = 'modifier_groups') THEN
+    CREATE POLICY "Modifier groups are viewable by everyone" ON modifier_groups FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Modifier options are viewable by everyone' AND tablename = 'modifier_options') THEN
+    CREATE POLICY "Modifier options are viewable by everyone" ON modifier_options FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Catalog cache is public' AND tablename = 'catalog_cache') THEN
+    CREATE POLICY "Catalog cache is public" ON catalog_cache FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Published articles are viewable by everyone' AND tablename = 'blog_articles') THEN
+    CREATE POLICY "Published articles are viewable by everyone" ON blog_articles FOR SELECT USING (published = true);
+  END IF;
 
-CREATE POLICY "Categories are viewable by everyone"
-  ON categories FOR SELECT USING (true);
+  -- Profils : chaque user voit/modifie son profil
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own profile' AND tablename = 'profiles') THEN
+    CREATE POLICY "Users can view their own profile" ON profiles FOR SELECT USING (auth.uid() = id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can update their own profile' AND tablename = 'profiles') THEN
+    CREATE POLICY "Users can update their own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+  END IF;
 
-CREATE POLICY "Variations are viewable by everyone"
-  ON product_variations FOR SELECT USING (true);
+  -- Commandes : chaque user voit ses commandes
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own orders' AND tablename = 'orders') THEN
+    CREATE POLICY "Users can view their own orders" ON orders FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert their own orders' AND tablename = 'orders') THEN
+    CREATE POLICY "Users can insert their own orders" ON orders FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Modifier groups are viewable by everyone"
-  ON modifier_groups FOR SELECT USING (true);
+  -- Order items
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view own order items' AND tablename = 'order_items') THEN
+    CREATE POLICY "Users can view own order items" ON order_items FOR SELECT USING (
+      order_id IN (SELECT id FROM orders WHERE user_id = auth.uid())
+    );
+  END IF;
 
-CREATE POLICY "Modifier options are viewable by everyone"
-  ON modifier_options FOR SELECT USING (true);
+  -- Fidélité
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own loyalty transactions' AND tablename = 'loyalty_transactions') THEN
+    CREATE POLICY "Users can view their own loyalty transactions" ON loyalty_transactions FOR SELECT USING (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Catalog cache is public"
-  ON catalog_cache FOR SELECT USING (true);
+  -- Wallet
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view own wallet' AND tablename = 'wallet_transactions') THEN
+    CREATE POLICY "Users can view own wallet" ON wallet_transactions FOR SELECT USING (auth.uid() = user_id);
+  END IF;
 
-CREATE POLICY "Published articles are viewable by everyone"
-  ON blog_articles FOR SELECT USING (published = true);
-
--- Profils : chaque user voit/modifie son profil
-CREATE POLICY "Users can view their own profile"
-  ON profiles FOR SELECT USING (auth.uid() = id);
-
-CREATE POLICY "Users can update their own profile"
-  ON profiles FOR UPDATE USING (auth.uid() = id);
-
--- Commandes : chaque user voit ses commandes
-CREATE POLICY "Users can view their own orders"
-  ON orders FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own orders"
-  ON orders FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- Order items
-CREATE POLICY "Users can view own order items"
-  ON order_items FOR SELECT USING (
-    order_id IN (SELECT id FROM orders WHERE user_id = auth.uid())
-  );
-
--- Fidélité
-CREATE POLICY "Users can view their own loyalty transactions"
-  ON loyalty_transactions FOR SELECT USING (auth.uid() = user_id);
-
--- Wallet
-CREATE POLICY "Users can view own wallet"
-  ON wallet_transactions FOR SELECT USING (auth.uid() = user_id);
-
--- Adresses
-CREATE POLICY "Users can manage own addresses"
-  ON addresses FOR ALL USING (auth.uid() = user_id);
+  -- Adresses
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can manage own addresses' AND tablename = 'addresses') THEN
+    CREATE POLICY "Users can manage own addresses" ON addresses FOR ALL USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- ============================================================
 -- FUNCTIONS & TRIGGERS
