@@ -1,4 +1,5 @@
 // Écran Accueil — salutation dynamique, bannière promo, pull-to-refresh, favoris, badges
+// Animations d'entrée échelonnées + labels d'accessibilité
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
@@ -30,12 +31,26 @@ const CARD_WIDTH = 260;
 const CARD_GAP = spacing.md;
 const SNAP_INTERVAL = CARD_WIDTH + CARD_GAP;
 
+/** Nombre de sections animées lors de l'entrée */
+const SECTION_COUNT = 5;
+
+/** Délai entre chaque section (ms) */
+const STAGGER_DELAY = 100;
+
 /** Salutation dynamique selon l'heure */
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour >= 6 && hour < 12) return 'Bonjour';
   if (hour >= 12 && hour < 18) return 'Bon après-midi';
   return 'Bonsoir';
+}
+
+/** Formate un prix en centimes pour les lecteurs d'écran */
+function priceAccessibilityLabel(cents: number): string {
+  const euros = Math.floor(cents / 100);
+  const centimes = cents % 100;
+  if (centimes === 0) return `${euros} euros`;
+  return `${euros} euros ${centimes}`;
 }
 
 export default function HomeScreen() {
@@ -49,6 +64,36 @@ export default function HomeScreen() {
 
   const formatPrice = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
+
+  // ── Animations d'entrée échelonnées ──
+  // Chaque section dispose de sa propre opacité et translation verticale
+  const sectionAnims = useRef(
+    Array.from({ length: SECTION_COUNT }, () => ({
+      opacity: new Animated.Value(0),
+      translateY: new Animated.Value(20),
+    })),
+  ).current;
+
+  useEffect(() => {
+    const useNative = Platform.OS !== 'web';
+    const animations = sectionAnims.map((anim, index) =>
+      Animated.parallel([
+        Animated.timing(anim.opacity, {
+          toValue: 1,
+          duration: 350,
+          delay: index * STAGGER_DELAY,
+          useNativeDriver: useNative,
+        }),
+        Animated.timing(anim.translateY, {
+          toValue: 0,
+          duration: 350,
+          delay: index * STAGGER_DELAY,
+          useNativeDriver: useNative,
+        }),
+      ]),
+    );
+    Animated.parallel(animations).start();
+  }, [sectionAnims]);
 
   // Produits pour le carrousel (filtrés par catégorie)
   const carouselProducts = products;
@@ -91,192 +136,245 @@ export default function HomeScreen() {
         }
       >
         {/* Header : avatar + greeting + notification */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {(isGuest ? 'I' : user.fullName.charAt(0))}
-              </Text>
-            </View>
-            <View>
-              <Text style={styles.greeting}>
-                {getGreeting()} {isGuest ? '' : user.fullName}
-              </Text>
-              <Text style={styles.subtitle}>
-                Qu'est-ce qui vous ferait du bien ?
-              </Text>
-            </View>
-          </View>
-          <Pressable
-            style={styles.notifButton}
-            accessibilityLabel="Notifications"
-            onPress={() => router.push('/notifications')}
-          >
-            <Bell size={20} color={colors.textSecondary} strokeWidth={1.3} />
-            <View style={styles.notifBadge} />
-          </Pressable>
-        </View>
-
-        {/* Barre de recherche */}
-        <Pressable
-          style={styles.searchContainer}
-          onPress={() => setSearchVisible(true)}
-          accessibilityLabel="Rechercher un produit"
+        <Animated.View
+          style={{
+            opacity: sectionAnims[0].opacity,
+            transform: [{ translateY: sectionAnims[0].translateY }],
+          }}
         >
-          <View style={styles.searchBar}>
-            <Search size={16} color={colors.textMuted} strokeWidth={1.6} />
-            <Text style={styles.searchPlaceholder}>Rechercher...</Text>
-          </View>
-        </Pressable>
-
-        {/* Bannières promotionnelles — carrousel */}
-        <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          style={styles.promosContainer}
-          contentContainerStyle={styles.promosContent}
-        >
-          <LinearGradient colors={['#E8F0EA', '#D4E5D7']} style={styles.promoCard}>
-            <View style={styles.promoContent}>
-              <Text style={styles.promoTitle}>Première commande ?</Text>
-              <Text style={styles.promoSubtitle}>-15% avec le code BIENVENUE</Text>
-              <Pressable><Text style={styles.promoCta}>En profiter</Text></Pressable>
-            </View>
-            <View style={styles.promoIconWrap}>
-              <Leaf size={36} color={colors.green} strokeWidth={1} />
-            </View>
-          </LinearGradient>
-
-          <LinearGradient colors={['#F5EFDF', '#EDE4CC']} style={styles.promoCard}>
-            <View style={styles.promoContent}>
-              <Text style={styles.promoTitle}>Parrainez un ami</Text>
-              <Text style={styles.promoSubtitle}>Gagnez 200 pts de fidélité</Text>
-              <Pressable onPress={() => router.push('/referral')}>
-                <Text style={[styles.promoCta, { color: colors.gold }]}>Parrainer</Text>
-              </Pressable>
-            </View>
-          </LinearGradient>
-
-          <LinearGradient colors={['#2C4A32', '#4A6B50']} style={styles.promoCard}>
-            <View style={styles.promoContent}>
-              <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Nouveau</Text>
-              <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
-                Matcha Zen Latte Glacé
-              </Text>
-              <Pressable><Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Découvrir</Text></Pressable>
-            </View>
-          </LinearGradient>
-        </ScrollView>
-
-        {/* Pills catégorie */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.pills}
-        >
-          {categories.map((cat) => (
-            <Pill
-              key={cat.id}
-              label={cat.label}
-              active={selectedCategory === cat.id}
-              onPress={() => setSelectedCategory(cat.id)}
-            />
-          ))}
-        </ScrollView>
-
-        {/* Section "À LA CARTE" */}
-        <Text style={styles.sectionLabel}>À LA CARTE</Text>
-
-        {/* Carrousel produits */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carousel}
-          decelerationRate="fast"
-          snapToInterval={SNAP_INTERVAL}
-          snapToAlignment="start"
-          onScroll={handleCarouselScroll}
-          scrollEventThrottle={16}
-        >
-          {carouselProducts.map((product) => (
-            <ProductCardCarousel
-              key={product.id}
-              product={product}
-              onPress={() => router.push(`/produit/${product.id}`)}
-            />
-          ))}
-        </ScrollView>
-
-        {/* Dots pagination */}
-        <View style={styles.dotsContainer}>
-          {carouselProducts.map((product, index) => (
-            <View
-              key={product.id}
-              style={[styles.dot, index === activeCardIndex && styles.dotActive]}
-            />
-          ))}
-        </View>
-
-        {/* Section "Nouveautés" si des produits récents */}
-        {allProducts.some((p) => p.isNew) && (
-          <>
-            <View style={styles.favoritesHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.favoritesTitle}>Nouveautés</Text>
-                <View style={styles.newBadge}><Text style={styles.newBadgeText}>NEW</Text></View>
-              </View>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newProductsScroll}>
-              {allProducts.filter((p) => p.isNew).map((product) => (
-                <Pressable
-                  key={product.id}
-                  onPress={() => router.push(`/produit/${product.id}`)}
-                  style={styles.newProductCard}
-                >
-                  <Image source={{ uri: product.image }} style={styles.newProductImage} contentFit="cover" transition={200} />
-                  <Text style={styles.newProductName} numberOfLines={1}>{product.name}</Text>
-                  <Text style={styles.newProductPrice}>{formatPrice(product.price)}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </>
-        )}
-
-        {/* Section "Nos coups de cœur" */}
-        <View style={styles.favoritesHeader}>
-          <Text style={styles.favoritesTitle}>Nos coups de cœur</Text>
-          <Pressable onPress={() => router.push('/carte')}>
-            <Text style={styles.seeAll}>Voir tout</Text>
-          </Pressable>
-        </View>
-
-        {/* Liste coups de cœur */}
-        <View style={styles.favoritesList}>
-          {favorites.map((product) => (
-            <Pressable
-              key={product.id}
-              onPress={() => router.push(`/produit/${product.id}`)}
-              style={({ pressed }) => [styles.favoriteItem, pressed && styles.favoritePressed]}
-              accessibilityLabel={`${product.name}, ${formatPrice(product.price)}`}
-            >
-              <Image
-                source={{ uri: product.image }}
-                style={styles.favoriteThumbnail}
-                contentFit="cover"
-                transition={200}
-                placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
-              />
-              <View style={styles.favoriteContent}>
-                <Text style={styles.favoriteName} numberOfLines={1}>{product.name}</Text>
-                <Text style={styles.favoriteDescription} numberOfLines={1}>
-                  {product.description}
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {(isGuest ? 'I' : user.fullName.charAt(0))}
                 </Text>
               </View>
-              <Text style={styles.favoritePrice}>{formatPrice(product.price)}</Text>
+              <View>
+                <Text style={styles.greeting}>
+                  {getGreeting()} {isGuest ? '' : user.fullName}
+                </Text>
+                <Text style={styles.subtitle}>
+                  Qu'est-ce qui vous ferait du bien ?
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              style={styles.notifButton}
+              accessibilityLabel="Notifications"
+              onPress={() => router.push('/notifications')}
+            >
+              <Bell size={20} color={colors.textSecondary} strokeWidth={1.3} />
+              <View style={styles.notifBadge} />
             </Pressable>
-          ))}
-        </View>
+          </View>
+        </Animated.View>
+
+        {/* Barre de recherche */}
+        <Animated.View
+          style={{
+            opacity: sectionAnims[1].opacity,
+            transform: [{ translateY: sectionAnims[1].translateY }],
+          }}
+        >
+          <Pressable
+            style={styles.searchContainer}
+            onPress={() => setSearchVisible(true)}
+            accessibilityLabel="Rechercher un produit"
+          >
+            <View style={styles.searchBar}>
+              <Search size={16} color={colors.textMuted} strokeWidth={1.6} />
+              <Text style={styles.searchPlaceholder}>Rechercher...</Text>
+            </View>
+          </Pressable>
+
+          {/* Bannières promotionnelles — carrousel */}
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            style={styles.promosContainer}
+            contentContainerStyle={styles.promosContent}
+          >
+            <LinearGradient colors={['#E8F0EA', '#D4E5D7']} style={styles.promoCard}>
+              <View style={styles.promoContent}>
+                <Text style={styles.promoTitle}>Première commande ?</Text>
+                <Text style={styles.promoSubtitle}>-15% avec le code BIENVENUE</Text>
+                <Pressable accessibilityLabel="Profiter de moins quinze pourcent sur la première commande">
+                  <Text style={styles.promoCta}>En profiter</Text>
+                </Pressable>
+              </View>
+              <View style={styles.promoIconWrap}>
+                <Leaf size={36} color={colors.green} strokeWidth={1} />
+              </View>
+            </LinearGradient>
+
+            <LinearGradient colors={['#F5EFDF', '#EDE4CC']} style={styles.promoCard}>
+              <View style={styles.promoContent}>
+                <Text style={styles.promoTitle}>Parrainez un ami</Text>
+                <Text style={styles.promoSubtitle}>Gagnez 200 pts de fidélité</Text>
+                <Pressable
+                  onPress={() => router.push('/referral')}
+                  accessibilityLabel="Parrainer un ami et gagner 200 points de fidélité"
+                >
+                  <Text style={[styles.promoCta, { color: colors.gold }]}>Parrainer</Text>
+                </Pressable>
+              </View>
+            </LinearGradient>
+
+            <LinearGradient colors={['#2C4A32', '#4A6B50']} style={styles.promoCard}>
+              <View style={styles.promoContent}>
+                <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Nouveau</Text>
+                <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
+                  Matcha Zen Latte Glacé
+                </Text>
+                <Pressable accessibilityLabel="Découvrir le Matcha Zen Latte Glacé">
+                  <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Découvrir</Text>
+                </Pressable>
+              </View>
+            </LinearGradient>
+          </ScrollView>
+        </Animated.View>
+
+        {/* Pills catégorie */}
+        <Animated.View
+          style={{
+            opacity: sectionAnims[2].opacity,
+            transform: [{ translateY: sectionAnims[2].translateY }],
+          }}
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pills}
+          >
+            {categories.map((cat) => (
+              <Pill
+                key={cat.id}
+                label={cat.label}
+                active={selectedCategory === cat.id}
+                onPress={() => setSelectedCategory(cat.id)}
+              />
+            ))}
+          </ScrollView>
+        </Animated.View>
+
+        {/* Section "À LA CARTE" + Carrousel produits */}
+        <Animated.View
+          style={{
+            opacity: sectionAnims[3].opacity,
+            transform: [{ translateY: sectionAnims[3].translateY }],
+          }}
+        >
+          <Text style={styles.sectionLabel}>À LA CARTE</Text>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carousel}
+            decelerationRate="fast"
+            snapToInterval={SNAP_INTERVAL}
+            snapToAlignment="start"
+            onScroll={handleCarouselScroll}
+            scrollEventThrottle={16}
+          >
+            {carouselProducts.map((product) => (
+              <ProductCardCarousel
+                key={product.id}
+                product={product}
+                onPress={() => router.push(`/produit/${product.id}`)}
+              />
+            ))}
+          </ScrollView>
+
+          {/* Dots pagination */}
+          <View style={styles.dotsContainer}>
+            {carouselProducts.map((product, index) => (
+              <View
+                key={product.id}
+                style={[styles.dot, index === activeCardIndex && styles.dotActive]}
+              />
+            ))}
+          </View>
+        </Animated.View>
+
+        {/* Section "Nouveautés" + "Nos coups de cœur" */}
+        <Animated.View
+          style={{
+            opacity: sectionAnims[4].opacity,
+            transform: [{ translateY: sectionAnims[4].translateY }],
+          }}
+        >
+          {/* Section "Nouveautés" si des produits récents */}
+          {allProducts.some((p) => p.isNew) && (
+            <>
+              <View style={styles.favoritesHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={styles.favoritesTitle}>Nouveautés</Text>
+                  <View style={styles.newBadge}><Text style={styles.newBadgeText}>NEW</Text></View>
+                </View>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newProductsScroll}>
+                {allProducts.filter((p) => p.isNew).map((product) => (
+                  <Pressable
+                    key={product.id}
+                    onPress={() => router.push(`/produit/${product.id}`)}
+                    style={styles.newProductCard}
+                    accessibilityLabel={`${product.name}, ${priceAccessibilityLabel(product.price)}, nouveau produit`}
+                  >
+                    <Image
+                      source={{ uri: product.image }}
+                      style={styles.newProductImage}
+                      contentFit="cover"
+                      transition={200}
+                      accessibilityLabel={`Photo de ${product.name}`}
+                    />
+                    <Text style={styles.newProductName} numberOfLines={1}>{product.name}</Text>
+                    <Text style={styles.newProductPrice}>{formatPrice(product.price)}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </>
+          )}
+
+          {/* Section "Nos coups de cœur" */}
+          <View style={styles.favoritesHeader}>
+            <Text style={styles.favoritesTitle}>Nos coups de cœur</Text>
+            <Pressable
+              onPress={() => router.push('/carte')}
+              accessibilityLabel="Voir tous les coups de cœur"
+            >
+              <Text style={styles.seeAll}>Voir tout</Text>
+            </Pressable>
+          </View>
+
+          {/* Liste coups de cœur */}
+          <View style={styles.favoritesList}>
+            {favorites.map((product) => (
+              <Pressable
+                key={product.id}
+                onPress={() => router.push(`/produit/${product.id}`)}
+                style={({ pressed }) => [styles.favoriteItem, pressed && styles.favoritePressed]}
+                accessibilityLabel={`${product.name}, ${priceAccessibilityLabel(product.price)}`}
+              >
+                <Image
+                  source={{ uri: product.image }}
+                  style={styles.favoriteThumbnail}
+                  contentFit="cover"
+                  transition={200}
+                  placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
+                  accessibilityLabel={`Photo de ${product.name}`}
+                />
+                <View style={styles.favoriteContent}>
+                  <Text style={styles.favoriteName} numberOfLines={1}>{product.name}</Text>
+                  <Text style={styles.favoriteDescription} numberOfLines={1}>
+                    {product.description}
+                  </Text>
+                </View>
+                <Text style={styles.favoritePrice}>{formatPrice(product.price)}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Animated.View>
       </ScrollView>
 
       {/* Modal recherche */}

@@ -1,8 +1,9 @@
 // Carte produit carrousel — format horizontal (260px large, 180px image)
 // Badge rating en haut à droite, bouton "+" radius 8px
 // Micro-interaction "+" → "AJOUTÉ" (30px → 76px)
+// Retour tactile scale(0.97) + badges populaire/nouveau/saison
 import { useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Plus, Star } from 'lucide-react-native';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
@@ -14,13 +15,45 @@ interface ProductCardCarouselProps {
   onPress: () => void;
 }
 
+/** Formate un prix en centimes pour les lecteurs d'écran */
+function priceAccessibilityLabel(cents: number): string {
+  const euros = Math.floor(cents / 100);
+  const centimes = cents % 100;
+  if (centimes === 0) return `${euros} euros`;
+  return `${euros} euros ${centimes}`;
+}
+
 export function ProductCardCarousel({ product, onPress }: ProductCardCarouselProps) {
   const addItem = useCartStore((s) => s.addItem);
   const buttonWidth = useRef(new Animated.Value(30)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
 
+  // Animation de retour tactile (press feedback)
+  const cardScale = useRef(new Animated.Value(1)).current;
+  const useNative = Platform.OS !== 'web';
+
   const formatPrice = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
+
+  /** Réduction d'échelle au toucher */
+  const handlePressIn = useCallback(() => {
+    Animated.spring(cardScale, {
+      toValue: 0.97,
+      damping: 15,
+      stiffness: 300,
+      useNativeDriver: useNative,
+    }).start();
+  }, [cardScale, useNative]);
+
+  /** Retour à l'échelle normale au relâchement */
+  const handlePressOut = useCallback(() => {
+    Animated.spring(cardScale, {
+      toValue: 1,
+      damping: 15,
+      stiffness: 300,
+      useNativeDriver: useNative,
+    }).start();
+  }, [cardScale, useNative]);
 
   const handleAdd = useCallback(() => {
     addItem(product);
@@ -60,36 +93,69 @@ export function ProductCardCarousel({ product, onPress }: ProductCardCarouselPro
   }, [addItem, product, buttonWidth, textOpacity]);
 
   return (
-    <Pressable onPress={onPress} style={styles.card}>
-      {/* Image avec badge rating */}
-      <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: product.image }}
-          style={styles.image}
-          contentFit="cover"
-          transition={300}
-        />
-        <View style={styles.ratingBadge}>
-          <Star size={10} color="#FFFFFF" fill="#FFFFFF" strokeWidth={1.5} />
-          <Text style={styles.ratingText}>{product.rating}</Text>
-        </View>
-      </View>
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      accessibilityLabel={`${product.name}, ${priceAccessibilityLabel(product.price)}${product.isPopular ? ', populaire' : ''}${product.isNew ? ', nouveau' : ''}${product.isSeasonal ? ', de saison' : ''}`}
+    >
+      <Animated.View style={[styles.card, { transform: [{ scale: cardScale }] }]}>
+        {/* Image avec badge rating + badges statut */}
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: product.image }}
+            style={styles.image}
+            contentFit="cover"
+            transition={300}
+            accessibilityLabel={`Photo de ${product.name}`}
+          />
+          <View style={styles.ratingBadge}>
+            <Star size={10} color="#FFFFFF" fill="#FFFFFF" strokeWidth={1.5} />
+            <Text style={styles.ratingText}>{product.rating}</Text>
+          </View>
 
-      <View style={styles.content}>
-        <Text style={styles.name} numberOfLines={1}>{product.name}</Text>
-        <Text style={styles.description} numberOfLines={2}>{product.description}</Text>
-        <View style={styles.footer}>
-          <Text style={styles.price}>{formatPrice(product.price)}</Text>
-          <Pressable onPress={handleAdd}>
-            <Animated.View style={[styles.addButton, { width: buttonWidth }]}>
-              <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
-              <Animated.Text style={[styles.addedText, { opacity: textOpacity }]}>
-                AJOUTÉ
-              </Animated.Text>
-            </Animated.View>
-          </Pressable>
+          {/* Badges populaire / nouveau / saison */}
+          {product.isPopular && (
+            <View style={[styles.statusBadge, styles.popularBadge]}>
+              <Text style={styles.statusBadgeText}>Populaire 🔥</Text>
+            </View>
+          )}
+          {product.isNew && (
+            <View style={[styles.statusBadge, styles.newBadge]}>
+              <Text style={styles.statusBadgeText}>Nouveau</Text>
+            </View>
+          )}
+          {product.isSeasonal && (
+            <View style={[styles.statusBadge, styles.seasonalBadge]}>
+              <Text style={styles.statusBadgeText}>Saison</Text>
+            </View>
+          )}
         </View>
-      </View>
+
+        <View style={styles.content}>
+          <Text style={styles.name} numberOfLines={1}>{product.name}</Text>
+          <Text style={styles.description} numberOfLines={2}>{product.description}</Text>
+          <View style={styles.footer}>
+            <Text
+              style={styles.price}
+              accessibilityLabel={priceAccessibilityLabel(product.price)}
+            >
+              {formatPrice(product.price)}
+            </Text>
+            <Pressable
+              onPress={handleAdd}
+              accessibilityLabel={`Ajouter ${product.name} au panier`}
+            >
+              <Animated.View style={[styles.addButton, { width: buttonWidth }]}>
+                <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+                <Animated.Text style={[styles.addedText, { opacity: textOpacity }]}>
+                  AJOUTÉ
+                </Animated.Text>
+              </Animated.View>
+            </Pressable>
+          </View>
+        </View>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -126,6 +192,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#FFFFFF',
   },
+
+  // Badges statut (populaire, nouveau, saison)
+  statusBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radii.badge,
+  },
+  popularBadge: {
+    backgroundColor: 'rgba(212, 84, 74, 0.9)',
+  },
+  newBadge: {
+    backgroundColor: 'rgba(76, 142, 88, 0.9)',
+    top: spacing.sm + 28,
+  },
+  seasonalBadge: {
+    backgroundColor: 'rgba(232, 168, 73, 0.9)',
+    top: spacing.sm + (28 * 2),
+  },
+  statusBadgeText: {
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+
   content: {
     padding: spacing.md,
   },

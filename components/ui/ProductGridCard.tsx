@@ -1,7 +1,8 @@
 // Carte produit grille — format 2 colonnes (photo ratio 4/5)
 // Bouton "+" 28px radius 8px avec micro-interaction expand "AJOUTÉ"
+// Retour tactile scale(0.97) + badges populaire/nouveau/saison
 import { useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Plus } from 'lucide-react-native';
 import { colors, fonts, radii, spacing } from '@/constants/theme';
@@ -13,13 +14,45 @@ interface ProductGridCardProps {
   onPress: () => void;
 }
 
+/** Formate un prix en centimes pour les lecteurs d'écran */
+function priceAccessibilityLabel(cents: number): string {
+  const euros = Math.floor(cents / 100);
+  const centimes = cents % 100;
+  if (centimes === 0) return `${euros} euros`;
+  return `${euros} euros ${centimes}`;
+}
+
 export function ProductGridCard({ product, onPress }: ProductGridCardProps) {
   const addItem = useCartStore((s) => s.addItem);
   const buttonWidth = useRef(new Animated.Value(28)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
 
+  // Animation de retour tactile (press feedback)
+  const cardScale = useRef(new Animated.Value(1)).current;
+  const useNative = Platform.OS !== 'web';
+
   const formatPrice = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
+
+  /** Réduction d'échelle au toucher */
+  const handlePressIn = useCallback(() => {
+    Animated.spring(cardScale, {
+      toValue: 0.97,
+      damping: 15,
+      stiffness: 300,
+      useNativeDriver: useNative,
+    }).start();
+  }, [cardScale, useNative]);
+
+  /** Retour à l'échelle normale au relâchement */
+  const handlePressOut = useCallback(() => {
+    Animated.spring(cardScale, {
+      toValue: 1,
+      damping: 15,
+      stiffness: 300,
+      useNativeDriver: useNative,
+    }).start();
+  }, [cardScale, useNative]);
 
   const handleAdd = useCallback(() => {
     addItem(product);
@@ -59,41 +92,76 @@ export function ProductGridCard({ product, onPress }: ProductGridCardProps) {
   }, [addItem, product, buttonWidth, textOpacity]);
 
   return (
-    <Pressable onPress={onPress} style={styles.card}>
-      {/* Photo ratio 4/5 */}
-      <Image
-        source={{ uri: product.image }}
-        style={styles.image}
-        contentFit="cover"
-        transition={300}
-      />
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      accessibilityLabel={`${product.name}, ${priceAccessibilityLabel(product.price)}${product.isPopular ? ', populaire' : ''}${product.isNew ? ', nouveau' : ''}${product.isSeasonal ? ', de saison' : ''}`}
+    >
+      <Animated.View style={[styles.card, { transform: [{ scale: cardScale }] }]}>
+        {/* Photo ratio 4/5 avec badges statut */}
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: product.image }}
+            style={styles.image}
+            contentFit="cover"
+            transition={300}
+            accessibilityLabel={`Photo de ${product.name}`}
+          />
 
-      <View style={styles.content}>
-        {/* Tags */}
-        <View style={styles.tags}>
-          {product.tags.map((tag) => (
-            <View key={tag} style={styles.tag}>
-              <Text style={styles.tagText}>{tag.toUpperCase()}</Text>
+          {/* Badges populaire / nouveau / saison */}
+          {product.isPopular && (
+            <View style={[styles.statusBadge, styles.popularBadge]}>
+              <Text style={styles.statusBadgeText}>Populaire 🔥</Text>
             </View>
-          ))}
+          )}
+          {product.isNew && (
+            <View style={[styles.statusBadge, styles.newBadge]}>
+              <Text style={styles.statusBadgeText}>Nouveau</Text>
+            </View>
+          )}
+          {product.isSeasonal && (
+            <View style={[styles.statusBadge, styles.seasonalBadge]}>
+              <Text style={styles.statusBadgeText}>Saison</Text>
+            </View>
+          )}
         </View>
 
-        {/* Nom */}
-        <Text style={styles.name} numberOfLines={1}>{product.name}</Text>
+        <View style={styles.content}>
+          {/* Tags */}
+          <View style={styles.tags}>
+            {product.tags.map((tag) => (
+              <View key={tag} style={styles.tag}>
+                <Text style={styles.tagText}>{tag.toUpperCase()}</Text>
+              </View>
+            ))}
+          </View>
 
-        {/* Prix + bouton "+" */}
-        <View style={styles.footer}>
-          <Text style={styles.price}>{formatPrice(product.price)}</Text>
-          <Pressable onPress={handleAdd}>
-            <Animated.View style={[styles.addButton, { width: buttonWidth }]}>
-              <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
-              <Animated.Text style={[styles.addedText, { opacity: textOpacity }]}>
-                AJOUTÉ
-              </Animated.Text>
-            </Animated.View>
-          </Pressable>
+          {/* Nom */}
+          <Text style={styles.name} numberOfLines={1}>{product.name}</Text>
+
+          {/* Prix + bouton "+" */}
+          <View style={styles.footer}>
+            <Text
+              style={styles.price}
+              accessibilityLabel={priceAccessibilityLabel(product.price)}
+            >
+              {formatPrice(product.price)}
+            </Text>
+            <Pressable
+              onPress={handleAdd}
+              accessibilityLabel={`Ajouter ${product.name} au panier`}
+            >
+              <Animated.View style={[styles.addButton, { width: buttonWidth }]}>
+                <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
+                <Animated.Text style={[styles.addedText, { opacity: textOpacity }]}>
+                  AJOUTÉ
+                </Animated.Text>
+              </Animated.View>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -111,12 +179,43 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
+  imageContainer: {
+    position: 'relative',
+  },
   image: {
     width: '100%',
     aspectRatio: 0.8,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
   },
+
+  // Badges statut (populaire, nouveau, saison)
+  statusBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: radii.badge,
+  },
+  popularBadge: {
+    backgroundColor: 'rgba(212, 84, 74, 0.9)',
+  },
+  newBadge: {
+    backgroundColor: 'rgba(76, 142, 88, 0.9)',
+    top: spacing.sm + 24,
+  },
+  seasonalBadge: {
+    backgroundColor: 'rgba(232, 168, 73, 0.9)',
+    top: spacing.sm + (24 * 2),
+  },
+  statusBadgeText: {
+    fontFamily: fonts.bold,
+    fontSize: 9,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+
   content: {
     padding: spacing.sm,
     paddingTop: spacing.sm,

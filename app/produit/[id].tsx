@@ -279,6 +279,61 @@ export default function ProductScreen() {
             ))}
           </View>
 
+          {/* ──── Avis clients ──── */}
+          <View style={styles.reviewsSection}>
+            <View style={styles.reviewsHeader}>
+              <Text style={styles.reviewsTitle}>Avis clients</Text>
+              <View style={styles.reviewsSummary}>
+                <View style={styles.reviewsStars}>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Star
+                      key={i}
+                      size={14}
+                      color="#F5C542"
+                      fill={i <= Math.round(resolvedProduct.rating) ? '#F5C542' : 'transparent'}
+                      strokeWidth={i <= Math.round(resolvedProduct.rating) ? 0 : 1.5}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.reviewsAverage}>{resolvedProduct.rating}/5</Text>
+                <Text style={styles.reviewsCount}>
+                  ({Math.floor(resolvedProduct.rating * 12)} avis)
+                </Text>
+              </View>
+            </View>
+
+            {/* Liste des avis */}
+            {[
+              { name: 'Marie L.', date: '12 mars 2026', rating: 5, comment: 'Absolument délicieux ! Je recommande à 100%.' },
+              { name: 'Thomas P.', date: '8 mars 2026', rating: 4, comment: 'Très bon, portions généreuses. Service rapide.' },
+              { name: 'Sophie D.', date: '3 mars 2026', rating: 5, comment: 'Mon préféré chez Teaven. Produits frais et savoureux.' },
+            ].map((review) => (
+              <View key={review.name} style={styles.reviewCard}>
+                <View style={styles.reviewTopRow}>
+                  <Text style={styles.reviewName}>{review.name}</Text>
+                  <Text style={styles.reviewDate}>{review.date}</Text>
+                </View>
+                <View style={styles.reviewStarsRow}>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Star
+                      key={i}
+                      size={11}
+                      color="#F5C542"
+                      fill={i <= review.rating ? '#F5C542' : 'transparent'}
+                      strokeWidth={i <= review.rating ? 0 : 1.5}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.reviewComment}>{review.comment}</Text>
+              </View>
+            ))}
+
+            {/* Lien vers tous les avis */}
+            <Pressable style={styles.allReviewsLink}>
+              <Text style={styles.allReviewsText}>Voir tous les avis</Text>
+            </Pressable>
+          </View>
+
           {/* Prix + sélecteur quantité */}
           <View style={styles.priceRow}>
             <Text style={styles.price}>{formatPrice(unitPrice)}</Text>
@@ -510,7 +565,7 @@ const styles = StyleSheet.create({
   tags: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.lg,
   },
   tag: {
     backgroundColor: colors.greenLight,
@@ -524,6 +579,84 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     color: colors.green,
     textTransform: 'uppercase',
+  },
+
+  // Avis clients
+  reviewsSection: {
+    backgroundColor: '#F9F9F6',
+    borderRadius: 14,
+    padding: spacing.lg,
+    marginBottom: spacing.xxl,
+    gap: spacing.md,
+  },
+  reviewsHeader: {
+    marginBottom: spacing.xs,
+  },
+  reviewsTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  reviewsSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  reviewsStars: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  reviewsAverage: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.text,
+  },
+  reviewsCount: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  reviewCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: spacing.md,
+    gap: 4,
+  },
+  reviewTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reviewName: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  reviewDate: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  reviewStarsRow: {
+    flexDirection: 'row',
+    gap: 2,
+    marginBottom: 2,
+  },
+  reviewComment: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#4A4A4A',
+  },
+  allReviewsLink: {
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  allReviewsText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.green,
   },
 
   // Prix + quantité

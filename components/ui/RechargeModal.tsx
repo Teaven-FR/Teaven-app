@@ -11,17 +11,23 @@ interface RechargeModalProps {
   onRecharge: (amount: number) => void; // montant en centimes
 }
 
-const PRESET_AMOUNTS = [1000, 2000, 5000, 10000]; // 10€, 20€, 50€, 100€
+// Montants prédéfinis avec bonus fidélité
+const PRESET_OPTIONS = [
+  { charge: 1000, bonus: 100 },   // 10€ → 11€ (bonus +1€)
+  { charge: 2000, bonus: 200 },   // 20€ → 22€ (bonus +2€)
+  { charge: 5000, bonus: 500 },   // 50€ → 55€ (bonus +5€)
+  { charge: 10000, bonus: 1500 }, // 100€ → 115€ (bonus +15€)
+];
 
 export function RechargeModal({ visible, onClose, onRecharge }: RechargeModalProps) {
   const insets = useSafeAreaInsets();
-  const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
 
-  const formatPreset = (cents: number) => `${cents / 100} €`;
+  const formatEuros = (cents: number) => `${(cents / 100).toFixed(0)} €`;
 
-  const handlePresetPress = (amount: number) => {
-    setSelectedPreset(amount);
+  const handlePresetPress = (index: number) => {
+    setSelectedIndex(index);
     setCustomAmount('');
   };
 
@@ -29,26 +35,38 @@ export function RechargeModal({ visible, onClose, onRecharge }: RechargeModalPro
     // N'accepter que des chiffres et un point/virgule
     const cleaned = text.replace(/[^0-9.,]/g, '');
     setCustomAmount(cleaned);
-    setSelectedPreset(null);
+    setSelectedIndex(null);
   };
 
-  const getAmount = (): number => {
-    if (selectedPreset) return selectedPreset;
+  // Montant total crédité (charge + bonus pour les prédéfinis)
+  const getCreditedAmount = (): number => {
+    if (selectedIndex !== null) {
+      const option = PRESET_OPTIONS[selectedIndex];
+      return option.charge + option.bonus;
+    }
+    const parsed = parseFloat(customAmount.replace(',', '.'));
+    return isNaN(parsed) ? 0 : Math.round(parsed * 100);
+  };
+
+  // Montant débité (charge uniquement)
+  const getChargeAmount = (): number => {
+    if (selectedIndex !== null) return PRESET_OPTIONS[selectedIndex].charge;
     const parsed = parseFloat(customAmount.replace(',', '.'));
     return isNaN(parsed) ? 0 : Math.round(parsed * 100);
   };
 
   const handleRecharge = () => {
-    const amount = getAmount();
-    if (amount > 0) {
-      onRecharge(amount);
-      setSelectedPreset(null);
+    const credited = getCreditedAmount();
+    if (credited > 0) {
+      onRecharge(credited);
+      setSelectedIndex(null);
       setCustomAmount('');
       onClose();
     }
   };
 
-  const amount = getAmount();
+  const creditedAmount = getCreditedAmount();
+  const chargeAmount = getChargeAmount();
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -65,18 +83,32 @@ export function RechargeModal({ visible, onClose, onRecharge }: RechargeModalPro
             </Pressable>
           </View>
 
-          {/* Montants prédéfinis */}
+          {/* Montants prédéfinis avec bonus */}
+          {selectedIndex !== null && (
+            <View style={styles.bonusBanner}>
+              <Text style={styles.bonusBannerText}>
+                Chargez {formatEuros(PRESET_OPTIONS[selectedIndex].charge)}, recevez{' '}
+                {formatEuros(PRESET_OPTIONS[selectedIndex].charge + PRESET_OPTIONS[selectedIndex].bonus)}
+              </Text>
+            </View>
+          )}
           <View style={styles.presetsGrid}>
-            {PRESET_AMOUNTS.map((preset) => {
-              const isActive = selectedPreset === preset;
+            {PRESET_OPTIONS.map((option, index) => {
+              const isActive = selectedIndex === index;
               return (
                 <Pressable
-                  key={preset}
-                  onPress={() => handlePresetPress(preset)}
+                  key={option.charge}
+                  onPress={() => handlePresetPress(index)}
                   style={[styles.presetCard, isActive && styles.presetCardActive]}
                 >
                   <Text style={[styles.presetText, isActive && styles.presetTextActive]}>
-                    {formatPreset(preset)}
+                    {formatEuros(option.charge)}
+                  </Text>
+                  <Text style={styles.receivedText}>
+                    → {formatEuros(option.charge + option.bonus)} crédités
+                  </Text>
+                  <Text style={styles.bonusText}>
+                    +{formatEuros(option.bonus)} offerts
                   </Text>
                 </Pressable>
               );
@@ -102,11 +134,11 @@ export function RechargeModal({ visible, onClose, onRecharge }: RechargeModalPro
           {/* Bouton recharger */}
           <Pressable
             onPress={handleRecharge}
-            style={[styles.rechargeButton, amount <= 0 && styles.rechargeButtonDisabled]}
-            disabled={amount <= 0}
+            style={[styles.rechargeButton, chargeAmount <= 0 && styles.rechargeButtonDisabled]}
+            disabled={chargeAmount <= 0}
           >
             <Text style={styles.rechargeButtonText}>
-              Recharger{amount > 0 ? ` ${(amount / 100).toFixed(2).replace('.', ',')} €` : ''}
+              Recharger{chargeAmount > 0 ? ` ${(chargeAmount / 100).toFixed(2).replace('.', ',')} €` : ''}
             </Text>
           </Pressable>
         </View>
@@ -165,17 +197,18 @@ const styles = StyleSheet.create({
   },
   presetCard: {
     width: '47%',
-    height: 56,
+    height: 84,
     backgroundColor: colors.surface,
     borderRadius: radii.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 2,
+    paddingVertical: spacing.sm,
   },
   presetCardActive: {
     borderColor: colors.green,
-    borderWidth: 1.5,
     backgroundColor: '#F0F5F1',
   },
   presetText: {
@@ -185,6 +218,30 @@ const styles = StyleSheet.create({
   },
   presetTextActive: {
     color: colors.green,
+  },
+  receivedText: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  bonusText: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.green,
+  },
+  bonusBanner: {
+    backgroundColor: '#F0F5F1',
+    borderRadius: radii.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    alignItems: 'center',
+  },
+  bonusBannerText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.green,
+    textAlign: 'center',
   },
 
   // Montant libre

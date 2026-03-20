@@ -23,11 +23,23 @@ import {
   Trash2,
 } from 'lucide-react-native';
 import { EmptyState } from '@/components/ui/EmptyState';
+import TimeSlotPicker from '@/components/ui/TimeSlotPicker';
+import { mockTimeSlots } from '@/constants/mockTimeSlots';
 import { useCart } from '@/hooks/useCart';
 import { useUser } from '@/hooks/useUser';
 import { useOrderStore } from '@/stores/orderStore';
 import { useCartStore } from '@/stores/cartStore';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
+import type { TimeSlot as PickerTimeSlot } from '@/components/ui/TimeSlotPicker';
+
+// Convertir les créneaux mock vers le format attendu par TimeSlotPicker
+const pickerSlots: PickerTimeSlot[] = mockTimeSlots.map((slot) => ({
+  id: slot.id,
+  timeRange: slot.id === 'asap' ? '' : slot.label,
+  queueCount: slot.ordersInQueue,
+  available: slot.available,
+  isAsap: slot.id === 'asap',
+}));
 
 type PaymentMethod = 'card' | 'wallet' | 'mixed';
 
@@ -49,6 +61,7 @@ export default function PanierScreen() {
   const { loyalty } = useUser();
   const [useLoyalty, setUseLoyalty] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
   const [isOrdering, setIsOrdering] = useState(false);
   const createOrder = useOrderStore((s) => s.createOrder);
   const cartItems = useCartStore((s) => s.items);
@@ -211,6 +224,16 @@ export default function PanierScreen() {
             <Text style={styles.recapTotalLabel}>Total</Text>
             <Text style={styles.recapTotalValue}>{formatPrice(total)}</Text>
           </View>
+        </View>
+
+        {/* ──── CRÉNEAU DE RETRAIT ──── */}
+        <Text style={styles.sectionLabel}>CRÉNEAU DE RETRAIT</Text>
+        <View style={styles.timeSlotSection}>
+          <TimeSlotPicker
+            slots={pickerSlots}
+            selectedId={selectedTimeSlot}
+            onSelect={setSelectedTimeSlot}
+          />
         </View>
 
         {/* ──── PAIEMENT ──── */}
@@ -579,5 +602,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  timeSlotSection: {
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
   },
 });
