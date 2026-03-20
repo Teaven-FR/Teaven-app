@@ -10,8 +10,6 @@ enable_signup = true
 enable_confirmations = true
 template = "Votre code Teaven : {{ .Code }}"
 max_frequency = "60s"
-otp_length = 6
-otp_exp = 300
 
 # En local, utiliser le mode "test" (les OTP sont logués dans la console)
 # En production, configurer Twilio dans le Dashboard Supabase :
