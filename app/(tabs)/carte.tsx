@@ -1,5 +1,6 @@
-// Écran Carte / Menu — grille 2 colonnes avec pills sticky
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
+// Écran Carte / Menu — grille 2 colonnes avec pills sticky + pull-to-refresh
+import { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ScrollView } from 'react-native';
@@ -13,7 +14,14 @@ import type { Product } from '@/lib/types';
 export default function CarteScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { products, categories, selectedCategory, setSelectedCategory } = useCatalog();
+  const { products, categories, selectedCategory, setSelectedCategory, refetch } = useCatalog();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    refetch();
+    setTimeout(() => setRefreshing(false), 1000);
+  }, [refetch]);
 
   // En-tête de la grille (header + pills sticky + compteur)
   const ListHeader = () => (
@@ -57,6 +65,14 @@ export default function CarteScreen() {
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.green}
+            colors={[colors.green]}
+          />
+        }
         ListHeaderComponent={
           <>
             <ListHeader />

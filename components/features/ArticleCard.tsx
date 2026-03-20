@@ -13,7 +13,7 @@ export function ArticleCard({ article, onPress }: ArticleCardProps) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <Image
-        source={{ uri: article.image }}
+        source={{ uri: article.imageUrl }}
         style={styles.image}
         contentFit="cover"
         transition={300}

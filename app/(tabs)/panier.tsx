@@ -1,4 +1,4 @@
-// Écran Panier & Checkout — données dynamiques depuis cartStore
+// Écran Panier & Checkout — données dynamiques depuis cartStore + orderStore
 import { useState } from 'react';
 import {
   View,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Pressable,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -23,6 +24,8 @@ import {
 } from 'lucide-react-native';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useCart } from '@/hooks/useCart';
+import { useOrderStore } from '@/stores/orderStore';
+import { useCartStore } from '@/stores/cartStore';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 
 type PaymentMethod = 'card' | 'wallet' | 'mixed';
@@ -43,6 +46,9 @@ export default function PanierScreen() {
 
   const [useLoyalty, setUseLoyalty] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
+  const [isOrdering, setIsOrdering] = useState(false);
+  const createOrder = useOrderStore((s) => s.createOrder);
+  const cartItems = useCartStore((s) => s.items);
 
   // Calculs récap
   const loyaltyDiscount = getLoyaltyDiscount(useLoyalty);
@@ -229,13 +235,29 @@ export default function PanierScreen() {
       {/* ──── CTA sticky ──── */}
       <View style={[styles.cta, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <Pressable
-          onPress={() => router.push('/order-confirmation')}
-          style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaPressed]}
+          onPress={async () => {
+            if (isOrdering) return;
+            setIsOrdering(true);
+            const order = await createOrder(cartItems, paymentMethod, useLoyalty);
+            setIsOrdering(false);
+            router.push(`/order/${order.id}`);
+          }}
+          disabled={isOrdering}
+          style={({ pressed }) => [
+            styles.ctaButton,
+            pressed && styles.ctaPressed,
+            isOrdering && { opacity: 0.7 },
+          ]}
+          accessibilityRole="button"
           accessibilityLabel={`Valider ma commande, ${formatPrice(total)}`}
         >
-          <Text style={styles.ctaText}>
-            Valider ma commande — {formatPrice(total)}
-          </Text>
+          {isOrdering ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <Text style={styles.ctaText}>
+              Valider ma commande — {formatPrice(total)}
+            </Text>
+          )}
         </Pressable>
         <Text style={styles.ctaDisclaimer}>
           En validant, vous acceptez nos conditions générales de vente.

@@ -1,12 +1,13 @@
-// Root layout — chargement des fonts, onboarding check, providers
+// Root layout — chargement des fonts, auth flow, providers
 import React, { useState, useEffect } from 'react';
 import { Platform, View, Text, StyleSheet } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from '@/components/layout/StatusBar';
 import { ToastProvider } from '@/contexts/ToastContext';
+import { useAuthStore } from '@/stores/authStore';
 
 const ONBOARDING_KEY = '@teaven/onboarding_completed';
 
@@ -37,6 +38,106 @@ class ErrorBoundary extends React.Component<
   }
 }
 
+/** Composant interne qui gère la navigation conditionnelle */
+function RootNavigator() {
+  const router = useRouter();
+  const segments = useSegments();
+  const { isAuthenticated, isGuest, isLoading } = useAuthStore();
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+
+  // Vérifier si l'onboarding a été fait
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY)
+      .then((val) => setOnboardingDone(val === 'true'))
+      .catch(() => setOnboardingDone(false));
+  }, []);
+
+  // Charger la session au lancement
+  useEffect(() => {
+    useAuthStore.getState().loadSession();
+  }, []);
+
+  // Redirection conditionnelle basée sur l'état auth
+  useEffect(() => {
+    if (onboardingDone === null || isLoading) return;
+
+    const inAuthGroup = segments[0] === 'auth';
+    const inOnboarding = segments[0] === 'onboarding';
+    const inTabs = segments[0] === '(tabs)';
+
+    // Si onboarding pas vu → /onboarding
+    if (!onboardingDone && !inOnboarding) {
+      router.replace('/onboarding');
+      return;
+    }
+
+    // Si pas authentifié et pas invité → /auth/login
+    if (onboardingDone && !isAuthenticated && !isGuest && !inAuthGroup) {
+      router.replace('/auth/login');
+      return;
+    }
+
+    // Si authentifié ou invité et dans auth → /(tabs)
+    if ((isAuthenticated || isGuest) && inAuthGroup) {
+      router.replace('/(tabs)');
+    }
+  }, [isAuthenticated, isGuest, isLoading, onboardingDone, segments, router]);
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="onboarding" />
+      <Stack.Screen
+        name="produit/[id]"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
+        name="article/[id]"
+        options={{
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen name="auth/login" />
+      <Stack.Screen name="auth/otp" />
+      <Stack.Screen
+        name="order/[id]"
+        options={{
+          presentation: 'modal',
+          animation: 'fade',
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="order-confirmation"
+        options={{
+          presentation: 'modal',
+          animation: 'fade',
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="profil/informations"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="profil/adresses"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="profil/paiement"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="profil/cgu"
+        options={{ animation: 'slide_from_right' }}
+      />
+    </Stack>
+  );
+}
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     'BwModelica-Thin': require('@/assets/fonts/BwModelica-Thin.otf'),
@@ -46,24 +147,9 @@ export default function RootLayout() {
     'JetBrains Mono SemiBold': require('@/assets/fonts/JetBrainsMono-SemiBold.ttf'),
   });
 
-  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
-
-  // Vérifier si l'onboarding a été fait
-  useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_KEY)
-      .then((val) => {
-        setOnboardingDone(val === 'true');
-      })
-      .catch(() => {
-        // Fallback si AsyncStorage échoue (web)
-        setOnboardingDone(false);
-      });
-  }, []);
-
-  // Tant que les fonts ou l'état onboarding ne sont pas prêts
-  // Sur web, on n'attend pas les fonts pour éviter un écran blanc
+  // Tant que les fonts ne sont pas prêtes
   const fontsReady = fontsLoaded || fontError || Platform.OS === 'web';
-  if (!fontsReady || onboardingDone === null) {
+  if (!fontsReady) {
     return (
       <View style={loadingStyles.container}>
         <Text style={loadingStyles.text}>TEAVEN</Text>
@@ -76,33 +162,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ToastProvider>
           <StatusBar />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="onboarding" />
-            <Stack.Screen
-              name="produit/[id]"
-              options={{
-                presentation: 'modal',
-                animation: 'slide_from_bottom',
-              }}
-            />
-            <Stack.Screen
-              name="article/[id]"
-              options={{
-                animation: 'slide_from_right',
-              }}
-            />
-            <Stack.Screen name="auth/login" />
-            <Stack.Screen name="auth/otp" />
-            <Stack.Screen
-              name="order-confirmation"
-              options={{
-                presentation: 'modal',
-                animation: 'fade',
-                gestureEnabled: false,
-              }}
-            />
-          </Stack>
+          <RootNavigator />
         </ToastProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
