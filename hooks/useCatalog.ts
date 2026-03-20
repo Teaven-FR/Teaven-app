@@ -1,108 +1,153 @@
 // Hook catalogue — données produits depuis Supabase avec variations et modificateurs
-import { useState, useMemo, useEffect, useCallback } from 'react';
+// Séquence : fetch DB → sync Square → re-fetch DB (si sync a mis à jour)
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { syncCatalog } from '@/lib/square';
 import { mockProducts, mockCategories } from '@/constants/mockData';
 import type { Product, Category, ModifierGroup, ModifierOption, ProductVariation } from '@/lib/types';
+
+/** Transforme les rows Supabase en Product[] */
+function mapProducts(data: Record<string, unknown>[]): Product[] {
+  return data.map((p) => {
+    const rawVariations = (p.product_variations as Record<string, unknown>[]) ?? [];
+    const variations: ProductVariation[] = rawVariations
+      .sort((a, b) => ((a.ordinal as number) ?? 0) - ((b.ordinal as number) ?? 0))
+      .map((v) => ({
+        id: v.id as string,
+        name: v.name as string,
+        price: v.price as number,
+        squareVariationId: v.square_variation_id as string,
+      }));
+
+    const rawGroups = (p.modifier_groups as Record<string, unknown>[]) ?? [];
+    const modifiers: ModifierGroup[] = rawGroups
+      .sort((a, b) => ((a.ordinal as number) ?? 0) - ((b.ordinal as number) ?? 0))
+      .map((g) => {
+        const rawOptions = (g.modifier_options as Record<string, unknown>[]) ?? [];
+        const options: ModifierOption[] = rawOptions
+          .sort((a, b) => ((a.ordinal as number) ?? 0) - ((b.ordinal as number) ?? 0))
+          .map((o) => ({
+            id: o.id as string,
+            label: o.label as string,
+            price: o.price as number,
+            squareModifierId: o.square_modifier_id as string,
+          }));
+
+        return {
+          id: g.id as string,
+          label: g.label as string,
+          type: (g.type as 'single' | 'multiple') ?? 'single',
+          options,
+        };
+      });
+
+    return {
+      id: p.id as string,
+      squareId: (p.square_id as string) ?? undefined,
+      name: p.name as string,
+      description: (p.description as string) ?? '',
+      price: p.price as number,
+      image: (p.square_image_url as string) || (p.image as string) || '',
+      category: p.category as Product['category'],
+      rating: Number(p.rating) || 4.5,
+      kcal: (p.kcal as number) ?? 0,
+      prepTime: (p.prep_time as number) ?? 10,
+      tags: (p.tags as string[]) ?? [],
+      location: (p.location as string) ?? 'Franconville',
+      available: p.available as boolean,
+      variations: variations.length > 0 ? variations : undefined,
+      modifiers: modifiers.length > 0 ? modifiers : undefined,
+    };
+  });
+}
+
+/** Fetch produits depuis Supabase */
+async function queryProducts() {
+  return supabase
+    .from('products')
+    .select(`
+      *,
+      product_variations (*),
+      modifier_groups (
+        *,
+        modifier_options (*)
+      )
+    `)
+    .eq('available', true)
+    .order('name');
+}
+
+/** Fetch catégories depuis Supabase */
+async function queryCategories() {
+  return supabase
+    .from('categories')
+    .select('*')
+    .order('ordinal');
+}
 
 export function useCatalog() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [remoteProducts, setRemoteProducts] = useState<Product[] | null>(null);
   const [remoteCategories, setRemoteCategories] = useState<Category[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const hasSynced = useRef(false);
 
-  const fetchProducts = useCallback(async () => {
+  /** Charge les produits depuis Supabase, puis synchronise Square si nécessaire */
+  const fetchProducts = useCallback(async (forceSync = false) => {
     setIsLoading(true);
     try {
-      // Fetch produits avec variations et modificateurs en une seule requête
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          product_variations (*),
-          modifier_groups (
-            *,
-            modifier_options (*)
-          )
-        `)
-        .eq('available', true)
-        .order('name');
+      // 1. Fetch depuis Supabase (données en cache)
+      const [productsRes, categoriesRes] = await Promise.all([
+        queryProducts(),
+        queryCategories(),
+      ]);
 
-      if (error || !data || data.length === 0) {
-        setRemoteProducts(null);
-      } else {
-        setRemoteProducts(
-          data.map((p: Record<string, unknown>) => {
-            // Mapper les variations
-            const rawVariations = (p.product_variations as Record<string, unknown>[]) ?? [];
-            const variations: ProductVariation[] = rawVariations
-              .sort((a, b) => ((a.ordinal as number) ?? 0) - ((b.ordinal as number) ?? 0))
-              .map((v) => ({
-                id: v.id as string,
-                name: v.name as string,
-                price: v.price as number,
-                squareVariationId: v.square_variation_id as string,
-              }));
+      const hasProducts = !productsRes.error && productsRes.data && productsRes.data.length > 0;
+      const hasCategories = !categoriesRes.error && categoriesRes.data && categoriesRes.data.length > 0;
 
-            // Mapper les modificateurs
-            const rawGroups = (p.modifier_groups as Record<string, unknown>[]) ?? [];
-            const modifiers: ModifierGroup[] = rawGroups
-              .sort((a, b) => ((a.ordinal as number) ?? 0) - ((b.ordinal as number) ?? 0))
-              .map((g) => {
-                const rawOptions = (g.modifier_options as Record<string, unknown>[]) ?? [];
-                const options: ModifierOption[] = rawOptions
-                  .sort((a, b) => ((a.ordinal as number) ?? 0) - ((b.ordinal as number) ?? 0))
-                  .map((o) => ({
-                    id: o.id as string,
-                    label: o.label as string,
-                    price: o.price as number,
-                    squareModifierId: o.square_modifier_id as string,
-                  }));
-
-                return {
-                  id: g.id as string,
-                  label: g.label as string,
-                  type: (g.type as 'single' | 'multiple') ?? 'single',
-                  options,
-                };
-              });
-
-            return {
-              id: p.id as string,
-              squareId: (p.square_id as string) ?? undefined,
-              name: p.name as string,
-              description: (p.description as string) ?? '',
-              price: p.price as number,
-              image: (p.square_image_url as string) || (p.image as string) || '',
-              category: p.category as Product['category'],
-              rating: Number(p.rating) || 4.5,
-              kcal: (p.kcal as number) ?? 0,
-              prepTime: (p.prep_time as number) ?? 10,
-              tags: (p.tags as string[]) ?? [],
-              location: (p.location as string) ?? 'Franconville',
-              available: p.available as boolean,
-              variations: variations.length > 0 ? variations : undefined,
-              modifiers: modifiers.length > 0 ? modifiers : undefined,
-            };
-          }),
-        );
+      if (hasProducts) {
+        setRemoteProducts(mapProducts(productsRes.data as Record<string, unknown>[]));
       }
 
-      // Fetch catégories dynamiques
-      const { data: catData } = await supabase
-        .from('categories')
-        .select('*')
-        .order('ordinal');
-
-      if (catData && catData.length > 0) {
+      if (hasCategories) {
         setRemoteCategories(
-          catData.map((c: Record<string, unknown>) => ({
+          categoriesRes.data!.map((c: Record<string, unknown>) => ({
             id: (c.slug as string) ?? (c.id as string),
             label: c.label as string,
           })),
         );
       }
+
+      // 2. Sync Square → Supabase si pas encore fait ou si forcé ou si DB vide
+      const shouldSync = forceSync || !hasSynced.current || !hasProducts;
+      if (shouldSync) {
+        hasSynced.current = true;
+        const syncResult = await syncCatalog();
+
+        if (!syncResult.error) {
+          // 3. Re-fetch après sync pour récupérer les données fraîches
+          const [freshProducts, freshCategories] = await Promise.all([
+            queryProducts(),
+            queryCategories(),
+          ]);
+
+          if (!freshProducts.error && freshProducts.data && freshProducts.data.length > 0) {
+            setRemoteProducts(mapProducts(freshProducts.data as Record<string, unknown>[]));
+          }
+
+          if (!freshCategories.error && freshCategories.data && freshCategories.data.length > 0) {
+            setRemoteCategories(
+              freshCategories.data.map((c: Record<string, unknown>) => ({
+                id: (c.slug as string) ?? (c.id as string),
+                label: c.label as string,
+              })),
+            );
+          }
+        }
+      }
     } catch {
-      setRemoteProducts(null);
+      // En cas d'erreur réseau, on garde les données existantes ou mock
+      if (!remoteProducts) setRemoteProducts(null);
     } finally {
       setIsLoading(false);
     }
@@ -120,6 +165,9 @@ export function useCatalog() {
     return allProducts.filter((p) => p.category === selectedCategory);
   }, [selectedCategory, allProducts]);
 
+  /** Force sync Square + re-fetch (pour pull-to-refresh) */
+  const refetch = useCallback(() => fetchProducts(true), [fetchProducts]);
+
   return {
     products,
     allProducts,
@@ -127,7 +175,7 @@ export function useCatalog() {
     selectedCategory,
     setSelectedCategory,
     isLoading,
-    refetch: fetchProducts,
+    refetch,
     isUsingMockData: remoteProducts === null,
   };
 }

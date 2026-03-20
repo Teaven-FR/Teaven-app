@@ -7,7 +7,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from '@/components/layout/StatusBar';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { useAuthStore } from '@/stores/authStore';
-import { syncCatalog } from '@/lib/square';
 
 // Error boundary pour afficher les erreurs runtime sur web
 class ErrorBoundary extends React.Component<
@@ -45,17 +44,6 @@ function RootNavigator() {
   // Charger la session au lancement
   useEffect(() => {
     useAuthStore.getState().loadSession();
-  }, []);
-
-  // Synchroniser le catalogue Square → Supabase au démarrage
-  useEffect(() => {
-    syncCatalog().then((result) => {
-      if (result.error) {
-        console.log('Sync catalogue ignorée:', result.error);
-      } else {
-        console.log('Catalogue synchronisé:', result.data);
-      }
-    });
   }, []);
 
   // Redirection conditionnelle basée sur l'état auth

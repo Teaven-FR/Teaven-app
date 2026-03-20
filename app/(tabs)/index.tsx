@@ -64,11 +64,11 @@ export default function HomeScreen() {
     [],
   );
 
-  // Pull-to-refresh
-  const onRefresh = useCallback(() => {
+  // Pull-to-refresh — sync Square + re-fetch
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    refetch();
-    setTimeout(() => setRefreshing(false), 1000);
+    await refetch();
+    setRefreshing(false);
   }, [refetch]);
 
   return (
