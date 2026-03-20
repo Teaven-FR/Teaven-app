@@ -18,7 +18,7 @@ import { Leaf, Coffee, Heart } from 'lucide-react-native';
 import { colors, fonts, spacing } from '@/constants/theme';
 
 const ONBOARDING_KEY = '@teaven/onboarding_completed';
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface Slide {
   id: string;
@@ -138,6 +138,11 @@ export default function OnboardingScreen() {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         bounces={false}
+        getItemLayout={(_, index) => ({
+          length: SCREEN_WIDTH,
+          offset: SCREEN_WIDTH * index,
+          index,
+        })}
         style={StyleSheet.absoluteFill}
       />
 
@@ -162,22 +167,28 @@ export default function OnboardingScreen() {
         {/* Bouton principal */}
         <Pressable
           onPress={handleNext}
-          style={({ pressed }) => [styles.button, pressed && { opacity: 0.9 }]}
+          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
         >
-          <Text style={styles.buttonText}>
-            {isLast ? 'Commencer' : 'Suivant'}
-          </Text>
+          <LinearGradient
+            colors={['#FFFFFF', '#F5F5F0']}
+            style={styles.buttonGradient}
+          >
+            <Text style={styles.buttonText}>
+              {isLast ? 'Commencer' : 'Suivant'}
+            </Text>
+          </LinearGradient>
         </Pressable>
 
         {/* Lien skip / login */}
         {!isLast ? (
-          <Pressable onPress={handleStart}>
+          <Pressable onPress={handleStart} style={styles.skipButton}>
             <Text style={styles.skipLink}>Passer</Text>
           </Pressable>
         ) : (
-          <Pressable onPress={handleStart}>
+          <Pressable onPress={handleStart} style={styles.skipButton}>
             <Text style={styles.skipLink}>
-              Déjà un compte ? Se connecter
+              Déjà un compte ?{' '}
+              <Text style={styles.skipLinkBold}>Se connecter</Text>
             </Text>
           </Pressable>
         )}
@@ -227,7 +238,7 @@ const styles = StyleSheet.create({
   // Slide
   slide: {
     width: SCREEN_WIDTH,
-    flex: 1,
+    height: SCREEN_HEIGHT,
     justifyContent: 'flex-end',
   },
   slideContent: {
@@ -286,20 +297,43 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
-    height: 48,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 50,
+    height: 54,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.97 }],
+    shadowOpacity: 0.08,
+  },
+  buttonGradient: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 12,
   },
   buttonText: {
     fontFamily: fonts.bold,
-    fontSize: 15,
-    color: '#4A6B50',
+    fontSize: 16,
+    color: '#3A5A40',
+    letterSpacing: 0.5,
+  },
+  skipButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
   skipLink: {
     fontFamily: fonts.regular,
     fontSize: 14,
     color: 'rgba(255,255,255,0.6)',
+  },
+  skipLinkBold: {
+    fontFamily: fonts.bold,
+    color: 'rgba(255,255,255,0.85)',
+    textDecorationLine: 'underline',
   },
 });

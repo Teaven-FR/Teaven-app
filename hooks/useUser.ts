@@ -1,8 +1,9 @@
 // Hook utilisateur — centralise infos profil, fidélité et wallet
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import { fetchLoyalty } from '@/lib/square';
 import { mockUser } from '@/constants/mockData';
-import type { User, LoyaltyInfo, WalletInfo } from '@/lib/types';
+import type { User, LoyaltyLevel, LoyaltyInfo, WalletInfo, Reward } from '@/lib/types';
 
 // Seuils de fidélité
 const LOYALTY_THRESHOLDS = {
@@ -38,10 +39,38 @@ function getLoyaltyProgress(points: number): number {
 export function useUser() {
   const storeUser = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const [remoteRewards, setRemoteRewards] = useState<Reward[]>([]);
 
   // En mode invité ou non connecté, utiliser le mockUser
   const user = storeUser ?? mockUser;
   const isGuest = !isAuthenticated;
+
+  // Charger les données de fidélité depuis Square si connecté
+  useEffect(() => {
+    if (!user.squareCustomerId) return;
+    fetchLoyalty(user.squareCustomerId).then((result) => {
+      if (result.data) {
+        // Mettre à jour les points en local si différents
+        const { updateProfile } = useAuthStore.getState();
+        if (result.data.points !== user.loyaltyPoints) {
+          updateProfile({
+            loyaltyPoints: result.data.points,
+            loyaltyLevel: result.data.level as LoyaltyLevel,
+          });
+        }
+        // Stocker les récompenses
+        setRemoteRewards(
+          result.data.rewards.map((r) => ({
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            pointsCost: r.pointsCost,
+            icon: r.icon,
+          })),
+        );
+      }
+    });
+  }, [user.squareCustomerId]);
 
   // Infos fidélité calculées
   const loyalty: LoyaltyInfo = useMemo(() => {
@@ -52,7 +81,7 @@ export function useUser() {
     const nextRewards: Record<string, string> = {
       Bronze: 'Boisson offerte à 200 pts',
       Argent: 'Dessert offert à 500 pts',
-      Or: 'Boisson offerte à 1500 pts',
+      Or: 'Menu complet offert à 1000 pts',
       Platine: 'Vous êtes au niveau maximum !',
     };
 
@@ -68,10 +97,10 @@ export function useUser() {
   const wallet: WalletInfo = useMemo(() => ({
     balance: user.walletBalance,
     giftCardId: user.squareGiftCardId,
-    transactions: [], // Sera chargé depuis Supabase plus tard
+    transactions: [],
   }), [user.walletBalance, user.squareGiftCardId]);
 
-  // Mise à jour du profil (mock pour l'instant)
+  // Mise à jour du profil
   const updateProfile = useCallback(async (updates: Partial<User>) => {
     const { setUser } = useAuthStore.getState();
     if (storeUser) {
@@ -79,7 +108,7 @@ export function useUser() {
     }
   }, [storeUser]);
 
-  // Recharger le wallet (mock pour l'instant)
+  // Recharger le wallet
   const rechargeWallet = useCallback(async (amount: number) => {
     const { setUser } = useAuthStore.getState();
     if (storeUser) {
@@ -95,6 +124,7 @@ export function useUser() {
     isGuest,
     loyalty,
     wallet,
+    rewards: remoteRewards,
     updateProfile,
     rechargeWallet,
   };

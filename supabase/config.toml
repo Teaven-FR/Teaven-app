@@ -23,3 +23,6 @@ verify_jwt = true
 
 [functions.manage-wallet]
 verify_jwt = true
+
+[functions.fetch-customer]
+verify_jwt = true
