@@ -3,8 +3,9 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { fetchCustomer, fetchLoyalty } from '@/lib/square';
 import { mockUser } from '@/constants/mockData';
-import type { User } from '@/lib/types';
+import type { User, LoyaltyLevel } from '@/lib/types';
 
 interface AuthState {
   user: User | null;
@@ -22,6 +23,37 @@ interface AuthState {
   enterGuestMode: () => void;
   updateProfile: (updates: Partial<User>) => Promise<void>;
   logout: () => void;
+}
+
+/** Récupère les données Square (client + fidélité) et enrichit le user */
+async function enrichWithSquareData(user: User): Promise<User> {
+  try {
+    // 1. Récupérer ou créer le client Square
+    const customerResult = await fetchCustomer(user.phone);
+    const customer = customerResult.data?.customer;
+
+    if (customer) {
+      user = {
+        ...user,
+        squareCustomerId: customer.squareCustomerId,
+        fullName: user.fullName || customer.fullName || '',
+        email: user.email || customer.email || undefined,
+      };
+
+      // 2. Récupérer les données de fidélité
+      const loyaltyResult = await fetchLoyalty(customer.squareCustomerId);
+      if (loyaltyResult.data) {
+        user = {
+          ...user,
+          loyaltyPoints: loyaltyResult.data.points,
+          loyaltyLevel: loyaltyResult.data.level as LoyaltyLevel,
+        };
+      }
+    }
+  } catch (err) {
+    console.log('Square data enrichment skipped:', err);
+  }
+  return user;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -63,11 +95,11 @@ export const useAuthStore = create<AuthState>()(
         try {
           // Mode développement : le code "000000" est toujours accepté
           if (otp === '000000') {
-            set({
-              user: { ...mockUser, phone },
-              isAuthenticated: true,
-              isLoading: false,
-              isGuest: false,
+            const baseUser = { ...mockUser, phone };
+            set({ user: baseUser, isAuthenticated: true, isLoading: false, isGuest: false });
+            // Enrichir en arrière-plan avec les données Square
+            enrichWithSquareData(baseUser).then((enriched) => {
+              set({ user: enriched });
             });
             return true;
           }
@@ -86,22 +118,22 @@ export const useAuthStore = create<AuthState>()(
           // Récupérer les infos utilisateur depuis Supabase
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
-            set({
-              user: {
-                id: session.user.id,
-                fullName: session.user.user_metadata?.full_name ?? '',
-                phone: session.user.phone ?? phone,
-                email: session.user.email,
-                dietaryPreferences: [],
-                loyaltyPoints: 0,
-                loyaltyLevel: 'Bronze',
-                walletBalance: 0,
-                createdAt: session.user.created_at,
-                updatedAt: new Date().toISOString(),
-              },
-              isAuthenticated: true,
-              isLoading: false,
-              isGuest: false,
+            const baseUser: User = {
+              id: session.user.id,
+              fullName: session.user.user_metadata?.full_name ?? '',
+              phone: session.user.phone ?? phone,
+              email: session.user.email,
+              dietaryPreferences: [],
+              loyaltyPoints: 0,
+              loyaltyLevel: 'Bronze',
+              walletBalance: 0,
+              createdAt: session.user.created_at,
+              updatedAt: new Date().toISOString(),
+            };
+            set({ user: baseUser, isAuthenticated: true, isLoading: false, isGuest: false });
+            // Enrichir avec les données Square
+            enrichWithSquareData(baseUser).then((enriched) => {
+              set({ user: enriched });
             });
           }
           return true;

@@ -1,0 +1,23 @@
+# Configuration Supabase pour Teaven
+# Déclaration des Edge Functions pour le déploiement automatique via Git Integration
+
+[functions.sync-catalog]
+verify_jwt = false # Appelée par cron / webhook Square
+
+[functions.create-order]
+verify_jwt = true
+
+[functions.process-payment]
+verify_jwt = true
+
+[functions.square-webhook]
+verify_jwt = false # Appelée par Square (vérification HMAC interne)
+
+[functions.get-loyalty]
+verify_jwt = true
+
+[functions.manage-wallet]
+verify_jwt = true
+
+[functions.fetch-customer]
+verify_jwt = true

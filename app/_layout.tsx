@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from '@/components/layout/StatusBar';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { useAuthStore } from '@/stores/authStore';
+import { syncCatalog } from '@/lib/square';
 
 const ONBOARDING_KEY = '@teaven/onboarding_completed';
 
@@ -55,6 +56,17 @@ function RootNavigator() {
   // Charger la session au lancement
   useEffect(() => {
     useAuthStore.getState().loadSession();
+  }, []);
+
+  // Synchroniser le catalogue Square → Supabase au démarrage
+  useEffect(() => {
+    syncCatalog().then((result) => {
+      if (result.error) {
+        console.log('Sync catalogue ignorée:', result.error);
+      } else {
+        console.log('Catalogue synchronisé:', result.data);
+      }
+    });
   }, []);
 
   // Redirection conditionnelle basée sur l'état auth

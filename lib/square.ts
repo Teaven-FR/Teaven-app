@@ -51,3 +51,35 @@ export async function processPayment(payload: {
 }) {
   return callEdgeFunction('process-payment', payload);
 }
+
+/** Récupérer ou créer un client Square par téléphone */
+export async function fetchCustomer(phone: string) {
+  return callEdgeFunction<{
+    success: boolean;
+    customer: {
+      squareCustomerId: string;
+      fullName: string;
+      email: string | null;
+      phone: string;
+      createdAt: string;
+    } | null;
+  }>('fetch-customer', { phone });
+}
+
+/** Récupérer les données de fidélité */
+export async function fetchLoyalty(customerId: string) {
+  return callEdgeFunction<{
+    success: boolean;
+    points: number;
+    level: string;
+    progress: number;
+    loyaltyAccountId: string | null;
+    rewards: {
+      id: string;
+      name: string;
+      description: string;
+      pointsCost: number;
+      icon: string;
+    }[];
+  }>('get-loyalty', { customerId });
+}
