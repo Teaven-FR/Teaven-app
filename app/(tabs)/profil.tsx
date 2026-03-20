@@ -141,11 +141,11 @@ export default function ProfilScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Mon Profil</Text>
           <Pressable
-            onPress={() => router.push('/profil/informations')}
+            onPress={() => router.push('/settings')}
             accessibilityLabel="Paramètres"
             accessibilityRole="button"
           >
-            <Settings size={20} color={colors.textSecondary} strokeWidth={1.8} />
+            <Settings size={20} color={colors.textSecondary} strokeWidth={1.3} />
           </Pressable>
         </View>
 
@@ -262,7 +262,7 @@ export default function ProfilScreen() {
         {/* ──── Récompenses ──── */}
         <View style={styles.rewardsHeader}>
           <Text style={styles.rewardsTitle}>Récompenses</Text>
-          <Pressable accessibilityRole="button">
+          <Pressable accessibilityRole="button" onPress={() => showToast('Bientôt disponible')}>
             <Text style={styles.rewardsSeeAll}>Tout voir</Text>
           </Pressable>
         </View>
@@ -281,7 +281,11 @@ export default function ProfilScreen() {
                 </View>
                 <Text style={styles.rewardName}>{reward.name}</Text>
                 <Text style={styles.rewardSub}>{reward.sub}</Text>
-                <Pressable accessibilityLabel={`Utiliser ${reward.name}`} accessibilityRole="button">
+                <Pressable
+                  accessibilityLabel={`Utiliser ${reward.name}`}
+                  accessibilityRole="button"
+                  onPress={() => showToast(`${reward.name} bientôt disponible`)}
+                >
                   <Text style={styles.rewardCta}>{reward.cta}</Text>
                 </Pressable>
               </View>
@@ -343,7 +347,7 @@ export default function ProfilScreen() {
 
         {/* ──── Aide & Déconnexion ──── */}
         <View style={[styles.menu, { marginTop: spacing.md }]}>
-          <Pressable style={styles.menuItem} accessibilityRole="button">
+          <Pressable style={styles.menuItem} accessibilityRole="button" onPress={() => showToast('Aide bientôt disponible')}>
             <HelpCircle size={18} color={colors.green} strokeWidth={1.6} />
             <Text style={styles.menuItemText}>Aide & FAQ</Text>
           </Pressable>
