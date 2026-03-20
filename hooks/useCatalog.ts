@@ -1,6 +1,6 @@
 // Hook catalogue — données produits depuis Supabase avec variations et modificateurs
 // Séquence : fetch DB → sync Square → re-fetch DB (si sync a mis à jour)
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { syncCatalog } from '@/lib/square';
 import { mockProducts, mockCategories } from '@/constants/mockData';
@@ -85,12 +85,24 @@ async function queryCategories() {
     .order('ordinal');
 }
 
+// Singleton : une seule sync partagée entre toutes les instances du hook
+let syncPromise: Promise<{ data: unknown; error: string | null }> | null = null;
+
+function sharedSyncCatalog() {
+  if (!syncPromise) {
+    syncPromise = syncCatalog().finally(() => {
+      // Permettre un nouveau sync après 60s (éviter spam, mais autoriser pull-to-refresh)
+      setTimeout(() => { syncPromise = null; }, 60_000);
+    });
+  }
+  return syncPromise;
+}
+
 export function useCatalog() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [remoteProducts, setRemoteProducts] = useState<Product[] | null>(null);
   const [remoteCategories, setRemoteCategories] = useState<Category[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const hasSynced = useRef(false);
 
   /** Charge les produits depuis Supabase, puis synchronise Square si nécessaire */
   const fetchProducts = useCallback(async (forceSync = false) => {
@@ -118,11 +130,14 @@ export function useCatalog() {
         );
       }
 
-      // 2. Sync Square → Supabase si pas encore fait ou si forcé ou si DB vide
-      const shouldSync = forceSync || !hasSynced.current || !hasProducts;
+      // 2. Sync Square → Supabase (singleton partagé, ou forcé par pull-to-refresh)
+      const isFirstSync = syncPromise === null; // Première sync de la session
+      if (forceSync) {
+        syncPromise = null; // Forcer un nouveau sync
+      }
+      const shouldSync = forceSync || isFirstSync || !hasProducts;
       if (shouldSync) {
-        hasSynced.current = true;
-        const syncResult = await syncCatalog();
+        const syncResult = await sharedSyncCatalog();
 
         if (!syncResult.error) {
           // 3. Re-fetch après sync pour récupérer les données fraîches
