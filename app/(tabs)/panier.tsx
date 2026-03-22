@@ -94,7 +94,12 @@ export default function PanierScreen() {
 
   // Code promo
   const [promoInput, setPromoInput] = useState('');
-  const [appliedPromo, setAppliedPromo] = useState<{ code: string; type: 'percent' | 'fixed'; value: number; label: string; description: string } | null>(null);
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; type: 'percent' | 'fixed'; value: number; label: string; description: string } | null>(() => {
+    if (!storePromoCode) return null;
+    const found = PROMO_CODES[storePromoCode];
+    if (!found) return null;
+    return { code: storePromoCode, ...found };
+  });
   const [promoError, setPromoError] = useState('');
 
   const availableRewards = (squareRewards.length > 0 ? squareRewards : FALLBACK_REWARDS)
@@ -106,22 +111,31 @@ export default function PanierScreen() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
   const [isOrdering, setIsOrdering] = useState(false);
   const createOrder = useOrderStore((s) => s.createOrder);
+  const orderHistory = useOrderStore((s) => s.orderHistory ?? []);
   const cartItems = useCartStore((s) => s.items);
+  const storePromoCode = useCartStore((s) => s.activePromoCode);
+  const setStorePromoCode = useCartStore((s) => s.setPromoCode);
 
   const applyPromoCode = () => {
     const code = promoInput.trim().toUpperCase();
+    if (code === 'BIENVENUE' && orderHistory.length > 0) {
+      setPromoError('Code réservé à la première commande');
+      return;
+    }
     const found = PROMO_CODES[code];
     if (!found) {
       setPromoError('Code invalide ou expiré');
       return;
     }
     setAppliedPromo({ code, ...found });
+    setStorePromoCode(code);
     setPromoInput('');
     setPromoError('');
   };
 
   const removePromo = () => {
     setAppliedPromo(null);
+    setStorePromoCode(null);
     setPromoError('');
   };
 

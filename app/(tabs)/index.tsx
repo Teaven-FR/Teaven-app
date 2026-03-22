@@ -15,7 +15,7 @@ import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Bell, Search, Leaf, Flame, ShoppingBag, Instagram, Trophy, ChevronRight } from 'lucide-react-native';
+import { Bell, Search, Leaf, ShoppingBag, Instagram, Trophy } from 'lucide-react-native';
 import { Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pill } from '@/components/ui/Pill';
@@ -24,6 +24,7 @@ import { SearchModal } from '@/components/ui/SearchModal';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useUser } from '@/hooks/useUser';
 import { useCartStore } from '@/stores/cartStore';
+import { useOrderStore } from '@/stores/orderStore';
 import { useToast } from '@/contexts/ToastContext';
 import { RechargeModal } from '@/components/ui/RechargeModal';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
@@ -61,6 +62,8 @@ export default function HomeScreen() {
   const { products, allProducts, categories, selectedCategory, setSelectedCategory, refetch } = useCatalog();
   const { user, isGuest, wallet, rechargeWallet } = useUser();
   const { showToast } = useToast();
+  const setPromoCode = useCartStore((s) => s.setPromoCode);
+  const orderHistory = useOrderStore((s) => s.orderHistory ?? []);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
@@ -219,21 +222,27 @@ export default function HomeScreen() {
             style={styles.promosContainer}
             contentContainerStyle={styles.promosContent}
           >
-            <LinearGradient colors={['#E8F0EA', '#D4E5D7']} style={styles.promoCard}>
-              <View style={styles.promoContent}>
-                <Text style={styles.promoTitle}>Première commande ?</Text>
-                <Text style={styles.promoSubtitle}>-15% avec le code BIENVENUE</Text>
-                <Pressable
-                  onPress={() => router.push('/(tabs)/carte')}
-                  accessibilityLabel="Profiter de moins quinze pourcent sur la première commande"
-                >
-                  <Text style={styles.promoCta}>En profiter</Text>
-                </Pressable>
-              </View>
-              <View style={styles.promoIconWrap}>
-                <Leaf size={36} color={colors.green} strokeWidth={1} />
-              </View>
-            </LinearGradient>
+            {orderHistory.length === 0 && (
+              <LinearGradient colors={['#E8F0EA', '#D4E5D7']} style={styles.promoCard}>
+                <View style={styles.promoContent}>
+                  <Text style={styles.promoTitle}>Première commande ?</Text>
+                  <Text style={styles.promoSubtitle}>-15% avec le code BIENVENUE</Text>
+                  <Pressable
+                    onPress={() => {
+                      setPromoCode('BIENVENUE');
+                      showToast('Code BIENVENUE activé ! -15% sur votre commande');
+                      router.push('/(tabs)/carte');
+                    }}
+                    accessibilityLabel="Profiter de moins quinze pourcent sur la première commande"
+                  >
+                    <Text style={styles.promoCta}>En profiter</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.promoIconWrap}>
+                  <Leaf size={36} color={colors.green} strokeWidth={1} />
+                </View>
+              </LinearGradient>
+            )}
 
             <LinearGradient colors={['#F5EFDF', '#EDE4CC']} style={styles.promoCard}>
               <View style={styles.promoContent}>
@@ -368,21 +377,34 @@ export default function HomeScreen() {
 
           {/* ──── Encart Défis ──── */}
           <Pressable
-            style={styles.defisCard}
+            style={styles.defisCardWrap}
             onPress={() => router.push('/defis')}
             accessibilityRole="button"
             accessibilityLabel="Voir mes défis en cours"
           >
-            <View style={styles.defisLeft}>
-              <View style={styles.defisIconWrap}>
-                <Trophy size={20} color={colors.gold} strokeWidth={1.5} />
+            <LinearGradient
+              colors={['#5a7a64', '#75967F']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.defisCard}
+            >
+              {/* Icon déco en arrière-plan */}
+              <View style={styles.defisDecoIcon}>
+                <Trophy size={80} color="rgba(255,255,255,0.08)" strokeWidth={1} />
               </View>
-              <View style={styles.defisText}>
-                <Text style={styles.defisTitle}>Défis en cours</Text>
-                <Text style={styles.defisSubtitle}>Gagnez des points en relevant des défis</Text>
+
+              {/* Badge "X défis en cours" */}
+              <View style={styles.defisBadge}>
+                <Text style={styles.defisBadgeText}>3 défis actifs</Text>
               </View>
-            </View>
-            <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.8} />
+
+              <Text style={styles.defisCardTitle}>Les Défis Teaven</Text>
+              <Text style={styles.defisCardSub}>Relevez nos défis et gagnez des points bonus</Text>
+
+              <View style={styles.defisCardCta}>
+                <Text style={styles.defisCardCtaText}>Voir les défis →</Text>
+              </View>
+            </LinearGradient>
           </Pressable>
 
           {/* Section "Nos coups de cœur" */}
@@ -808,45 +830,67 @@ const styles = StyleSheet.create({
   },
 
   // Encart Défis
+  defisCardWrap: {
+    paddingHorizontal: spacing.xl,
+    marginTop: 28,
+    marginBottom: spacing.xxl,
+  },
   defisCard: {
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.xl,
-    backgroundColor: '#FFF8E7',
     borderRadius: 16,
+    height: 170,
+    padding: 20,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    ...shadows.card,
+  },
+  defisDecoIcon: {
+    position: 'absolute',
+    right: -10,
+    top: -10,
+  },
+  defisBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderWidth: 1,
-    borderColor: '#F0D080',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  defisLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flex: 1,
-  },
-  defisIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#FFF0C0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  defisText: {
-    flex: 1,
-  },
-  defisTitle: {
+  defisBadgeText: {
     fontFamily: fonts.bold,
-    fontSize: 14,
-    color: colors.text,
+    fontSize: 11,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
-  defisSubtitle: {
+  defisCardTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 22,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+    marginBottom: 4,
+  },
+  defisCardSub: {
     fontFamily: fonts.regular,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 12,
+  },
+  defisCardCta: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  defisCardCtaText: {
+    fontFamily: fonts.bold,
     fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
+    color: '#FFFFFF',
   },
 
   // Instagram
