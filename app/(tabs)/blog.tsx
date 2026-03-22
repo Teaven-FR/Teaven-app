@@ -1,5 +1,5 @@
 // Écran Blog Atmosphère — article à la une + articles récents + pull-to-refresh + newsletter
-import { useState, useCallback } from 'react';
+import { useState, useCallback, Fragment } from 'react';
 import {
   View,
   Text,
@@ -194,9 +194,8 @@ export default function BlogScreen() {
       {/* ──── Cards articles avec newsletter intercalée après le 2e article ──── */}
       <View style={styles.articles}>
         {filteredArticles.map((article, index) => (
-          <>
+          <Fragment key={article.id}>
             <Pressable
-              key={article.id}
               style={({ pressed }) => [styles.articleCard, pressed && { opacity: 0.7 }]}
               onPress={() => router.push(`/article/${article.id}`)}
               accessibilityLabel={article.title}
@@ -226,7 +225,7 @@ export default function BlogScreen() {
 
             {/* Newsletter intercalée après le 2e article */}
             {index === 1 && !newsletterSubscribed && (
-              <View key="newsletter-inline" style={styles.newsletterInline}>
+              <View style={styles.newsletterInline}>
                 <View style={styles.newsletterInlineLeft}>
                   <View style={styles.newsletterInlineIcon}>
                     <Mail size={16} color={colors.green} strokeWidth={1.8} />
@@ -267,14 +266,14 @@ export default function BlogScreen() {
               </View>
             )}
             {index === 1 && newsletterSubscribed && (
-              <View key="newsletter-success" style={[styles.newsletterInline, styles.newsletterInlineSuccess]}>
+              <View style={[styles.newsletterInline, styles.newsletterInlineSuccess]}>
                 <Mail size={14} color={colors.green} strokeWidth={1.8} />
                 <Text style={styles.newsletterInlineSuccessText}>
                   Abonné·e à Atmosphère !
                 </Text>
               </View>
             )}
-          </>
+          </Fragment>
         ))}
       </View>
     </ScrollView>

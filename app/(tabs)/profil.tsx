@@ -256,7 +256,7 @@ export default function ProfilScreen() {
         >
           <Pressable
             style={styles.streakCard}
-            onPress={() => router.push('/fidelite')}
+            onPress={() => router.push('/defis')}
             accessibilityRole="button"
             accessibilityLabel="Défi série en cours — 3 sur 5 jours"
           >
@@ -272,7 +272,7 @@ export default function ProfilScreen() {
           </Pressable>
           <Pressable
             style={styles.streakCard}
-            onPress={() => router.push('/fidelite')}
+            onPress={() => router.push('/defis')}
             accessibilityRole="button"
             accessibilityLabel="Challenge Mars — 4 sur 10 commandes"
           >
