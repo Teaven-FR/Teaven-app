@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
-import { fetchCustomer, fetchLoyalty } from '@/lib/square';
+import { fetchCustomer, fetchLoyalty, fetchWalletBalance } from '@/lib/square';
 import { mockUser } from '@/constants/mockData';
 import type { User, LoyaltyLevel } from '@/lib/types';
 
@@ -251,6 +251,14 @@ export const useAuthStore = create<AuthState>()(
             // Rafraîchir les données Square en arrière-plan
             enrichWithSquareData(baseUser, session.access_token).then(async (enriched) => {
               set({ user: enriched });
+              // Synchroniser le solde wallet depuis Square Gift Cards
+              fetchWalletBalance(session.access_token).then((walletResult) => {
+                if (walletResult.data?.success) {
+                  set((s) => ({
+                    user: s.user ? { ...s.user, walletBalance: walletResult.data!.balance } : s.user,
+                  }));
+                }
+              });
               // Persister dans Supabase les données récupérées depuis Square
               try {
                 const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
