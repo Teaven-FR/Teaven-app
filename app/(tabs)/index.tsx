@@ -15,7 +15,7 @@ import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Bell, Search, Leaf, Flame, ShoppingBag, Instagram } from 'lucide-react-native';
+import { Bell, Search, Leaf, Flame, ShoppingBag, Instagram, Trophy, ChevronRight } from 'lucide-react-native';
 import { Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pill } from '@/components/ui/Pill';
@@ -365,6 +365,25 @@ export default function HomeScreen() {
               </ScrollView>
             </>
           )}
+
+          {/* ──── Encart Défis ──── */}
+          <Pressable
+            style={styles.defisCard}
+            onPress={() => router.push('/defis')}
+            accessibilityRole="button"
+            accessibilityLabel="Voir mes défis en cours"
+          >
+            <View style={styles.defisLeft}>
+              <View style={styles.defisIconWrap}>
+                <Trophy size={20} color={colors.gold} strokeWidth={1.5} />
+              </View>
+              <View style={styles.defisText}>
+                <Text style={styles.defisTitle}>Défis en cours</Text>
+                <Text style={styles.defisSubtitle}>Gagnez des points en relevant des défis</Text>
+              </View>
+            </View>
+            <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.8} />
+          </Pressable>
 
           {/* Section "Nos coups de cœur" */}
           <View style={styles.favoritesHeader}>
@@ -786,6 +805,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingBottom: 8,
     paddingTop: 2,
+  },
+
+  // Encart Défis
+  defisCard: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
+    backgroundColor: '#FFF8E7',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F0D080',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+  },
+  defisLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  defisIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFF0C0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  defisText: {
+    flex: 1,
+  },
+  defisTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.text,
+  },
+  defisSubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 
   // Instagram
