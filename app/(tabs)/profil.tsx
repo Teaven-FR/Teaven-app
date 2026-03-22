@@ -305,12 +305,22 @@ export default function ProfilScreen() {
             const Icon = REWARD_ICON_MAP[reward.icon] ?? Gift;
             const unlocked = loyalty.points >= reward.pointsCost;
             return (
-              <View key={reward.id} style={[styles.rewardCard, !unlocked && { opacity: 0.55 }]}>
+              <View key={reward.id} style={styles.rewardCard}>
                 <View style={styles.rewardIconWrap}>
-                  <Icon size={18} color={colors.green} strokeWidth={1.8} />
+                  <Icon size={18} color={unlocked ? colors.green : colors.textMuted} strokeWidth={1.8} />
                 </View>
                 <Text style={styles.rewardName}>{reward.name}</Text>
                 <Text style={styles.rewardSub}>{reward.pointsCost} pts</Text>
+
+                {/* Progress bar */}
+                <View style={styles.rewardProgressBg}>
+                  <View style={[
+                    styles.rewardProgressFill,
+                    { width: `${Math.min(Math.round((loyalty.points / reward.pointsCost) * 100), 100)}%` as `${number}%` }
+                  ]} />
+                </View>
+
+                {/* Dynamic status text */}
                 <Pressable
                   accessibilityLabel={unlocked ? `Utiliser ${reward.name}` : `${reward.name} — non débloqué`}
                   accessibilityRole="button"
@@ -318,9 +328,17 @@ export default function ProfilScreen() {
                     ? showToast(`${reward.name} — disponible dans votre panier`)
                     : showToast(`Encore ${reward.pointsCost - loyalty.points} pts pour débloquer`)}
                 >
-                  <Text style={[styles.rewardCta, !unlocked && { color: colors.textMuted }]}>
-                    {unlocked ? 'Utiliser' : 'Bientôt'}
-                  </Text>
+                  {unlocked ? (
+                    <Text style={[styles.rewardCta, { color: colors.green }]}>🎉 Disponible !</Text>
+                  ) : loyalty.points >= reward.pointsCost / 2 ? (
+                    <Text style={[styles.rewardCta, { color: '#738478', fontSize: 11 }]}>
+                      Presque ! +{reward.pointsCost - loyalty.points} pts
+                    </Text>
+                  ) : (
+                    <Text style={[styles.rewardCta, { color: colors.textMuted, fontSize: 11 }]}>
+                      Plus que {reward.pointsCost - loyalty.points} pts
+                    </Text>
+                  )}
                 </Pressable>
               </View>
             );
@@ -656,7 +674,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl,
   },
   rewardCard: {
-    width: 150,
+    width: 160,
     backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
@@ -688,6 +706,18 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 12,
     color: colors.green,
+  },
+  rewardProgressBg: {
+    height: 6,
+    backgroundColor: '#E8E8E3',
+    borderRadius: 3,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+  },
+  rewardProgressFill: {
+    height: 6,
+    backgroundColor: colors.green,
+    borderRadius: 3,
   },
 
   // Streaks / Défis
