@@ -21,7 +21,11 @@ import {
   Minus,
   Plus,
   Trash2,
+  Tag,
+  X,
+  Check,
 } from 'lucide-react-native';
+import { TextInput } from 'react-native';
 import { EmptyState } from '@/components/ui/EmptyState';
 import TimeSlotPicker from '@/components/ui/TimeSlotPicker';
 import { mockTimeSlots } from '@/constants/mockTimeSlots';
@@ -32,6 +36,24 @@ import { useCartStore } from '@/stores/cartStore';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 import type { TimeSlot as PickerTimeSlot } from '@/components/ui/TimeSlotPicker';
 import type { Reward } from '@/lib/types';
+
+// Codes promo valides — à déplacer dans Supabase plus tard
+const PROMO_CODES: Record<string, { type: 'percent' | 'fixed'; value: number; label: string; description: string }> = {
+  'BIENVENUE': { type: 'percent', value: 15, label: '-15%', description: 'Code bienvenue' },
+  'TEAVEN10':  { type: 'percent', value: 10, label: '-10%', description: '-10% sur votre commande' },
+  'TEAVEN20':  { type: 'percent', value: 20, label: '-20%', description: '-20% sur votre commande' },
+  'CADEAU5':   { type: 'fixed',   value: 500, label: '-5,00 €', description: 'Bon cadeau 5 €' },
+  'CADEAU10':  { type: 'fixed',   value: 1000, label: '-10,00 €', description: 'Bon cadeau 10 €' },
+};
+
+function calcPromoDiscount(
+  promo: { type: 'percent' | 'fixed'; value: number } | null,
+  subtotal: number,
+): number {
+  if (!promo) return 0;
+  if (promo.type === 'percent') return Math.round(subtotal * promo.value / 100);
+  return Math.min(promo.value, subtotal);
+}
 
 const FALLBACK_REWARDS: Reward[] = [
   { id: 'r1', name: 'Boisson offerte', description: 'Thé, café ou infusion', pointsCost: 200, icon: 'coffee' },
@@ -70,6 +92,11 @@ export default function PanierScreen() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
   const [appliedReward, setAppliedReward] = useState<Reward | null>(null);
 
+  // Code promo
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; type: 'percent' | 'fixed'; value: number; label: string; description: string } | null>(null);
+  const [promoError, setPromoError] = useState('');
+
   const availableRewards = (squareRewards.length > 0 ? squareRewards : FALLBACK_REWARDS)
     .filter((r) => loyalty.points >= r.pointsCost);
 
@@ -81,9 +108,27 @@ export default function PanierScreen() {
   const createOrder = useOrderStore((s) => s.createOrder);
   const cartItems = useCartStore((s) => s.items);
 
+  const applyPromoCode = () => {
+    const code = promoInput.trim().toUpperCase();
+    const found = PROMO_CODES[code];
+    if (!found) {
+      setPromoError('Code invalide ou expiré');
+      return;
+    }
+    setAppliedPromo({ code, ...found });
+    setPromoInput('');
+    setPromoError('');
+  };
+
+  const removePromo = () => {
+    setAppliedPromo(null);
+    setPromoError('');
+  };
+
   // Calculs récap — prix Square TTC, pas de TVA séparée
   const loyaltyDiscount = getLoyaltyDiscount(useLoyalty, loyalty.points);
-  const total = subtotal - loyaltyDiscount - rewardDiscount;
+  const promoDiscount = calcPromoDiscount(appliedPromo, subtotal);
+  const total = Math.max(0, subtotal - loyaltyDiscount - rewardDiscount - promoDiscount);
 
   const paymentOptions: { id: PaymentMethod; label: string }[] = [
     { id: 'card', label: 'Carte bancaire' },
@@ -214,6 +259,52 @@ export default function PanierScreen() {
           />
         </View>
 
+        {/* ──── CODE PROMO ──── */}
+        <Text style={styles.sectionLabel}>CODE PROMO</Text>
+        {appliedPromo ? (
+          <View style={styles.promoApplied}>
+            <View style={styles.promoAppliedLeft}>
+              <View style={styles.promoAppliedIcon}>
+                <Tag size={14} color={colors.green} strokeWidth={1.8} />
+              </View>
+              <View>
+                <Text style={styles.promoAppliedCode}>{appliedPromo.code}</Text>
+                <Text style={styles.promoAppliedDesc}>{appliedPromo.description} · {appliedPromo.label}</Text>
+              </View>
+            </View>
+            <Pressable onPress={removePromo} hitSlop={8} accessibilityLabel="Retirer le code promo">
+              <X size={16} color={colors.textMuted} strokeWidth={2} />
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.promoInputWrap}>
+            <View style={styles.promoInputRow}>
+              <Tag size={15} color={colors.textMuted} strokeWidth={1.8} style={styles.promoInputIcon} />
+              <TextInput
+                style={styles.promoInput}
+                placeholder="Entrez votre code"
+                placeholderTextColor={colors.textMuted}
+                value={promoInput}
+                onChangeText={(t) => { setPromoInput(t); setPromoError(''); }}
+                autoCapitalize="characters"
+                returnKeyType="done"
+                onSubmitEditing={applyPromoCode}
+              />
+              <Pressable
+                style={[styles.promoApplyBtn, !promoInput.trim() && { opacity: 0.4 }]}
+                onPress={applyPromoCode}
+                disabled={!promoInput.trim()}
+                accessibilityLabel="Appliquer le code promo"
+              >
+                <Check size={16} color="#FFFFFF" strokeWidth={2.5} />
+              </Pressable>
+            </View>
+            {promoError ? (
+              <Text style={styles.promoError}>{promoError}</Text>
+            ) : null}
+          </View>
+        )}
+
         {/* ──── RÉCAPITULATIF ──── */}
         <View style={styles.recap}>
           <View style={styles.recapRow}>
@@ -237,6 +328,16 @@ export default function PanierScreen() {
               </Text>
               <Text style={[styles.recapValue, styles.recapDiscount]}>
                 -{formatPrice(rewardDiscount)}
+              </Text>
+            </View>
+          )}
+          {appliedPromo && promoDiscount > 0 && (
+            <View style={styles.recapRow}>
+              <Text style={[styles.recapLabel, styles.recapDiscount]}>
+                Code {appliedPromo.code}
+              </Text>
+              <Text style={[styles.recapValue, styles.recapDiscount]}>
+                -{formatPrice(promoDiscount)}
               </Text>
             </View>
           )}
@@ -711,5 +812,81 @@ const styles = StyleSheet.create({
   timeSlotSection: {
     paddingHorizontal: spacing.xl,
     marginBottom: spacing.lg,
+  },
+
+  // Code promo
+  promoInputWrap: {
+    gap: spacing.sm,
+  },
+  promoInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    height: 50,
+    gap: spacing.sm,
+  },
+  promoInputIcon: {
+    flexShrink: 0,
+  },
+  promoInput: {
+    flex: 1,
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.text,
+    letterSpacing: 1,
+  },
+  promoApplyBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promoError: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.error,
+    paddingLeft: 4,
+  },
+  promoApplied: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F2FAF3',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#B8D4BC',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  promoAppliedLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  promoAppliedIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promoAppliedCode: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.green,
+    letterSpacing: 1,
+  },
+  promoAppliedDesc: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 1,
   },
 });
