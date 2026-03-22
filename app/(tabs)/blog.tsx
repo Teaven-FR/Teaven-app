@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Pressable,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -43,6 +44,16 @@ export default function BlogScreen() {
   } = useBlog();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchVisible, setSearchVisible] = useState(false);
+
+  const filteredArticles = searchQuery.trim()
+    ? articles.filter(
+        (a) =>
+          a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          a.excerpt.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : articles;
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -73,12 +84,28 @@ export default function BlogScreen() {
           <Text style={styles.subtitle}>Prenez soin de vous</Text>
         </View>
         <Pressable
+          onPress={() => setSearchVisible((v) => !v)}
           accessibilityLabel="Rechercher un article"
           accessibilityRole="button"
         >
-          <Search size={20} color={colors.textSecondary} strokeWidth={1.8} />
+          <Search size={20} color={searchVisible ? colors.green : colors.textSecondary} strokeWidth={1.8} />
         </Pressable>
       </View>
+
+      {/* ──── Barre de recherche ──── */}
+      {searchVisible && (
+        <View style={styles.searchWrap}>
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Rechercher un article..."
+            placeholderTextColor={colors.textMuted}
+            autoFocus
+            returnKeyType="search"
+          />
+        </View>
+      )}
 
       {/* ──── Pills ──── */}
       <ScrollView
@@ -133,7 +160,7 @@ export default function BlogScreen() {
 
       {/* ──── Cards articles ──── */}
       <View style={styles.articles}>
-        {articles.map((article) => (
+        {filteredArticles.map((article) => (
           <Pressable
             key={article.id}
             style={({ pressed }) => [styles.articleCard, pressed && { opacity: 0.7 }]}
@@ -175,6 +202,23 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 100,
+  },
+
+  // Search
+  searchWrap: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.green,
+    paddingHorizontal: spacing.md,
+  },
+  searchInput: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.text,
+    paddingVertical: 10,
   },
 
   // Header

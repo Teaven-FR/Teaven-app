@@ -10,6 +10,7 @@ import {
   Platform,
   Animated,
   KeyboardAvoidingView,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -25,7 +26,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { colors, fonts, spacing, radii, shadows } from '@/constants/theme';
 
 /** Montants prédéfinis en euros */
-const PRESET_AMOUNTS = [15, 25, 50] as const;
+const PRESET_AMOUNTS = [10, 25, 50, 100] as const;
 
 /** Longueur maximale du message */
 const MAX_MESSAGE_LENGTH = 150;
@@ -68,22 +69,36 @@ export default function GiftScreen() {
     setSelectedAmount(null);
   };
 
-  /** Envoi simulé par SMS */
+  /** Envoi par SMS via l'app native */
   const handleSendSMS = () => {
     if (effectiveAmount <= 0) {
       showToast('Veuillez choisir un montant', 'error');
       return;
     }
-    showToast(`Carte cadeau de ${effectiveAmount}\u00A0\u20AC envoyée par SMS !`);
+    const body = message.length > 0
+      ? `Je t'offre une carte cadeau Teaven de ${effectiveAmount}\u00A0\u20AC ! \u00AB ${message} \u00BB`
+      : `Je t'offre une carte cadeau Teaven de ${effectiveAmount}\u00A0\u20AC !`;
+    const separator = Platform.OS === 'ios' ? '&' : '?';
+    Linking.openURL(`sms:${separator}body=${encodeURIComponent(body)}`).catch(() => {
+      showToast('Impossible d\'ouvrir l\'app SMS', 'error');
+    });
   };
 
-  /** Envoi simulé par email */
+  /** Envoi par email via l'app native */
   const handleSendEmail = () => {
     if (effectiveAmount <= 0) {
       showToast('Veuillez choisir un montant', 'error');
       return;
     }
-    showToast(`Carte cadeau de ${effectiveAmount}\u00A0\u20AC envoyée par email !`);
+    const subject = encodeURIComponent(`Carte cadeau Teaven — ${effectiveAmount}\u00A0\u20AC`);
+    const body = encodeURIComponent(
+      message.length > 0
+        ? `Bonjour,\n\nJe t'offre une carte cadeau Teaven de ${effectiveAmount}\u00A0\u20AC !\n\n\u00AB ${message} \u00BB\n\nÀ bientôt chez Teaven !`
+        : `Bonjour,\n\nJe t'offre une carte cadeau Teaven de ${effectiveAmount}\u00A0\u20AC !\n\nÀ bientôt chez Teaven !`
+    );
+    Linking.openURL(`mailto:?subject=${subject}&body=${body}`).catch(() => {
+      showToast('Impossible d\'ouvrir l\'app email', 'error');
+    });
   };
 
   return (
@@ -106,7 +121,7 @@ export default function GiftScreen() {
           >
             <ChevronLeft size={24} color={colors.text} strokeWidth={1.3} />
           </Pressable>
-          <Text style={styles.headerTitle}>Carte cadeau</Text>
+          <Text style={styles.headerTitle}>Offrir un moment</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -115,7 +130,7 @@ export default function GiftScreen() {
           <View style={styles.titleIconWrap}>
             <Gift size={24} color={colors.green} strokeWidth={1.3} />
           </View>
-          <Text style={styles.title}>Offrir une carte cadeau Teaven</Text>
+          <Text style={styles.title}>Offrir un moment Teaven</Text>
           <Text style={styles.subtitle}>
             Faites plaisir à vos proches avec une carte cadeau utilisable en boutique et sur l'application.
           </Text>

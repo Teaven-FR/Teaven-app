@@ -24,6 +24,7 @@ import { useCatalog } from '@/hooks/useCatalog';
 import { useUser } from '@/hooks/useUser';
 import { useCartStore } from '@/stores/cartStore';
 import { useToast } from '@/contexts/ToastContext';
+import { RechargeModal } from '@/components/ui/RechargeModal';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
 
 // Largeur d'une card carrousel + gap
@@ -57,10 +58,12 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { products, allProducts, categories, selectedCategory, setSelectedCategory, refetch } = useCatalog();
-  const { user, isGuest } = useUser();
+  const { user, isGuest, wallet, rechargeWallet } = useUser();
+  const { showToast } = useToast();
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
+  const [rechargeVisible, setRechargeVisible] = useState(false);
 
   const formatPrice = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
@@ -151,7 +154,7 @@ export default function HomeScreen() {
               </View>
               <View>
                 <Text style={styles.greeting}>
-                  {getGreeting()} {isGuest ? '' : user.fullName}
+                  {getGreeting()}{isGuest ? '' : `, ${user.fullName.split(' ')[0]}`}
                 </Text>
                 <Text style={styles.subtitle}>
                   Qu'est-ce qui vous ferait du bien ?
@@ -187,6 +190,26 @@ export default function HomeScreen() {
             </View>
           </Pressable>
 
+          {/* Bandeau rechargement wallet si solde faible */}
+          {!isGuest && wallet.balance < 500 && (
+            <Pressable
+              onPress={() => setRechargeVisible(true)}
+              style={styles.walletBanner}
+              accessibilityRole="button"
+              accessibilityLabel="Recharger votre porte-monnaie"
+            >
+              <ShoppingBag size={16} color={colors.green} strokeWidth={1.8} />
+              <Text style={styles.walletBannerText}>
+                Solde porte-monnaie :{' '}
+                <Text style={styles.walletBannerAmount}>
+                  {(wallet.balance / 100).toFixed(2).replace('.', ',')} €
+                </Text>
+                {'  '}—{' '}
+                <Text style={styles.walletBannerCta}>Recharger</Text>
+              </Text>
+            </Pressable>
+          )}
+
           {/* Bannières promotionnelles — carrousel */}
           <ScrollView
             horizontal
@@ -199,7 +222,10 @@ export default function HomeScreen() {
               <View style={styles.promoContent}>
                 <Text style={styles.promoTitle}>Première commande ?</Text>
                 <Text style={styles.promoSubtitle}>-15% avec le code BIENVENUE</Text>
-                <Pressable accessibilityLabel="Profiter de moins quinze pourcent sur la première commande">
+                <Pressable
+                  onPress={() => router.push('/(tabs)/carte')}
+                  accessibilityLabel="Profiter de moins quinze pourcent sur la première commande"
+                >
                   <Text style={styles.promoCta}>En profiter</Text>
                 </Pressable>
               </View>
@@ -227,7 +253,10 @@ export default function HomeScreen() {
                 <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
                   Matcha Zen Latte Glacé
                 </Text>
-                <Pressable accessibilityLabel="Découvrir le Matcha Zen Latte Glacé">
+                <Pressable
+                  onPress={() => router.push('/(tabs)/carte')}
+                  accessibilityLabel="Découvrir le Matcha Zen Latte Glacé"
+                >
                   <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Découvrir</Text>
                 </Pressable>
               </View>
@@ -383,6 +412,16 @@ export default function HomeScreen() {
         onClose={() => setSearchVisible(false)}
         onSelect={(product) => router.push(`/produit/${product.id}`)}
       />
+
+      {/* Modal rechargement wallet */}
+      <RechargeModal
+        visible={rechargeVisible}
+        onClose={() => setRechargeVisible(false)}
+        onRecharge={(amount) => {
+          rechargeWallet(amount);
+          showToast('Porte-monnaie rechargé !');
+        }}
+      />
     </>
   );
 }
@@ -444,6 +483,35 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Wallet banner
+  walletBanner: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.greenLight,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#B8D4BC',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    gap: spacing.sm,
+  },
+  walletBannerText: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.text,
+    flex: 1,
+  },
+  walletBannerAmount: {
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  walletBannerCta: {
+    fontFamily: fonts.bold,
+    color: colors.green,
   },
 
   // Recherche

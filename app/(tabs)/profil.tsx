@@ -173,7 +173,12 @@ export default function ProfilScreen() {
         </View>
 
         {/* ──── Carte fidélité TEAVEN CLUB ──── */}
-        <View style={styles.loyaltyWrapper}>
+        <Pressable
+          style={styles.loyaltyWrapper}
+          onPress={() => router.push('/fidelite')}
+          accessibilityRole="button"
+          accessibilityLabel="Voir mon programme fidélité"
+        >
           <LinearGradient
             colors={['#2C4A32', '#4A6B50']}
             start={{ x: 0, y: 0 }}
@@ -206,7 +211,7 @@ export default function ProfilScreen() {
               <Text style={styles.progressPercent}>{loyalty.progressPercent}%</Text>
             </View>
           </LinearGradient>
-        </View>
+        </Pressable>
 
         {/* ──── Wallet ──── */}
         <View style={styles.walletCard}>
@@ -235,9 +240,14 @@ export default function ProfilScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.rewardsScroll}
         >
-          <View style={styles.streakCard}>
+          <Pressable
+            style={styles.streakCard}
+            onPress={() => router.push('/fidelite')}
+            accessibilityRole="button"
+            accessibilityLabel="Défi série en cours — 3 sur 5 jours"
+          >
             <View style={styles.streakIconWrap}>
-              <Flame size={18} color="#E8A849" strokeWidth={1.3} />
+              <Flame size={18} color={colors.gold} strokeWidth={1.3} />
             </View>
             <Text style={styles.streakTitle}>Série en cours</Text>
             <Text style={styles.streakDesc}>3/5 jours consécutifs</Text>
@@ -245,8 +255,13 @@ export default function ProfilScreen() {
               <View style={[styles.streakFill, { width: '60%' }]} />
             </View>
             <Text style={styles.streakReward}>500 pts bonus</Text>
-          </View>
-          <View style={styles.streakCard}>
+          </Pressable>
+          <Pressable
+            style={styles.streakCard}
+            onPress={() => router.push('/fidelite')}
+            accessibilityRole="button"
+            accessibilityLabel="Challenge Mars — 4 sur 10 commandes"
+          >
             <View style={styles.streakIconWrap}>
               <Trophy size={18} color={colors.gold} strokeWidth={1.3} />
             </View>
@@ -256,13 +271,13 @@ export default function ProfilScreen() {
               <View style={[styles.streakFill, { width: '40%' }]} />
             </View>
             <Text style={styles.streakReward}>Dessert offert</Text>
-          </View>
+          </Pressable>
         </ScrollView>
 
         {/* ──── Récompenses ──── */}
         <View style={styles.rewardsHeader}>
           <Text style={styles.rewardsTitle}>Récompenses</Text>
-          <Pressable accessibilityRole="button" onPress={() => showToast('Bientôt disponible')}>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/fidelite')}>
             <Text style={styles.rewardsSeeAll}>Tout voir</Text>
           </Pressable>
         </View>
@@ -347,9 +362,11 @@ export default function ProfilScreen() {
 
         {/* ──── Aide & Déconnexion ──── */}
         <View style={[styles.menu, { marginTop: spacing.md }]}>
-          <Pressable style={styles.menuItem} accessibilityRole="button" onPress={() => showToast('Aide bientôt disponible')}>
+          <Pressable style={styles.menuItem} accessibilityRole="button" onPress={() => router.push('/faq')}>
             <HelpCircle size={18} color={colors.green} strokeWidth={1.6} />
             <Text style={styles.menuItemText}>Aide & FAQ</Text>
+            <View style={styles.menuItemSpacer} />
+            <ChevronRight size={16} color={colors.textMuted} strokeWidth={1.5} />
           </Pressable>
           <View style={styles.menuSep} />
           {isAuthenticated ? (
@@ -651,7 +668,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#FFF8EE',
+    backgroundColor: '#F5F0E1',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,

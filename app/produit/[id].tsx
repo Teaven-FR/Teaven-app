@@ -8,6 +8,7 @@ import {
   Pressable,
   Animated,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,12 +17,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft,
   Share2,
-  MapPin,
   Flame,
   Clock,
   Minus,
   Plus,
   Star,
+  Leaf,
+  Wheat,
+  Heart,
 } from 'lucide-react-native';
 import { ModifierSelector } from '@/components/features/ModifierSelector';
 import { ProductMiniCard } from '@/components/features/ProductMiniCard';
@@ -39,7 +42,7 @@ export default function ProductScreen() {
   const insets = useSafeAreaInsets();
   const addItem = useCartStore((s) => s.addItem);
   const { showToast } = useToast();
-  const { product, isUsingMockData } = useProduct(id);
+  const { product, isLoading, isUsingMockData } = useProduct(id);
   const { allProducts } = useCatalog();
 
   const [quantity, setQuantity] = useState(1);
@@ -61,6 +64,14 @@ export default function ProductScreen() {
 
   // Fallback : essayer aussi dans les mockProducts si pas trouvé
   const resolvedProduct = product ?? (isUsingMockData ? mockProducts.find((p) => p.id === id) : undefined);
+
+  if (isLoading && !resolvedProduct) {
+    return (
+      <View style={styles.notFound}>
+        <ActivityIndicator size="large" color={colors.green} />
+      </View>
+    );
+  }
 
   if (!resolvedProduct) {
     return (
@@ -87,6 +98,22 @@ export default function ProductScreen() {
       return s + (opt?.price || 0);
     }, 0);
   }, 0);
+
+  // Groupes obligatoires non remplis (single = obligatoire)
+  const missingRequiredGroups = modifiers.filter(
+    (g) => g.type === 'single' && (!selectedModifiers[g.id] || selectedModifiers[g.id].length === 0),
+  );
+  const hasUnmetRequired = missingRequiredGroups.length > 0;
+
+  // Label du sélecteur de variantes : dériver depuis les noms ou fallback générique
+  const variationGroupLabel = (() => {
+    if (!variations.length) return 'Choisissez votre option';
+    // Détecter si les variantes ressemblent à des tailles (S, M, L, XL, Small, Medium, Large…)
+    const sizeKeywords = /^(xs|s|m|l|xl|xxl|small|medium|large|taille|size|\d+(cl|ml|oz|g|kg))$/i;
+    const looksLikeSizes = variations.every((v) => sizeKeywords.test(v.name.trim()));
+    if (looksLikeSizes) return 'Format';
+    return 'Choisissez votre option';
+  })();
 
   const unitPrice = basePrice + extraPrice;
 
@@ -204,10 +231,6 @@ export default function ProductScreen() {
 
           {/* Badges info */}
           <View style={styles.infoBadges}>
-            <View style={styles.infoBadge}>
-              <MapPin size={12} color={colors.textSecondary} strokeWidth={1.8} />
-              <Text style={styles.infoBadgeText}>{resolvedProduct.location}</Text>
-            </View>
             {resolvedProduct.kcal > 0 && (
               <View style={styles.infoBadge}>
                 <Flame size={12} color={colors.textSecondary} strokeWidth={1.8} />
@@ -218,6 +241,24 @@ export default function ProductScreen() {
               <Clock size={12} color={colors.textSecondary} strokeWidth={1.8} />
               <Text style={styles.infoBadgeText}>{resolvedProduct.prepTime} min</Text>
             </View>
+            {resolvedProduct.tags.some((t) => /vegan|végétalien/i.test(t)) && (
+              <View style={[styles.infoBadge, styles.dietBadge]}>
+                <Leaf size={12} color="#3D7A4A" strokeWidth={1.8} />
+                <Text style={[styles.infoBadgeText, { color: '#3D7A4A' }]}>Vegan</Text>
+              </View>
+            )}
+            {resolvedProduct.tags.some((t) => /végétarien|vegetarien/i.test(t)) && (
+              <View style={[styles.infoBadge, styles.dietBadge]}>
+                <Heart size={12} color="#3D7A4A" strokeWidth={1.8} />
+                <Text style={[styles.infoBadgeText, { color: '#3D7A4A' }]}>Végétarien</Text>
+              </View>
+            )}
+            {resolvedProduct.tags.some((t) => /sans.gluten|gluten.free/i.test(t)) && (
+              <View style={[styles.infoBadge, styles.dietBadge]}>
+                <Wheat size={12} color="#B8860B" strokeWidth={1.8} />
+                <Text style={[styles.infoBadgeText, { color: '#B8860B' }]}>Sans gluten</Text>
+              </View>
+            )}
           </View>
 
           {/* Description */}
@@ -233,10 +274,10 @@ export default function ProductScreen() {
             </Pressable>
           )}
 
-          {/* Sélecteur de variation (tailles) */}
+          {/* Sélecteur de variation */}
           {variations.length > 1 && (
             <View style={styles.modifiersSection}>
-              <Text style={styles.variationTitle}>Taille</Text>
+              <Text style={styles.variationTitle}>{variationGroupLabel}</Text>
               <View style={styles.variationChips}>
                 {variations.map((v) => {
                   const isActive = (activeVariation?.id ?? variations[0]?.id) === v.id;
@@ -384,28 +425,44 @@ export default function ProductScreen() {
 
       {/* ──── CTA sticky ──── */}
       <View style={[styles.cta, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <Animated.View style={{ flex: 1, transform: [{ scale: addScale }] }}>
-          <Pressable
-            onPress={handleAddToCart}
-            onPressIn={() => animatePressIn(addScale)}
-            onPressOut={() => animatePressOut(addScale)}
-            style={[styles.ctaButton, styles.ctaSecondary]}
-            accessibilityLabel="Ajouter au panier"
-          >
-            <Text style={styles.ctaSecondaryText}>Ajouter au panier</Text>
-          </Pressable>
-        </Animated.View>
-        <Animated.View style={{ flex: 1, transform: [{ scale: orderScale }] }}>
-          <Pressable
-            onPress={handleOrder}
-            onPressIn={() => animatePressIn(orderScale)}
-            onPressOut={() => animatePressOut(orderScale)}
-            style={[styles.ctaButton, styles.ctaPrimary]}
-            accessibilityLabel="Commander maintenant"
-          >
-            <Text style={styles.ctaPrimaryText}>Commander</Text>
-          </Pressable>
-        </Animated.View>
+        {hasUnmetRequired && (
+          <View style={styles.ctaHint}>
+            <Text style={styles.ctaHintText}>
+              Veuillez choisir :{' '}
+              {missingRequiredGroups.map((g) => g.label).join(', ')}
+            </Text>
+          </View>
+        )}
+        <View style={styles.ctaButtons}>
+          <Animated.View style={{ flex: 1, transform: [{ scale: addScale }] }}>
+            <Pressable
+              onPress={hasUnmetRequired ? undefined : handleAddToCart}
+              onPressIn={hasUnmetRequired ? undefined : () => animatePressIn(addScale)}
+              onPressOut={hasUnmetRequired ? undefined : () => animatePressOut(addScale)}
+              style={[styles.ctaButton, styles.ctaSecondary, hasUnmetRequired && styles.ctaDisabled]}
+              accessibilityLabel="Ajouter au panier"
+              accessibilityState={{ disabled: hasUnmetRequired }}
+            >
+              <Text style={[styles.ctaSecondaryText, hasUnmetRequired && styles.ctaDisabledText]}>
+                Ajouter au panier
+              </Text>
+            </Pressable>
+          </Animated.View>
+          <Animated.View style={{ flex: 1, transform: [{ scale: orderScale }] }}>
+            <Pressable
+              onPress={hasUnmetRequired ? undefined : handleOrder}
+              onPressIn={hasUnmetRequired ? undefined : () => animatePressIn(orderScale)}
+              onPressOut={hasUnmetRequired ? undefined : () => animatePressOut(orderScale)}
+              style={[styles.ctaButton, styles.ctaPrimary, hasUnmetRequired && styles.ctaDisabled]}
+              accessibilityLabel="Commander maintenant"
+              accessibilityState={{ disabled: hasUnmetRequired }}
+            >
+              <Text style={[styles.ctaPrimaryText, hasUnmetRequired && styles.ctaDisabledText]}>
+                Commander
+              </Text>
+            </Pressable>
+          </Animated.View>
+        </View>
       </View>
     </View>
   );
@@ -505,6 +562,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 12,
     color: colors.textSecondary,
+  },
+  dietBadge: {
+    backgroundColor: '#EAF5EC',
   },
 
   // Description
@@ -709,13 +769,30 @@ const styles = StyleSheet.create({
 
   // CTA sticky
   cta: {
-    flexDirection: 'row',
-    gap: 10,
     paddingHorizontal: 20,
     paddingTop: spacing.md,
     backgroundColor: colors.bg,
     borderTopWidth: 0.5,
     borderTopColor: colors.border,
+  },
+  ctaHint: {
+    backgroundColor: '#FDF5F4',
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#F0D8D6',
+  },
+  ctaHintText: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: '#C0524A',
+    textAlign: 'center',
+  },
+  ctaButtons: {
+    flexDirection: 'row',
+    gap: 10,
   },
   ctaButton: {
     height: 44,
@@ -740,5 +817,11 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 13,
     color: '#FFFFFF',
+  },
+  ctaDisabled: {
+    opacity: 0.4,
+  },
+  ctaDisabledText: {
+    opacity: 0.6,
   },
 });

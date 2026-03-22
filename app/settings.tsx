@@ -59,6 +59,7 @@ export default function SettingsScreen() {
   const [notifOrders, setNotifOrders] = useState(true);
   const [notifPromos, setNotifPromos] = useState(true);
   const [notifBlog, setNotifBlog] = useState(false);
+  const [newsletter, setNewsletter] = useState(false);
 
   /** Déconnexion avec confirmation */
   const handleSignOut = () => {
@@ -199,7 +200,35 @@ export default function SettingsScreen() {
 
           {renderToggle('Commandes', notifOrders, setNotifOrders, false)}
           {renderToggle('Promotions', notifPromos, setNotifPromos, false)}
-          {renderToggle('Blog', notifBlog, setNotifBlog, true)}
+          {renderToggle('Blog', notifBlog, setNotifBlog, false)}
+        </View>
+
+        {/* ──── NEWSLETTER ──── */}
+        <Text style={styles.sectionLabel}>NEWSLETTER</Text>
+        <View style={styles.card}>
+          <View style={styles.newsletterBanner}>
+            <Text style={styles.newsletterTitle}>Recevez nos inspirations</Text>
+            <Text style={styles.newsletterSub}>
+              Recettes, conseils bien-être, nouveautés Teaven — et 50 pts offerts à l'inscription.
+            </Text>
+          </View>
+          <View style={styles.menuSep} />
+          <View style={styles.menuItem}>
+            <Text style={styles.menuItemText}>S'abonner à la newsletter</Text>
+            <Switch
+              value={newsletter}
+              onValueChange={(val) => {
+                setNewsletter(val);
+                if (val) showToast('Newsletter activée · +50 pts crédités !');
+                else showToast('Newsletter désactivée');
+              }}
+              trackColor={{ false: colors.border, true: colors.green }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={colors.border}
+              accessibilityLabel="S'abonner à la newsletter"
+              accessibilityRole="switch"
+            />
+          </View>
         </View>
 
         {/* ──── INFORMATIONS ──── */}
@@ -324,6 +353,24 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
     marginLeft: 50,
+  },
+
+  // Newsletter
+  newsletterBanner: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    gap: 4,
+  },
+  newsletterTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.text,
+  },
+  newsletterSub: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
 
   // Notifications header

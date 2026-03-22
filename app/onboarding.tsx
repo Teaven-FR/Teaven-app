@@ -158,38 +158,48 @@ export default function OnboardingScreen() {
 
       {/* Contrôles en bas */}
       <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, 32) }]}>
-        {/* Dots */}
-        <View style={styles.dots}>
-          {slides.map((_, index) => (
-            <View
-              key={index}
-              style={[styles.dot, index === activeIndex && styles.dotActive]}
-            />
-          ))}
+        {/* Ligne principale : Skip | Dots | Suivant */}
+        <View style={styles.controlsRow}>
+          {/* Bouton skip (ou vide si dernier slide) */}
+          {!isLast ? (
+            <Pressable onPress={handleStart} style={styles.skipButton} accessibilityRole="button">
+              <Text style={styles.skipLink}>Passer</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.skipButton} />
+          )}
+
+          {/* Dots centrés */}
+          <View style={styles.dots}>
+            {slides.map((_, index) => (
+              <View
+                key={index}
+                style={[styles.dot, index === activeIndex && styles.dotActive]}
+              />
+            ))}
+          </View>
+
+          {/* Bouton Suivant / Commencer */}
+          <Pressable
+            onPress={handleNext}
+            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={isLast ? 'Commencer' : 'Slide suivant'}
+          >
+            <LinearGradient
+              colors={['#FFFFFF', '#F5F5F0']}
+              style={styles.buttonGradient}
+            >
+              <Text style={styles.buttonText}>
+                {isLast ? 'Go !' : '→'}
+              </Text>
+            </LinearGradient>
+          </Pressable>
         </View>
 
-        {/* Bouton principal */}
-        <Pressable
-          onPress={handleNext}
-          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-        >
-          <LinearGradient
-            colors={['#FFFFFF', '#F5F5F0']}
-            style={styles.buttonGradient}
-          >
-            <Text style={styles.buttonText}>
-              {isLast ? 'Commencer' : 'Suivant'}
-            </Text>
-          </LinearGradient>
-        </Pressable>
-
-        {/* Lien skip / login */}
-        {!isLast ? (
-          <Pressable onPress={handleStart} style={styles.skipButton}>
-            <Text style={styles.skipLink}>Passer</Text>
-          </Pressable>
-        ) : (
-          <Pressable onPress={handleLogin} style={styles.skipButton}>
+        {/* Lien connexion sur le dernier slide */}
+        {isLast && (
+          <Pressable onPress={handleLogin} style={styles.loginRow} accessibilityRole="button">
             <Text style={styles.skipLink}>
               Déjà un compte ?{' '}
               <Text style={styles.skipLinkBold}>Se connecter</Text>
@@ -282,11 +292,19 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     paddingHorizontal: spacing.xxl,
-    gap: spacing.lg,
+    paddingTop: spacing.lg,
+    gap: spacing.md,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
   },
   dots: {
     flexDirection: 'row',
     gap: 8,
+    alignItems: 'center',
   },
   dot: {
     width: 8,
@@ -300,9 +318,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   button: {
-    width: '100%',
-    height: 54,
-    borderRadius: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -311,24 +329,24 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   buttonPressed: {
-    transform: [{ scale: 0.97 }],
+    transform: [{ scale: 0.95 }],
     shadowOpacity: 0.08,
   },
   buttonGradient: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    borderRadius: 28,
   },
   buttonText: {
     fontFamily: fonts.bold,
-    fontSize: 16,
+    fontSize: 18,
     color: '#3A5A40',
-    letterSpacing: 0.5,
   },
   skipButton: {
+    width: 60,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    alignItems: 'flex-start',
   },
   skipLink: {
     fontFamily: fonts.regular,
@@ -339,5 +357,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     color: 'rgba(255,255,255,0.85)',
     textDecorationLine: 'underline',
+  },
+  loginRow: {
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
   },
 });

@@ -10,8 +10,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Catégories Square autorisées (whitelist, case-insensitive)
+const ALLOWED_CATEGORIES = ['🍽 food teaven', 'boissons ☕️🍵', 'food - formules teaven', '🍰 food – pâtisseries'];
+
 // Mapping des catégories Square vers Teaven (case-insensitive)
 const CATEGORY_MAP: Record<string, string> = {
+  '🍽 food teaven': 'food-teaven',
+  'boissons ☕️🍵': 'boissons',
+  'food - formules teaven': 'formules',
+  '🍰 food – pâtisseries': 'patisseries',
   'nourrir': 'nourrir',
   'savourer': 'savourer',
   'emporter': 'emporter',
@@ -74,6 +81,9 @@ serve(async (req) => {
   }
 
   try {
+    const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
+    const debugMode = body.debug === true;
+
     const squareAccessToken = Deno.env.get('SQUARE_ACCESS_TOKEN');
     const squareEnvironment = Deno.env.get('SQUARE_ENVIRONMENT') ?? 'sandbox';
     const squareBaseUrl = squareEnvironment === 'production'
@@ -106,6 +116,17 @@ serve(async (req) => {
       modifierListMap.set(ml.id, ml);
     }
 
+    // Mode debug : retourner les noms de catégories sans sync
+    if (debugMode) {
+      const categoryNames = categories
+        .filter((c) => !c.is_deleted)
+        .map((c) => c.category_data?.name ?? 'unknown');
+      return new Response(
+        JSON.stringify({ debug: true, categories: categoryNames }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // 3. Init Supabase
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -131,7 +152,10 @@ serve(async (req) => {
         .upsert(categoryRows, { onConflict: 'square_category_id' });
     }
 
-    // 5. Transformer et upsert les produits
+    // 5. Désactiver tous les produits existants avant sync (on réactivera ceux du whitelist)
+    await supabase.from('products').update({ available: false }).neq('id', '00000000-0000-0000-0000-000000000000');
+
+    // 6. Transformer et upsert les produits
     let syncedProducts = 0;
 
     for (const item of items) {
@@ -140,6 +164,14 @@ serve(async (req) => {
       const itemData = item.item_data;
       if (!itemData) continue;
 
+      // Résoudre la catégorie (category_id ancien format, categories[] nouveau format Square)
+      const categoryId = itemData.category_id
+        ?? (itemData.categories as { id: string }[] | undefined)?.[0]?.id;
+      const categoryName = categoryId ? categoryMap.get(categoryId) : undefined;
+
+      // Filtrer par catégories autorisées
+      if (!categoryName || !ALLOWED_CATEGORIES.includes(categoryName.toLowerCase().trim())) continue;
+
       const variations = itemData.variations ?? [];
       const firstVariation = variations[0];
       const firstPrice = firstVariation?.item_variation_data?.price_money?.amount ?? 0;
@@ -147,9 +179,6 @@ serve(async (req) => {
       // Résoudre l'image
       const imageIds = itemData.image_ids ?? [];
       const imageUrl = imageIds.length > 0 ? (imageMap.get(imageIds[0]) ?? '') : '';
-
-      const categoryId = itemData.category_id;
-      const categoryName = categoryId ? categoryMap.get(categoryId) : undefined;
 
       // Upsert le produit
       const { data: dbProduct, error: productError } = await supabase
@@ -210,7 +239,8 @@ serve(async (req) => {
 
         const selectionType = mlData.selection_type === 'SINGLE' ? 'single' : 'multiple';
 
-        // Upsert le modifier_group
+        // Upsert le modifier_group avec clé composite (product_id, square_modifier_list_id)
+        // pour permettre à plusieurs produits de partager la même modifier list Square
         const { data: dbGroup, error: groupError } = await supabase
           .from('modifier_groups')
           .upsert(
@@ -221,7 +251,7 @@ serve(async (req) => {
               type: selectionType,
               ordinal: 0,
             },
-            { onConflict: 'square_modifier_list_id' },
+            { onConflict: 'product_id,square_modifier_list_id' },
           )
           .select('id')
           .single();
