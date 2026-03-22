@@ -1,5 +1,5 @@
 // Écran Blog Atmosphère — article à la une + articles récents + pull-to-refresh + newsletter
-import { useState, useCallback, Fragment } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Pressable,
   RefreshControl,
   TextInput,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -19,7 +20,7 @@ import { useBlog } from '@/hooks/useBlog';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
-import { colors, fonts, spacing } from '@/constants/theme';
+import { colors, fonts, spacing, shadows } from '@/constants/theme';
 
 const CATEGORY_LABELS: Record<string, string> = {
   'bien-etre': 'Bien-être',
@@ -54,6 +55,11 @@ export default function BlogScreen() {
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
   const [newsletterLoading, setNewsletterLoading] = useState(false);
+  const [newsletterModalVisible, setNewsletterModalVisible] = useState(false);
+
+  useEffect(() => {
+    if (!isGuest && user.email) setNewsletterEmail(user.email);
+  }, [isGuest, user.email]);
 
   const subscribeNewsletter = async () => {
     const email = newsletterEmail.trim().toLowerCase();
@@ -156,6 +162,36 @@ export default function BlogScreen() {
         ))}
       </ScrollView>
 
+      {/* ──── Encart Newsletter ──── */}
+      {newsletterSubscribed ? (
+        <View style={styles.newsletterCardSubscribed}>
+          <Mail size={14} color={colors.green} strokeWidth={1.8} />
+          <Text style={styles.newsletterSubscribedText}>✓ Abonné·e à Atmosphère</Text>
+        </View>
+      ) : (
+        <View style={styles.newsletterCardTop}>
+          <View style={styles.newsletterCardTopLeft}>
+            <View style={styles.newsletterCardTopIcon}>
+              <Mail size={20} color={colors.green} strokeWidth={1.8} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.newsletterCardTopTitle}>Rejoignez Atmosphère</Text>
+              <Text style={styles.newsletterCardTopSub}>
+                Articles, recettes et offres exclusives. Gagnez 25 points !
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            style={styles.newsletterCardTopBtn}
+            onPress={() => setNewsletterModalVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="S'inscrire à la newsletter Atmosphère"
+          >
+            <Text style={styles.newsletterCardTopBtnText}>S'inscrire</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* ──── Article à la une ──── */}
       {featured && (
         <View style={styles.featuredWrapper}>
@@ -191,91 +227,78 @@ export default function BlogScreen() {
       {/* ──── Label articles récents ──── */}
       <Text style={styles.recentLabel}>ARTICLES RÉCENTS</Text>
 
-      {/* ──── Cards articles avec newsletter intercalée après le 2e article ──── */}
+      {/* ──── Cards articles ──── */}
       <View style={styles.articles}>
-        {filteredArticles.map((article, index) => (
-          <Fragment key={article.id}>
-            <Pressable
-              style={({ pressed }) => [styles.articleCard, pressed && { opacity: 0.7 }]}
-              onPress={() => router.push(`/article/${article.id}`)}
-              accessibilityLabel={article.title}
-              accessibilityRole="button"
-            >
-              <Image
-                source={{ uri: article.imageUrl }}
-                style={styles.articleImage}
-                contentFit="cover"
-                transition={300}
-                placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
-              />
-              <View style={styles.articleCatRow}>
-                <Text style={styles.articleCategory}>
-                  {(CATEGORY_LABELS[article.category] || article.category).toUpperCase()}
-                </Text>
-                <Text style={styles.articleDate}>{article.publishedAt}</Text>
-              </View>
-              <Text style={styles.articleTitle} numberOfLines={2}>
-                {article.title}
+        {filteredArticles.map((article) => (
+          <Pressable
+            key={article.id}
+            style={({ pressed }) => [styles.articleCard, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push(`/article/${article.id}`)}
+            accessibilityLabel={article.title}
+            accessibilityRole="button"
+          >
+            <Image
+              source={{ uri: article.imageUrl }}
+              style={styles.articleImage}
+              contentFit="cover"
+              transition={300}
+              placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
+            />
+            <View style={styles.articleCatRow}>
+              <Text style={styles.articleCategory}>
+                {(CATEGORY_LABELS[article.category] || article.category).toUpperCase()}
               </Text>
-              <Text style={styles.articleExcerpt} numberOfLines={2}>
-                {article.excerpt}
-              </Text>
-              <Text style={styles.readMore}>Lire la suite</Text>
-            </Pressable>
-
-            {/* Newsletter intercalée après le 2e article */}
-            {index === 1 && !newsletterSubscribed && (
-              <View style={styles.newsletterInline}>
-                <View style={styles.newsletterInlineLeft}>
-                  <View style={styles.newsletterInlineIcon}>
-                    <Mail size={16} color={colors.green} strokeWidth={1.8} />
-                  </View>
-                  <View style={styles.newsletterInlineText}>
-                    <Text style={styles.newsletterInlineTitle}>
-                      Atmosphère dans votre boîte
-                      {!isGuest && (
-                        <Text style={styles.newsletterInlineBonus}> · +25 pts</Text>
-                      )}
-                    </Text>
-                    <View style={styles.newsletterInlineInputRow}>
-                      <TextInput
-                        style={styles.newsletterInlineInput}
-                        placeholder="votre@email.com"
-                        placeholderTextColor={colors.textMuted}
-                        value={newsletterEmail}
-                        onChangeText={setNewsletterEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        returnKeyType="send"
-                        onSubmitEditing={subscribeNewsletter}
-                      />
-                      <Pressable
-                        style={[
-                          styles.newsletterInlineBtn,
-                          (!newsletterEmail.includes('@') || newsletterLoading) && { opacity: 0.45 },
-                        ]}
-                        onPress={subscribeNewsletter}
-                        disabled={!newsletterEmail.includes('@') || newsletterLoading}
-                        accessibilityLabel="S'abonner à la newsletter Atmosphère"
-                      >
-                        <Text style={styles.newsletterInlineBtnText}>OK</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            )}
-            {index === 1 && newsletterSubscribed && (
-              <View style={[styles.newsletterInline, styles.newsletterInlineSuccess]}>
-                <Mail size={14} color={colors.green} strokeWidth={1.8} />
-                <Text style={styles.newsletterInlineSuccessText}>
-                  Abonné·e à Atmosphère !
-                </Text>
-              </View>
-            )}
-          </Fragment>
+              <Text style={styles.articleDate}>{article.publishedAt}</Text>
+            </View>
+            <Text style={styles.articleTitle} numberOfLines={2}>
+              {article.title}
+            </Text>
+            <Text style={styles.articleExcerpt} numberOfLines={2}>
+              {article.excerpt}
+            </Text>
+            <Text style={styles.readMore}>Lire la suite</Text>
+          </Pressable>
         ))}
       </View>
+
+      {/* ──── Modal Newsletter ──── */}
+      <Modal
+        visible={newsletterModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setNewsletterModalVisible(false)}
+      >
+        <Pressable style={styles.newsletterModalOverlay} onPress={() => setNewsletterModalVisible(false)}>
+          <View style={styles.newsletterModalSheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.newsletterModalHandle} />
+            <Text style={styles.newsletterModalTitle}>Rejoignez Atmosphère</Text>
+            <Text style={styles.newsletterModalSub}>
+              Recevez nos articles bien-être, recettes et offres exclusives chaque semaine.
+              {!isGuest && ' +25 points offerts à l\'inscription.'}
+            </Text>
+            <TextInput
+              style={styles.newsletterModalInput}
+              placeholder="votre@email.com"
+              placeholderTextColor={colors.textMuted}
+              value={newsletterEmail}
+              onChangeText={setNewsletterEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoFocus
+            />
+            <Pressable
+              style={[styles.newsletterModalBtn, (!newsletterEmail.includes('@') || newsletterLoading) && { opacity: 0.5 }]}
+              onPress={async () => {
+                await subscribeNewsletter();
+                setNewsletterModalVisible(false);
+              }}
+              disabled={!newsletterEmail.includes('@') || newsletterLoading}
+            >
+              <Text style={styles.newsletterModalBtnText}>Confirmer l'inscription</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -429,80 +452,129 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  // Newsletter inline (intercalée entre articles)
-  newsletterInline: {
-    backgroundColor: colors.greenLight,
-    borderRadius: 14,
+  // Newsletter card (top)
+  newsletterCardTop: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#B8D4BC',
-    padding: 14,
+    borderColor: colors.border,
+    padding: 16,
+    gap: 12,
+    ...shadows.subtle,
   },
-  newsletterInlineSuccess: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  newsletterInlineSuccessText: {
-    fontFamily: fonts.bold,
-    fontSize: 13,
-    color: colors.green,
-  },
-  newsletterInlineLeft: {
+  newsletterCardTopLeft: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 12,
   },
-  newsletterInlineIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+  newsletterCardTopIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: colors.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
   },
-  newsletterInlineText: {
-    flex: 1,
-    gap: 8,
+  newsletterCardTopTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.text,
+    marginBottom: 3,
   },
-  newsletterInlineTitle: {
+  newsletterCardTopSub: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 17,
+  },
+  newsletterCardTopBtn: {
+    alignSelf: 'flex-end',
+    backgroundColor: colors.green,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  newsletterCardTopBtnText: {
     fontFamily: fonts.bold,
     fontSize: 13,
-    color: colors.text,
+    color: '#FFFFFF',
   },
-  newsletterInlineBonus: {
+  newsletterCardSubscribed: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.greenLight,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  newsletterSubscribedText: {
     fontFamily: fonts.bold,
-    fontSize: 12,
+    fontSize: 13,
     color: colors.green,
   },
-  newsletterInlineInputRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  newsletterInlineInput: {
+
+  // Newsletter modal
+  newsletterModalOverlay: {
     flex: 1,
-    height: 38,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#B8D4BC',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  newsletterModalSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    gap: 12,
+  },
+  newsletterModalHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
+  newsletterModalTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 20,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  newsletterModalSub: {
     fontFamily: fonts.regular,
     fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  newsletterModalInput: {
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#FAFAFA',
+    paddingHorizontal: 16,
+    fontFamily: fonts.regular,
+    fontSize: 14,
     color: colors.text,
   },
-  newsletterInlineBtn: {
-    height: 38,
-    paddingHorizontal: 14,
+  newsletterModalBtn: {
+    height: 50,
+    borderRadius: 14,
     backgroundColor: colors.green,
-    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 4,
   },
-  newsletterInlineBtnText: {
+  newsletterModalBtnText: {
     fontFamily: fonts.bold,
-    fontSize: 13,
+    fontSize: 15,
     color: '#FFFFFF',
   },
 });
