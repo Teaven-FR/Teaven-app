@@ -50,6 +50,7 @@ export function getItemUnitPrice(item: CartItem): number {
 
 interface CartState {
   items: CartItem[];
+  activePromoCode: string | null;
   addItem: (
     product: Product,
     quantity?: number,
@@ -67,6 +68,7 @@ interface CartState {
   totalItems: () => number;
   totalPrice: () => number;
   getItemKey: (item: CartItem) => string;
+  setPromoCode: (code: string | null) => void;
 }
 
 // Seuils de fidélité pour le calcul du discount
@@ -80,6 +82,7 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
+      activePromoCode: null,
 
       addItem: (
         product: Product,
@@ -166,10 +169,15 @@ export const useCartStore = create<CartState>()(
       totalItems: () => get().getItemCount(),
       totalPrice: () => get().getSubtotal(),
       getItemKey: (item: CartItem) => existingItemKey(item),
+      setPromoCode: (code) => set({ activePromoCode: code }),
     }),
     {
       name: '@teaven/cart',
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        items: state.items,
+        activePromoCode: state.activePromoCode,
+      }),
     },
   ),
 );
