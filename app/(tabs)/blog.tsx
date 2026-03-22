@@ -1,4 +1,4 @@
-// Écran Blog Atmosphère — article à la une + articles récents + pull-to-refresh
+// Écran Blog Atmosphère — article à la une + articles récents + pull-to-refresh + newsletter
 import { useState, useCallback } from 'react';
 import {
   View,
@@ -8,14 +8,19 @@ import {
   Pressable,
   RefreshControl,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Search } from 'lucide-react-native';
+import { Search, Mail, Gift } from 'lucide-react-native';
 import { Pill } from '@/components/ui/Pill';
 import { useBlog } from '@/hooks/useBlog';
+import { useUser } from '@/hooks/useUser';
+import { useToast } from '@/contexts/ToastContext';
+import { supabase } from '@/lib/supabase';
 import { colors, fonts, spacing } from '@/constants/theme';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -43,9 +48,39 @@ export default function BlogScreen() {
     isLoading,
   } = useBlog();
 
+  const { user, isGuest, updateProfile, loyalty } = useUser();
+  const { showToast } = useToast();
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchVisible, setSearchVisible] = useState(false);
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
+  const [newsletterLoading, setNewsletterLoading] = useState(false);
+
+  const subscribeNewsletter = async () => {
+    const email = newsletterEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) return;
+    setNewsletterLoading(true);
+    try {
+      await supabase.from('newsletter_subscribers').upsert(
+        { email, user_id: isGuest ? null : user.id ?? null, subscribed_at: new Date().toISOString() },
+        { onConflict: 'email' },
+      );
+      setNewsletterSubscribed(true);
+      setNewsletterEmail('');
+      // +25 pts de fidélité si connecté
+      if (!isGuest) {
+        await updateProfile({ loyaltyPoints: loyalty.points + 25 });
+        showToast('+25 pts crédités pour votre inscription !');
+      } else {
+        showToast('Inscription confirmée !');
+      }
+    } catch {
+      showToast('Erreur, veuillez réessayer.');
+    } finally {
+      setNewsletterLoading(false);
+    }
+  };
 
   const filteredArticles = searchQuery.trim()
     ? articles.filter(
@@ -190,6 +225,59 @@ export default function BlogScreen() {
             <Text style={styles.readMore}>Lire la suite</Text>
           </Pressable>
         ))}
+      </View>
+
+      {/* ──── Newsletter ──── */}
+      <View style={styles.newsletterCard}>
+        <View style={styles.newsletterIconRow}>
+          <View style={styles.newsletterIconWrap}>
+            <Mail size={20} color={colors.green} strokeWidth={1.8} />
+          </View>
+          {!isGuest && (
+            <View style={styles.newsletterBonusBadge}>
+              <Gift size={11} color={colors.gold} strokeWidth={2} />
+              <Text style={styles.newsletterBonusText}>+25 pts</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.newsletterTitle}>Restez inspiré·e</Text>
+        <Text style={styles.newsletterSubtitle}>
+          Recevez nos articles bien-être, conseils nutrition et nouveautés Teaven chaque semaine.
+        </Text>
+        {newsletterSubscribed ? (
+          <View style={styles.newsletterSuccess}>
+            <Text style={styles.newsletterSuccessText}>
+              Merci ! Vous êtes abonné·e à Atmosphère.
+            </Text>
+          </View>
+        ) : (
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={styles.newsletterInputRow}>
+              <TextInput
+                style={styles.newsletterInput}
+                placeholder="votre@email.com"
+                placeholderTextColor={colors.textMuted}
+                value={newsletterEmail}
+                onChangeText={setNewsletterEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                returnKeyType="send"
+                onSubmitEditing={subscribeNewsletter}
+              />
+              <Pressable
+                style={[
+                  styles.newsletterButton,
+                  (!newsletterEmail.includes('@') || newsletterLoading) && { opacity: 0.5 },
+                ]}
+                onPress={subscribeNewsletter}
+                disabled={!newsletterEmail.includes('@') || newsletterLoading}
+                accessibilityLabel="S'abonner à la newsletter"
+              >
+                <Text style={styles.newsletterButtonText}>S'abonner</Text>
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        )}
       </View>
     </ScrollView>
   );
@@ -342,5 +430,100 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.green,
     textDecorationLine: 'underline',
+  },
+
+  // Newsletter
+  newsletterCard: {
+    marginHorizontal: spacing.xl,
+    marginTop: 40,
+    marginBottom: spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  newsletterIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  newsletterIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newsletterBonusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF8E7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F0D080',
+  },
+  newsletterBonusText: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.gold,
+  },
+  newsletterTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    color: colors.text,
+    marginBottom: 6,
+  },
+  newsletterSubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 19,
+    marginBottom: spacing.lg,
+  },
+  newsletterInputRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  newsletterInput: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#FAFAFA',
+    paddingHorizontal: spacing.md,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.text,
+  },
+  newsletterButton: {
+    height: 44,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.green,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newsletterButtonText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  newsletterSuccess: {
+    backgroundColor: colors.greenLight,
+    borderRadius: 10,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  newsletterSuccessText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.green,
   },
 });

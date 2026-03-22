@@ -1,14 +1,15 @@
-// Écran Carte / Menu — grille 2 colonnes avec pills sticky + pull-to-refresh
+// Écran Carte / Menu — grille 2 colonnes avec pills sticky + pull-to-refresh + bannière récompense
 import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ScrollView } from 'react-native';
-import { Search } from 'lucide-react-native';
+import { Search, Gift } from 'lucide-react-native';
 import { Pill } from '@/components/ui/Pill';
 import { ProductGridCard } from '@/components/ui/ProductGridCard';
 import { SearchModal } from '@/components/ui/SearchModal';
 import { useCatalog } from '@/hooks/useCatalog';
+import { useUser } from '@/hooks/useUser';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 import type { Product } from '@/lib/types';
 
@@ -16,8 +17,13 @@ export default function CarteScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { products, categories, selectedCategory, setSelectedCategory, refetch } = useCatalog();
+  const { loyalty, rewards } = useUser();
   const [refreshing, setRefreshing] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
+
+  // Récompense la moins chère accessible (ou prochaine proche)
+  const availableReward = rewards.find((r) => r.pointsCost <= loyalty.points)
+    ?? rewards.slice().sort((a, b) => a.pointsCost - b.pointsCost)[0];
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -25,8 +31,10 @@ export default function CarteScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  // En-tête de la grille (header + pills sticky + compteur)
-  const ListHeader = () => (
+  // En-tête de la grille (header + bannière récompense + pills sticky + compteur)
+  const ListHeader = () => {
+    const hasUnlockedReward = availableReward && availableReward.pointsCost <= loyalty.points;
+    return (
     <>
       {/* Header : titre + sous-titre + loupe */}
       <View style={styles.header}>
@@ -38,8 +46,32 @@ export default function CarteScreen() {
           <Search size={17} color={colors.textSecondary} strokeWidth={1.6} />
         </Pressable>
       </View>
+
+      {/* Bannière récompense */}
+      {availableReward && (
+        <Pressable
+          style={[styles.rewardBanner, hasUnlockedReward && styles.rewardBannerActive]}
+          onPress={() => router.push('/(tabs)/panier')}
+          accessibilityRole="button"
+          accessibilityLabel={hasUnlockedReward ? `Utiliser votre récompense : ${availableReward.name}` : `Plus que ${availableReward.pointsCost - loyalty.points} pts pour ${availableReward.name}`}
+        >
+          <View style={styles.rewardBannerLeft}>
+            <Gift size={16} color={hasUnlockedReward ? colors.gold : colors.textSecondary} strokeWidth={1.8} />
+            <Text style={[styles.rewardBannerText, hasUnlockedReward && styles.rewardBannerTextActive]}>
+              {hasUnlockedReward
+                ? `Récompense dispo : ${availableReward.name}`
+                : `Plus que ${availableReward.pointsCost - loyalty.points} pts pour ${availableReward.name}`
+              }
+            </Text>
+          </View>
+          {hasUnlockedReward && (
+            <Text style={styles.rewardBannerCta}>Utiliser →</Text>
+          )}
+        </Pressable>
+      )}
     </>
   );
+  };
 
   // Compteur produits
   const ProductCount = () => (
@@ -164,6 +196,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
+  },
+
+  // Bannière récompense
+  rewardBanner: {
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
+  rewardBannerActive: {
+    backgroundColor: '#FFF8E7',
+    borderColor: '#F0D080',
+  },
+  rewardBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  rewardBannerText: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  rewardBannerTextActive: {
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  rewardBannerCta: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.gold,
   },
 
   // Compteur

@@ -15,7 +15,8 @@ import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Bell, Search, Leaf, Flame, ShoppingBag } from 'lucide-react-native';
+import { Bell, Search, Leaf, Flame, ShoppingBag, Instagram } from 'lucide-react-native';
+import { Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pill } from '@/components/ui/Pill';
 import { ProductCardCarousel } from '@/components/ui/ProductCardCarousel';
@@ -403,6 +404,47 @@ export default function HomeScreen() {
               </Pressable>
             ))}
           </View>
+
+          {/* Encart Instagram */}
+          <View style={styles.instagramSection}>
+            <View style={styles.instagramHeader}>
+              <View>
+                <Text style={styles.instagramTitle}>Notre univers</Text>
+                <Text style={styles.instagramHandle}>@teaven.co</Text>
+              </View>
+              <Pressable
+                style={styles.instagramButton}
+                onPress={() => {
+                  const deeplink = 'instagram://user?username=teaven.co';
+                  Linking.canOpenURL(deeplink).then((can) => {
+                    Linking.openURL(can ? deeplink : 'https://instagram.com/teaven.co');
+                  });
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Voir le profil Instagram Teaven"
+              >
+                <Instagram size={14} color="#FFFFFF" strokeWidth={1.8} />
+                <Text style={styles.instagramButtonText}>Voir le profil</Text>
+              </Pressable>
+            </View>
+            <View style={styles.instagramGrid}>
+              {['#E8F0EA', '#F5EFDF', '#2C4A32', '#EDE4CC'].map((bg, i) => (
+                <Pressable
+                  key={i}
+                  style={[styles.instagramPost, { backgroundColor: bg }]}
+                  onPress={() => {
+                    const deeplink = 'instagram://user?username=teaven.co';
+                    Linking.canOpenURL(deeplink).then((can) => {
+                      Linking.openURL(can ? deeplink : 'https://instagram.com/teaven.co');
+                    });
+                  }}
+                  accessibilityLabel={`Post Instagram ${i + 1}`}
+                >
+                  <Leaf size={22} color={i === 2 ? 'rgba(255,255,255,0.4)' : 'rgba(107,143,113,0.3)'} strokeWidth={1} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
         </Animated.View>
       </ScrollView>
 
@@ -744,5 +786,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingBottom: 8,
     paddingTop: 2,
+  },
+
+  // Instagram
+  instagramSection: {
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.xxl,
+  },
+  instagramHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  instagramTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: colors.text,
+  },
+  instagramHandle: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  instagramButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#C13584',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  instagramButtonText: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  instagramGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  instagramPost: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
 });

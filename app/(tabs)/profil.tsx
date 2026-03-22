@@ -43,12 +43,13 @@ import { useUser } from '@/hooks/useUser';
 import { useOrderStore } from '@/stores/orderStore';
 import { colors, fonts, spacing, shadows } from '@/constants/theme';
 
-// Mock récompenses
-const rewards = [
-  { id: '1', icon: Coffee, name: 'Boisson offerte', sub: '500 pts', cta: 'Utiliser' },
-  { id: '2', icon: Gift, name: 'Dessert offert', sub: '750 pts', cta: 'Utiliser' },
-  { id: '3', icon: Percent, name: '-20% sur carte', sub: '1000 pts', cta: 'Utiliser' },
-];
+// Mapping icône Square → composant lucide
+const REWARD_ICON_MAP: Record<string, typeof Coffee> = {
+  coffee: Coffee,
+  gift: Gift,
+  percent: Percent,
+  star: Gift,
+};
 
 // Liens du menu paramètres
 const SETTINGS_LINKS = [
@@ -61,14 +62,23 @@ const SETTINGS_LINKS = [
   { id: 'cgu', label: 'Mentions légales', icon: FileText, route: '/legal' },
 ] as const;
 
-const INSTAGRAM_URL = 'https://www.instagram.com/teaven.fr';
+const INSTAGRAM_URL = 'https://instagram.com/teaven.co';
+const INSTAGRAM_DEEPLINK = 'instagram://user?username=teaven.co';
 
 export default function ProfilScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showToast } = useToast();
   const addItem = useCartStore((s) => s.addItem);
-  const { user, isGuest, loyalty, wallet, rechargeWallet } = useUser();
+  const { user, isGuest, loyalty, wallet, rechargeWallet, rewards: squareRewards } = useUser();
+
+  // Récompenses live Square ou fallback
+  const FALLBACK_REWARDS = [
+    { id: 'f1', name: 'Boisson offerte', pointsCost: 200, icon: 'coffee' },
+    { id: 'f2', name: 'Dessert offert', pointsCost: 500, icon: 'gift' },
+    { id: 'f3', name: '-20% sur la carte', pointsCost: 750, icon: 'percent' },
+  ];
+  const rewards = squareRewards.length > 0 ? squareRewards : FALLBACK_REWARDS;
   const signOut = useAuthStore((s) => s.signOut);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const orderHistory = useOrderStore((s) => s.orderHistory);
@@ -292,20 +302,25 @@ export default function ProfilScreen() {
           contentContainerStyle={styles.rewardsScroll}
         >
           {rewards.map((reward) => {
-            const Icon = reward.icon;
+            const Icon = REWARD_ICON_MAP[reward.icon] ?? Gift;
+            const unlocked = loyalty.points >= reward.pointsCost;
             return (
-              <View key={reward.id} style={styles.rewardCard}>
+              <View key={reward.id} style={[styles.rewardCard, !unlocked && { opacity: 0.55 }]}>
                 <View style={styles.rewardIconWrap}>
                   <Icon size={18} color={colors.green} strokeWidth={1.8} />
                 </View>
                 <Text style={styles.rewardName}>{reward.name}</Text>
-                <Text style={styles.rewardSub}>{reward.sub}</Text>
+                <Text style={styles.rewardSub}>{reward.pointsCost} pts</Text>
                 <Pressable
-                  accessibilityLabel={`Utiliser ${reward.name}`}
+                  accessibilityLabel={unlocked ? `Utiliser ${reward.name}` : `${reward.name} — non débloqué`}
                   accessibilityRole="button"
-                  onPress={() => showToast(`${reward.name} bientôt disponible`)}
+                  onPress={() => unlocked
+                    ? showToast(`${reward.name} — disponible dans votre panier`)
+                    : showToast(`Encore ${reward.pointsCost - loyalty.points} pts pour débloquer`)}
                 >
-                  <Text style={styles.rewardCta}>{reward.cta}</Text>
+                  <Text style={[styles.rewardCta, !unlocked && { color: colors.textMuted }]}>
+                    {unlocked ? 'Utiliser' : 'Bientôt'}
+                  </Text>
                 </Pressable>
               </View>
             );
@@ -367,13 +382,17 @@ export default function ProfilScreen() {
         {/* ──── Instagram ──── */}
         <Pressable
           style={styles.instagramBtn}
-          onPress={() => Linking.openURL(INSTAGRAM_URL)}
+          onPress={() =>
+            Linking.canOpenURL(INSTAGRAM_DEEPLINK).then((can) =>
+              Linking.openURL(can ? INSTAGRAM_DEEPLINK : INSTAGRAM_URL),
+            )
+          }
           accessibilityRole="button"
           accessibilityLabel="Suivre Teaven sur Instagram"
         >
           <Instagram size={18} color="#E1306C" strokeWidth={1.6} />
           <Text style={styles.instagramText}>Suivez-nous sur Instagram</Text>
-          <Text style={styles.instagramHandle}>@teaven.fr</Text>
+          <Text style={styles.instagramHandle}>@teaven.co</Text>
         </Pressable>
 
         {/* ──── Aide & Déconnexion ──── */}

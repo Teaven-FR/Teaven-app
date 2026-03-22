@@ -1,5 +1,5 @@
-// Écran Modes de paiement — wallet + cartes bancaires gérées en local
-import { useState } from 'react';
+// Écran Modes de paiement — wallet Square + cartes bancaires gérées en local
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,13 +11,17 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, CreditCard, Plus, Wallet, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, CreditCard, Plus, Wallet, Trash2, RefreshCw } from 'lucide-react-native';
 import { RechargeModal } from '@/components/ui/RechargeModal';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from '@/contexts/ToastContext';
+import { fetchWalletBalance } from '@/lib/square';
+import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 import { colors, fonts, spacing, shadows, radii } from '@/constants/theme';
 
 interface SavedCard {
@@ -40,6 +44,28 @@ export default function PaiementScreen() {
   const [rechargeVisible, setRechargeVisible] = useState(false);
   const [cards, setCards] = useState<SavedCard[]>(INITIAL_CARDS);
   const [addCardVisible, setAddCardVisible] = useState(false);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+
+  // Rafraîchir le solde depuis Square Gift Cards au montage
+  useEffect(() => {
+    refreshBalance();
+  }, []);
+
+  const refreshBalance = async () => {
+    setBalanceLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const result = await fetchWalletBalance(session.access_token);
+      if (result.data?.success && result.data.balance !== undefined) {
+        const { setUser } = useAuthStore.getState();
+        const current = useAuthStore.getState().user;
+        if (current) setUser({ ...current, walletBalance: result.data.balance });
+      }
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
 
   // Champs du formulaire carte
   const [cardName, setCardName] = useState('');
@@ -116,25 +142,37 @@ export default function PaiementScreen() {
         {/* Section Wallet */}
         <Text style={styles.sectionLabel}>WALLET TEAVEN</Text>
         <View style={styles.walletCard}>
-          <View style={styles.walletLeft}>
+          <View style={styles.walletTop}>
             <View style={styles.walletIcon}>
-              <Wallet size={18} color={colors.green} strokeWidth={1.8} />
+              <Wallet size={20} color="#FFFFFF" strokeWidth={1.8} />
             </View>
-            <View>
-              <Text style={styles.walletTitle}>Porte-monnaie</Text>
-              <Text style={styles.walletBalance}>
-                {formatPrice(wallet.balance)}
-              </Text>
-            </View>
+            <Pressable
+              onPress={refreshBalance}
+              hitSlop={8}
+              accessibilityLabel="Rafraîchir le solde"
+              style={styles.refreshBtn}
+            >
+              {balanceLoading
+                ? <ActivityIndicator size="small" color="rgba(255,255,255,0.7)" />
+                : <RefreshCw size={16} color="rgba(255,255,255,0.7)" strokeWidth={1.8} />
+              }
+            </Pressable>
           </View>
-          <Pressable
-            style={styles.rechargeButton}
-            onPress={() => setRechargeVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Recharger le porte-monnaie"
-          >
-            <Text style={styles.rechargeText}>Recharger</Text>
-          </Pressable>
+          <Text style={styles.walletBalanceLabel}>Solde disponible</Text>
+          <Text style={styles.walletBalanceLarge}>
+            {formatPrice(wallet.balance)}
+          </Text>
+          <View style={styles.walletActions}>
+            <Pressable
+              style={styles.rechargeButton}
+              onPress={() => setRechargeVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Recharger le porte-monnaie"
+            >
+              <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.rechargeText}>Recharger</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Section Cartes bancaires */}
@@ -302,49 +340,63 @@ const styles = StyleSheet.create({
 
   // Wallet
   walletCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: 14,
-    ...shadows.subtle,
+    backgroundColor: colors.green,
+    borderRadius: 18,
+    padding: 20,
+    ...shadows.card,
   },
-  walletLeft: {
+  walletTop: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   walletIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: colors.greenLight,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  walletTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 14,
-    color: colors.text,
+  refreshBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  walletBalance: {
+  walletBalanceLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  walletBalanceLarge: {
     fontFamily: fonts.monoSemiBold,
-    fontSize: 16,
-    color: colors.green,
-    marginTop: 2,
+    fontSize: 36,
+    color: '#FFFFFF',
+    marginTop: 4,
+    letterSpacing: -1,
+  },
+  walletActions: {
+    flexDirection: 'row',
+    marginTop: spacing.xl,
   },
   rechargeButton: {
-    height: 32,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.green,
-    borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   rechargeText: {
     fontFamily: fonts.bold,
-    fontSize: 12,
+    fontSize: 13,
     color: '#FFFFFF',
   },
 

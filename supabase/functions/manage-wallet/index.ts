@@ -1,10 +1,14 @@
 // Edge Function — Gérer le wallet Teaven via Square Gift Cards API
-// Pour l'instant : simule les opérations
-// Plus tard : appelle Square Gift Cards API
 // Déployée via : supabase functions deploy manage-wallet
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+
+const SQUARE_BASE_URL = Deno.env.get('SQUARE_ENVIRONMENT') === 'production'
+  ? 'https://connect.squareup.com'
+  : 'https://connect.squareupsandbox.com';
+const SQUARE_ACCESS_TOKEN = Deno.env.get('SQUARE_ACCESS_TOKEN') ?? '';
+const SQUARE_VERSION = '2025-01-23';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -86,15 +90,49 @@ serve(async (req) => {
       case 'balance': {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('wallet_balance')
+          .select('wallet_balance, square_customer_id')
           .eq('id', userId)
           .single();
 
+        let balance = profile?.wallet_balance ?? 0;
+
+        // Appel Square Gift Cards API pour le solde réel
+        if (SQUARE_ACCESS_TOKEN && profile?.square_customer_id) {
+          try {
+            const res = await fetch(
+              `${SQUARE_BASE_URL}/v2/gift-cards?customer_id=${profile.square_customer_id}`,
+              {
+                headers: {
+                  'Square-Version': SQUARE_VERSION,
+                  'Authorization': `Bearer ${SQUARE_ACCESS_TOKEN}`,
+                },
+              },
+            );
+            const giftCardsData = await res.json();
+            console.log('[manage-wallet] Square Gift Cards raw:', JSON.stringify(giftCardsData));
+
+            if (giftCardsData.gift_cards && giftCardsData.gift_cards.length > 0) {
+              const totalBalance = (giftCardsData.gift_cards as Record<string, unknown>[]).reduce(
+                (sum: number, gc) => {
+                  const balanceMoney = gc.balance_money as Record<string, unknown> | undefined;
+                  return sum + ((balanceMoney?.amount as number) ?? 0);
+                },
+                0,
+              );
+              balance = totalBalance;
+              // Sync dans Supabase
+              await supabase
+                .from('profiles')
+                .update({ wallet_balance: balance, updated_at: new Date().toISOString() })
+                .eq('id', userId);
+            }
+          } catch (err) {
+            console.error('[manage-wallet] Erreur Square Gift Cards:', err);
+          }
+        }
+
         return new Response(
-          JSON.stringify({
-            success: true,
-            balance: profile?.wallet_balance ?? 0,
-          }),
+          JSON.stringify({ success: true, balance }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }

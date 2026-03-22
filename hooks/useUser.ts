@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
-import { fetchCustomer, fetchLoyalty } from '@/lib/square';
+import { fetchCustomer, fetchLoyalty, fetchWalletBalance } from '@/lib/square';
 import { mockUser } from '@/constants/mockData';
 import type { User, LoyaltyLevel, LoyaltyInfo, WalletInfo, Reward } from '@/lib/types';
 
@@ -66,6 +66,23 @@ export function useUser() {
       });
     });
   }, [isAuthenticated, user.phone, user.fullName, user.squareCustomerId]);
+
+  // Charger le solde wallet depuis Square Gift Cards au montage
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.access_token) return;
+      fetchWalletBalance(session.access_token).then((result) => {
+        if (result.data?.success && result.data.balance !== undefined) {
+          const { setUser } = useAuthStore.getState();
+          const current = useAuthStore.getState().user;
+          if (current && result.data.balance !== current.walletBalance) {
+            setUser({ ...current, walletBalance: result.data.balance });
+          }
+        }
+      });
+    });
+  }, [isAuthenticated]);
 
   // Charger les données de fidélité depuis Square si connecté
   useEffect(() => {

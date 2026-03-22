@@ -87,6 +87,15 @@ export async function fetchCustomer(phone: string, accessToken?: string) {
   }>('fetch-customer', { phone }, accessToken);
 }
 
+/** Récupérer le solde du wallet (Square Gift Cards) */
+export async function fetchWalletBalance(accessToken?: string) {
+  return callEdgeFunction<{ success: boolean; balance: number }>(
+    'manage-wallet',
+    { action: 'balance' },
+    accessToken,
+  );
+}
+
 /** Récupérer les données de fidélité */
 export async function fetchLoyalty(customerId: string, accessToken?: string, phone?: string) {
   return callEdgeFunction<{

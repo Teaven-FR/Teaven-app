@@ -271,9 +271,7 @@ serve(async (req) => {
         level,
         progress,
         loyaltyAccountId,
-        rewards: programRewards.length > 0
-        ? programRewards
-        : rewards.filter((r) => r.pointsCost <= points + 500),
+        rewards: programRewards.length > 0 ? programRewards : rewards,
       accrualRules,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
