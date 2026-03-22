@@ -1,12 +1,11 @@
-// Centre de notifications — liste complète avec état lu/non-lu
-import { useCallback } from 'react';
+// Centre de notifications — liste complète avec état lu/non-lu interactif
+import { useCallback, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
   Pressable,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,6 +15,7 @@ import {
   Tag,
   Star,
   Info,
+  CheckCheck,
 } from 'lucide-react-native';
 import {
   mockNotifications,
@@ -59,13 +59,28 @@ function formatRelativeTime(date: Date): string {
 }
 
 /** Rendu d'une notification individuelle */
-function NotificationItem({ item }: { item: AppNotification }) {
+function NotificationItem({
+  item,
+  onPress,
+}: {
+  item: AppNotification;
+  onPress: (id: string) => void;
+}) {
   const Icon = TYPE_ICONS[item.type];
   const iconColor = TYPE_COLORS[item.type];
-  const iconBg = `${iconColor}15`; // 15 = ~8% opacité en hex
+  const iconBg = `${iconColor}15`;
 
   return (
-    <View style={[styles.notifCard, !item.read && styles.notifCardUnread]}>
+    <Pressable
+      onPress={() => onPress(item.id)}
+      style={({ pressed }) => [
+        styles.notifCard,
+        !item.read && styles.notifCardUnread,
+        pressed && styles.notifCardPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={item.title}
+    >
       <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
         <Icon size={18} color={iconColor} strokeWidth={1.3} />
       </View>
@@ -82,12 +97,12 @@ function NotificationItem({ item }: { item: AppNotification }) {
         </Text>
         <Text style={styles.notifTime}>{formatRelativeTime(new Date(item.timestamp))}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 /** État vide — aucune notification */
-function EmptyState() {
+function EmptyNotifications() {
   return (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconWrap}>
@@ -105,11 +120,28 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const unreadCount = mockNotifications.filter((n) => !n.read).length;
+  // État local des notifications (read/unread géré en local)
+  const [notifications, setNotifications] = useState<AppNotification[]>(mockNotifications);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  /** Marquer une notification comme lue */
+  const markAsRead = useCallback((id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
+  }, []);
+
+  /** Marquer toutes les notifications comme lues */
+  const markAllAsRead = useCallback(() => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }, []);
 
   const renderItem = useCallback(
-    ({ item }: { item: AppNotification }) => <NotificationItem item={item} />,
-    [],
+    ({ item }: { item: AppNotification }) => (
+      <NotificationItem item={item} onPress={markAsRead} />
+    ),
+    [markAsRead],
   );
 
   const keyExtractor = useCallback((item: AppNotification) => item.id, []);
@@ -130,25 +162,40 @@ export default function NotificationsScreen() {
         <Text style={styles.headerTitle}>Notifications</Text>
 
         {unreadCount > 0 ? (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{unreadCount}</Text>
-          </View>
+          <Pressable
+            onPress={markAllAsRead}
+            hitSlop={12}
+            accessibilityLabel="Tout marquer comme lu"
+            accessibilityRole="button"
+            style={styles.markAllBtn}
+          >
+            <CheckCheck size={18} color={colors.green} strokeWidth={1.5} />
+          </Pressable>
         ) : (
           <View style={styles.headerSpacer} />
         )}
       </View>
 
+      {/* Badge compteur */}
+      {unreadCount > 0 && (
+        <View style={styles.unreadBanner}>
+          <Text style={styles.unreadBannerText}>
+            {unreadCount} non lue{unreadCount > 1 ? 's' : ''} · Appuyez pour marquer comme lu
+          </Text>
+        </View>
+      )}
+
       {/* ──── Liste des notifications ──── */}
       <FlatList
-        data={mockNotifications}
+        data={notifications}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         contentContainerStyle={[
           styles.listContent,
-          mockNotifications.length === 0 && styles.listContentEmpty,
+          notifications.length === 0 && styles.listContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={EmptyState}
+        ListEmptyComponent={EmptyNotifications}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
     </View>
@@ -177,19 +224,27 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 24,
   },
-  badge: {
-    backgroundColor: colors.green,
-    borderRadius: radii.full,
-    minWidth: 24,
-    height: 24,
+  markAllBtn: {
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
   },
-  badgeText: {
-    fontFamily: fonts.bold,
+
+  // Bannière non-lues
+  unreadBanner: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+    backgroundColor: colors.greenLight,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  unreadBannerText: {
+    fontFamily: fonts.regular,
     fontSize: 12,
-    color: '#FFFFFF',
+    color: colors.green,
+    textAlign: 'center',
   },
 
   // Liste
@@ -218,6 +273,9 @@ const styles = StyleSheet.create({
   notifCardUnread: {
     backgroundColor: '#FAFAF2',
     borderColor: colors.green + '30',
+  },
+  notifCardPressed: {
+    opacity: 0.85,
   },
   iconWrap: {
     width: 40,

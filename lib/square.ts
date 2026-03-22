@@ -10,10 +10,22 @@ type EdgeFunctionResponse<T> = {
 /** Appel générique à une Edge Function Supabase */
 async function callEdgeFunction<T>(
   functionName: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  accessToken?: string,
 ): Promise<EdgeFunctionResponse<T>> {
+  let token = accessToken;
+  if (!token) {
+    const { data: { session } } = await supabase.auth.getSession();
+    token = session?.access_token;
+  }
+
+  const headers: Record<string, string> = token
+    ? { 'Authorization': `Bearer ${token}` }
+    : {};
+
   const { data, error } = await supabase.functions.invoke(functionName, {
     body,
+    headers,
   });
 
   if (error) {
@@ -21,6 +33,15 @@ async function callEdgeFunction<T>(
   }
 
   return { data: data as T, error: null };
+}
+
+/** Expose callEdgeFunction avec token pour les appels authentifiés */
+export async function callAuthenticatedFunction<T>(
+  functionName: string,
+  body: Record<string, unknown>,
+  accessToken: string,
+): Promise<EdgeFunctionResponse<T>> {
+  return callEdgeFunction<T>(functionName, body, accessToken);
 }
 
 /** Synchroniser le catalogue Square → Supabase */
@@ -53,7 +74,7 @@ export async function processPayment(payload: {
 }
 
 /** Récupérer ou créer un client Square par téléphone */
-export async function fetchCustomer(phone: string) {
+export async function fetchCustomer(phone: string, accessToken?: string) {
   return callEdgeFunction<{
     success: boolean;
     customer: {
@@ -63,11 +84,11 @@ export async function fetchCustomer(phone: string) {
       phone: string;
       createdAt: string;
     } | null;
-  }>('fetch-customer', { phone });
+  }>('fetch-customer', { phone }, accessToken);
 }
 
 /** Récupérer les données de fidélité */
-export async function fetchLoyalty(customerId: string) {
+export async function fetchLoyalty(customerId: string, accessToken?: string, phone?: string) {
   return callEdgeFunction<{
     success: boolean;
     points: number;
@@ -81,5 +102,10 @@ export async function fetchLoyalty(customerId: string) {
       pointsCost: number;
       icon: string;
     }[];
-  }>('get-loyalty', { customerId });
+    accrualRules: {
+      type: string;
+      points: number;
+      spendAmount?: number;
+    }[];
+  }>('get-loyalty', { customerId, ...(phone ? { phone } : {}) }, accessToken);
 }

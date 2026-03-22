@@ -24,7 +24,7 @@ function priceAccessibilityLabel(cents: number): string {
 
 export function ProductGridCard({ product, onPress }: ProductGridCardProps) {
   const addItem = useCartStore((s) => s.addItem);
-  const buttonWidth = useRef(new Animated.Value(28)).current;
+  const buttonWidth = useRef(new Animated.Value(30)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
 
   // Animation de retour tactile (press feedback)
@@ -59,7 +59,7 @@ export function ProductGridCard({ product, onPress }: ProductGridCardProps) {
 
     // Animation : étirer le bouton de 28px à 76px
     Animated.spring(buttonWidth, {
-      toValue: 76,
+      toValue: 80,
       damping: 18,
       stiffness: 200,
       mass: 0.8,
@@ -76,7 +76,7 @@ export function ProductGridCard({ product, onPress }: ProductGridCardProps) {
     // Refermer après 1.4s
     setTimeout(() => {
       Animated.spring(buttonWidth, {
-        toValue: 28,
+        toValue: 30,
         damping: 18,
         stiffness: 200,
         mass: 0.8,
@@ -199,20 +199,20 @@ const styles = StyleSheet.create({
     borderRadius: radii.badge,
   },
   popularBadge: {
-    backgroundColor: 'rgba(212, 84, 74, 0.9)',
+    backgroundColor: '#E8D5D0',
   },
   newBadge: {
-    backgroundColor: 'rgba(76, 142, 88, 0.9)',
+    backgroundColor: '#C8D9CC',
     top: spacing.sm + 24,
   },
   seasonalBadge: {
-    backgroundColor: 'rgba(232, 168, 73, 0.9)',
+    backgroundColor: '#F5F0E1',
     top: spacing.sm + (24 * 2),
   },
   statusBadgeText: {
     fontFamily: fonts.bold,
     fontSize: 9,
-    color: '#FFFFFF',
+    color: colors.text,
     letterSpacing: 0.3,
   },
 
@@ -254,16 +254,18 @@ const styles = StyleSheet.create({
     color: colors.green,
   },
   addButton: {
-    height: 28,
+    height: 30,
     backgroundColor: colors.green,
-    borderRadius: 8,
-    flexDirection: 'row',
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    gap: 3,
   },
   addedText: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
     color: '#FFFFFF',
     fontFamily: fonts.bold,
     fontSize: 9,

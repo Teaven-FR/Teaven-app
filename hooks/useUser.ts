@@ -1,7 +1,8 @@
 // Hook utilisateur — centralise infos profil, fidélité et wallet
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
-import { fetchLoyalty } from '@/lib/square';
+import { supabase } from '@/lib/supabase';
+import { fetchCustomer, fetchLoyalty } from '@/lib/square';
 import { mockUser } from '@/constants/mockData';
 import type { User, LoyaltyLevel, LoyaltyInfo, WalletInfo, Reward } from '@/lib/types';
 
@@ -40,17 +41,37 @@ export function useUser() {
   const storeUser = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [remoteRewards, setRemoteRewards] = useState<Reward[]>([]);
+  const [accrualRules, setAccrualRules] = useState<Array<{ type: string; points: number; spendAmount?: number }>>([]);
 
   // En mode invité ou non connecté, utiliser le mockUser
   const user = storeUser ?? mockUser;
   const isGuest = !isAuthenticated;
 
+  // Charger le profil Square si nom ou customerId manquant
+  useEffect(() => {
+    if (!isAuthenticated || !user.phone) return;
+    if (user.fullName && user.squareCustomerId) return;
+
+    // Passer le token pour que fetch-customer puisse mettre à jour profiles
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      fetchCustomer(user.phone, session?.access_token).then((result) => {
+        if (result.data?.customer) {
+          const { updateProfile } = useAuthStore.getState();
+          updateProfile({
+            fullName: result.data.customer.fullName || user.fullName,
+            squareCustomerId: result.data.customer.squareCustomerId,
+            email: result.data.customer.email || user.email,
+          });
+        }
+      });
+    });
+  }, [isAuthenticated, user.phone, user.fullName, user.squareCustomerId]);
+
   // Charger les données de fidélité depuis Square si connecté
   useEffect(() => {
     if (!user.squareCustomerId) return;
-    fetchLoyalty(user.squareCustomerId).then((result) => {
+    fetchLoyalty(user.squareCustomerId, undefined, user.phone).then((result) => {
       if (result.data) {
-        // Mettre à jour les points en local si différents
         const { updateProfile } = useAuthStore.getState();
         if (result.data.points !== user.loyaltyPoints) {
           updateProfile({
@@ -58,7 +79,6 @@ export function useUser() {
             loyaltyLevel: result.data.level as LoyaltyLevel,
           });
         }
-        // Stocker les récompenses
         setRemoteRewards(
           result.data.rewards.map((r) => ({
             id: r.id,
@@ -68,6 +88,9 @@ export function useUser() {
             icon: r.icon,
           })),
         );
+        if (result.data.accrualRules) {
+          setAccrualRules(result.data.accrualRules);
+        }
       }
     });
   }, [user.squareCustomerId]);
@@ -100,22 +123,45 @@ export function useUser() {
     transactions: [],
   }), [user.walletBalance, user.squareGiftCardId]);
 
-  // Mise à jour du profil
+  // Mise à jour du profil — store local + Supabase
   const updateProfile = useCallback(async (updates: Partial<User>) => {
     const { setUser } = useAuthStore.getState();
     if (storeUser) {
       setUser({ ...storeUser, ...updates } as User);
     }
+
+    // Persister dans Supabase profiles
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const dbFields: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (updates.fullName !== undefined) dbFields.full_name = updates.fullName;
+        if (updates.email !== undefined) dbFields.email = updates.email;
+        if (updates.dietaryPreferences !== undefined) dbFields.dietary_preferences = updates.dietaryPreferences;
+        if (updates.loyaltyPoints !== undefined) dbFields.loyalty_points = updates.loyaltyPoints;
+        if (updates.walletBalance !== undefined) dbFields.wallet_balance = updates.walletBalance;
+        await supabase
+          .from('profiles')
+          .upsert({ id: session.user.id, ...dbFields }, { onConflict: 'id' });
+      }
+    } catch { /* non bloquant */ }
   }, [storeUser]);
 
-  // Recharger le wallet
+  // Recharger le wallet — met à jour le store ET Supabase
   const rechargeWallet = useCallback(async (amount: number) => {
     const { setUser } = useAuthStore.getState();
     if (storeUser) {
-      setUser({
-        ...storeUser,
-        walletBalance: storeUser.walletBalance + amount,
-      } as User);
+      const newBalance = storeUser.walletBalance + amount;
+      setUser({ ...storeUser, walletBalance: newBalance } as User);
+      // Persister dans Supabase
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await supabase
+            .from('profiles')
+            .upsert({ id: session.user.id, wallet_balance: newBalance, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+        }
+      } catch { /* non bloquant */ }
     }
   }, [storeUser]);
 
@@ -125,6 +171,7 @@ export function useUser() {
     loyalty,
     wallet,
     rewards: remoteRewards,
+    accrualRules,
     updateProfile,
     rechargeWallet,
   };

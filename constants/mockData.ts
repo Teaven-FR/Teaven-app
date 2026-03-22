@@ -19,6 +19,29 @@ export const mockProducts: Product[] = [
     isSeasonal: false,
     isPopular: true,
     orderedToday: 32,
+    modifiers: [
+      {
+        id: 'mg-base',
+        label: 'Base du bowl',
+        type: 'single',
+        options: [
+          { id: 'mo-quinoa', label: 'Quinoa', price: 0, squareModifierId: 'sq-mo-quinoa' },
+          { id: 'mo-riz', label: 'Riz brun', price: 0, squareModifierId: 'sq-mo-riz' },
+          { id: 'mo-salade', label: 'Mesclun', price: 0, squareModifierId: 'sq-mo-salade' },
+        ],
+      },
+      {
+        id: 'mg-toppings',
+        label: 'Toppings supplémentaires',
+        type: 'multiple',
+        options: [
+          { id: 'mo-tofu', label: 'Tofu grillé', price: 150, squareModifierId: 'sq-mo-tofu' },
+          { id: 'mo-halloumi', label: 'Halloumi', price: 180, squareModifierId: 'sq-mo-halloumi' },
+          { id: 'mo-oeuf', label: 'Œuf mollet', price: 100, squareModifierId: 'sq-mo-oeuf' },
+          { id: 'mo-graines', label: 'Graines de chanvre', price: 50, squareModifierId: 'sq-mo-graines' },
+        ],
+      },
+    ],
   },
   {
     id: '2',
@@ -37,6 +60,34 @@ export const mockProducts: Product[] = [
     isSeasonal: false,
     isPopular: true,
     orderedToday: 47,
+    variations: [
+      { id: 'v2-s', name: 'S — 25 cl', price: 550, squareVariationId: 'sq-v2-s' },
+      { id: 'v2-m', name: 'M — 35 cl', price: 650, squareVariationId: 'sq-v2-m' },
+      { id: 'v2-l', name: 'L — 50 cl', price: 750, squareVariationId: 'sq-v2-l' },
+    ],
+    modifiers: [
+      {
+        id: 'mg-lait',
+        label: 'Lait végétal',
+        type: 'single',
+        options: [
+          { id: 'mo-avoine', label: "Lait d'avoine", price: 0, squareModifierId: 'sq-mo-avoine' },
+          { id: 'mo-soja', label: 'Lait de soja', price: 0, squareModifierId: 'sq-mo-soja' },
+          { id: 'mo-amande', label: "Lait d'amande", price: 50, squareModifierId: 'sq-mo-amande' },
+          { id: 'mo-coco', label: 'Lait de coco', price: 50, squareModifierId: 'sq-mo-coco' },
+        ],
+      },
+      {
+        id: 'mg-extras',
+        label: 'Extras',
+        type: 'multiple',
+        options: [
+          { id: 'mo-sirop', label: 'Sirop de caramel', price: 40, squareModifierId: 'sq-mo-sirop' },
+          { id: 'mo-vanille', label: 'Sirop de vanille', price: 40, squareModifierId: 'sq-mo-vanille' },
+          { id: 'mo-chantilly', label: 'Chantilly vegan', price: 60, squareModifierId: 'sq-mo-chantilly' },
+        ],
+      },
+    ],
   },
   {
     id: '3',

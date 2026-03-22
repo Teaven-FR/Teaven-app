@@ -10,10 +10,24 @@ interface BadgeProps {
 export function Badge({ count, size = 15 }: BadgeProps) {
   if (count <= 0) return null;
 
+  const label = count > 99 ? '99+' : String(count);
+  // Pour 2 chiffres ou "99+", élargir le badge
+  const minWidth = label.length > 1 ? size + 6 : size;
+
   return (
-    <View style={[styles.badge, { width: size, height: size, borderRadius: size / 2 }]}>
+    <View
+      style={[
+        styles.badge,
+        {
+          minWidth,
+          height: size,
+          borderRadius: size / 2,
+          paddingHorizontal: label.length > 1 ? 3 : 0,
+        },
+      ]}
+    >
       <Text style={[styles.text, { fontSize: size * 0.6 }]}>
-        {count > 99 ? '99+' : count}
+        {label}
       </Text>
     </View>
   );
@@ -33,6 +47,8 @@ const styles = StyleSheet.create({
   text: {
     color: '#FFFFFF',
     fontFamily: fonts.bold,
-    lineHeight: 14,
+    textAlign: 'center',
+    includeFontPadding: false,
+    lineHeight: undefined,
   },
 });

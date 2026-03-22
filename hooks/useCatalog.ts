@@ -77,12 +77,30 @@ async function queryProducts() {
     .order('name');
 }
 
-/** Fetch catégories depuis Supabase */
-async function queryCategories() {
-  return supabase
-    .from('categories')
-    .select('*')
-    .order('ordinal');
+const CATEGORY_LABELS: Record<string, string> = {
+  'food-teaven': 'Food',
+  'boissons': 'Boissons',
+  'formules': 'Formules',
+  'patisseries': 'Pâtisseries',
+  'nourrir': 'Nourrir',
+  'savourer': 'Savourer',
+  'emporter': 'Emporter',
+};
+
+/** Dérive les catégories depuis les produits actifs */
+function deriveCategoriesFromProducts(products: Product[]): Category[] {
+  const seen = new Set<string>();
+  const cats: Category[] = [{ id: 'all', label: 'Tout' }];
+  for (const p of products) {
+    if (p.category && !seen.has(p.category)) {
+      seen.add(p.category);
+      cats.push({
+        id: p.category,
+        label: CATEGORY_LABELS[p.category] ?? (p.category.charAt(0).toUpperCase() + p.category.slice(1)),
+      });
+    }
+  }
+  return cats;
 }
 
 // Singleton : une seule sync partagée entre toutes les instances du hook
@@ -105,74 +123,53 @@ export function useCatalog() {
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  /** Charge les produits depuis Supabase, puis synchronise Square si nécessaire */
+  /** Charge les produits depuis Supabase, puis synchronise Square en arrière-plan */
   const fetchProducts = useCallback(async (forceSync = false) => {
     setIsLoading(true);
     setSyncError(null);
     try {
-      // 1. Fetch depuis Supabase (données en cache)
-      const [productsRes, categoriesRes] = await Promise.all([
-        queryProducts(),
-        queryCategories(),
-      ]);
-
+      // 1. Fetch depuis Supabase (cache local) — affichage immédiat
+      const productsRes = await queryProducts();
       const hasProducts = !productsRes.error && productsRes.data && productsRes.data.length > 0;
-      const hasCategories = !categoriesRes.error && categoriesRes.data && categoriesRes.data.length > 0;
 
       if (hasProducts) {
-        setRemoteProducts(mapProducts(productsRes.data as Record<string, unknown>[]));
+        const mapped = mapProducts(productsRes.data as Record<string, unknown>[]);
+        setRemoteProducts(mapped);
+        setRemoteCategories(deriveCategoriesFromProducts(mapped));
       }
 
-      if (hasCategories) {
-        setRemoteCategories(
-          categoriesRes.data!.map((c: Record<string, unknown>) => ({
-            id: (c.slug as string) ?? (c.id as string),
-            label: c.label as string,
-          })),
-        );
-      }
+      // 2. Déverrouiller l'UI immédiatement — pas besoin d'attendre Square
+      setIsLoading(false);
 
-      // 2. Sync Square → Supabase (singleton partagé, ou forcé par pull-to-refresh)
-      const isFirstSync = syncPromise === null; // Première sync de la session
-      if (forceSync) {
-        syncPromise = null; // Forcer un nouveau sync
-      }
+      // 3. Sync Square → Supabase en arrière-plan (sans bloquer)
+      const isFirstSync = syncPromise === null;
+      if (forceSync) syncPromise = null;
       const shouldSync = forceSync || isFirstSync || !hasProducts;
+
       if (shouldSync) {
-        const syncResult = await sharedSyncCatalog();
-
-        if (syncResult.error) {
-          const msg = `Sync catalogue Square échouée : ${syncResult.error}`;
-          console.warn(msg);
-          setSyncError(msg);
-        } else {
-          // 3. Re-fetch après sync pour récupérer les données fraîches
-          const [freshProducts, freshCategories] = await Promise.all([
-            queryProducts(),
-            queryCategories(),
-          ]);
-
-          if (!freshProducts.error && freshProducts.data && freshProducts.data.length > 0) {
-            setRemoteProducts(mapProducts(freshProducts.data as Record<string, unknown>[]));
-          }
-
-          if (!freshCategories.error && freshCategories.data && freshCategories.data.length > 0) {
-            setRemoteCategories(
-              freshCategories.data.map((c: Record<string, unknown>) => ({
-                id: (c.slug as string) ?? (c.id as string),
-                label: c.label as string,
-              })),
-            );
-          }
-        }
+        sharedSyncCatalog()
+          .then(async (syncResult) => {
+            if (syncResult.error) {
+              console.warn(`Sync catalogue Square échouée : ${syncResult.error}`);
+              setSyncError(`Sync catalogue Square échouée : ${syncResult.error}`);
+            } else {
+              // Re-fetch silencieux après sync
+              const freshProducts = await queryProducts();
+              if (!freshProducts.error && freshProducts.data && freshProducts.data.length > 0) {
+                const mapped = mapProducts(freshProducts.data as Record<string, unknown>[]);
+                setRemoteProducts(mapped);
+                setRemoteCategories(deriveCategoriesFromProducts(mapped));
+              }
+            }
+          })
+          .catch((err) => {
+            console.warn(`Erreur sync catalogue : ${err instanceof Error ? err.message : String(err)}`);
+          });
       }
     } catch (err) {
-      // En cas d'erreur réseau, on garde les données existantes ou mock
       const msg = `Erreur chargement catalogue : ${err instanceof Error ? err.message : String(err)}`;
       console.warn(msg);
       setSyncError(msg);
-      if (!remoteProducts) setRemoteProducts(null);
-    } finally {
       setIsLoading(false);
     }
   }, []);
@@ -181,8 +178,9 @@ export function useCatalog() {
     fetchProducts();
   }, [fetchProducts]);
 
-  const allProducts = remoteProducts ?? mockProducts;
-  const allCategories = remoteCategories ?? mockCategories;
+  // Ne pas afficher de mock data — si les produits ne sont pas chargés, retourner []
+  const allProducts = remoteProducts ?? [];
+  const allCategories = remoteCategories ?? [{ id: 'all', label: 'Tout' }];
 
   const products: Product[] = useMemo(() => {
     if (selectedCategory === 'all') return allProducts;

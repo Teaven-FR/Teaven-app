@@ -148,9 +148,10 @@ export const useCartStore = create<CartState>()(
       getSubtotal: () =>
         get().items.reduce((sum, item) => sum + getItemUnitPrice(item) * item.quantity, 0),
 
-      getTax: () => Math.round(get().getSubtotal() * 0.055),
+      // Prix Square déjà TTC — pas de TVA supplémentaire
+      getTax: () => 0,
 
-      getTotal: () => get().getSubtotal() + get().getTax(),
+      getTotal: () => get().getSubtotal(),
 
       getItemCount: () => get().items.reduce((sum, item) => sum + item.quantity, 0),
 

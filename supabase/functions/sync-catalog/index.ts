@@ -226,8 +226,11 @@ serve(async (req) => {
           .upsert(variationRows, { onConflict: 'square_variation_id' });
       }
 
-      // 7. Upsert les modificateurs
+      // 7. Sync modificateurs — on supprime + recrée pour éviter les données orphelines
       const modifierListInfo = itemData.modifier_list_info ?? [];
+
+      // Supprimer les anciens groupes de ce produit (les options cascadent via FK)
+      await supabase.from('modifier_groups').delete().eq('product_id', productId);
 
       for (const mlInfo of modifierListInfo) {
         const mlId = mlInfo.modifier_list_id;
@@ -272,9 +275,12 @@ serve(async (req) => {
         }));
 
         if (optionRows.length > 0) {
-          await supabase
+          const { error: optError } = await supabase
             .from('modifier_options')
-            .upsert(optionRows, { onConflict: 'square_modifier_id' });
+            .upsert(optionRows, { onConflict: 'group_id,square_modifier_id' });
+          if (optError) {
+            console.error('Modifier options upsert error:', optError.message);
+          }
         }
       }
 

@@ -1,23 +1,97 @@
-// Écran Modes de paiement — wallet + cartes bancaires
+// Écran Modes de paiement — wallet + cartes bancaires gérées en local
 import { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, CreditCard, Plus, Wallet } from 'lucide-react-native';
+import { ChevronLeft, CreditCard, Plus, Wallet, Trash2 } from 'lucide-react-native';
 import { RechargeModal } from '@/components/ui/RechargeModal';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from '@/contexts/ToastContext';
-import { colors, fonts, spacing, shadows } from '@/constants/theme';
+import { colors, fonts, spacing, shadows, radii } from '@/constants/theme';
+
+interface SavedCard {
+  id: string;
+  brand: string;
+  last4: string;
+  expiry: string;
+}
+
+const INITIAL_CARDS: SavedCard[] = [
+  { id: 'c1', brand: 'Visa', last4: '4242', expiry: '12/27' },
+];
 
 export default function PaiementScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { wallet, rechargeWallet } = useUser();
   const { showToast } = useToast();
+
   const [rechargeVisible, setRechargeVisible] = useState(false);
+  const [cards, setCards] = useState<SavedCard[]>(INITIAL_CARDS);
+  const [addCardVisible, setAddCardVisible] = useState(false);
+
+  // Champs du formulaire carte
+  const [cardName, setCardName] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
 
   const formatPrice = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
+
+  const deleteCard = (id: string) => {
+    Alert.alert(
+      'Supprimer la carte',
+      'Voulez-vous vraiment supprimer cette carte ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => setCards((prev) => prev.filter((c) => c.id !== id)),
+        },
+      ],
+    );
+  };
+
+  const addCard = () => {
+    if (!cardNumber || cardNumber.length < 4 || !cardExpiry) return;
+    const last4 = cardNumber.replace(/\s/g, '').slice(-4);
+    const brand = cardNumber.startsWith('4') ? 'Visa' :
+      cardNumber.startsWith('5') ? 'Mastercard' : 'Carte';
+    setCards((prev) => [
+      ...prev,
+      { id: Date.now().toString(), brand, last4, expiry: cardExpiry },
+    ]);
+    setAddCardVisible(false);
+    setCardName('');
+    setCardNumber('');
+    setCardExpiry('');
+    showToast('Carte ajoutée');
+  };
+
+  /** Formater le numéro de carte par blocs de 4 */
+  const formatCardNumber = (text: string) => {
+    const digits = text.replace(/\D/g, '').slice(0, 16);
+    return digits.replace(/(.{4})/g, '$1 ').trim();
+  };
+
+  /** Formater la date d'expiration MM/YY */
+  const formatExpiry = (text: string) => {
+    const digits = text.replace(/\D/g, '').slice(0, 4);
+    if (digits.length >= 3) return digits.slice(0, 2) + '/' + digits.slice(2);
+    return digits;
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -65,20 +139,31 @@ export default function PaiementScreen() {
 
         {/* Section Cartes bancaires */}
         <Text style={styles.sectionLabel}>CARTES BANCAIRES</Text>
-        <View style={styles.cardItem}>
-          <View style={styles.cardIconWrap}>
-            <CreditCard size={18} color={colors.green} strokeWidth={1.8} />
+        {cards.map((card) => (
+          <View key={card.id} style={styles.cardItem}>
+            <View style={styles.cardIconWrap}>
+              <CreditCard size={18} color={colors.green} strokeWidth={1.8} />
+            </View>
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardName}>{card.brand}</Text>
+              <Text style={styles.cardNumber}>•••• •••• •••• {card.last4}</Text>
+            </View>
+            <Text style={styles.cardExp}>{card.expiry}</Text>
+            <Pressable
+              onPress={() => deleteCard(card.id)}
+              style={styles.deleteCardBtn}
+              hitSlop={8}
+              accessibilityLabel="Supprimer la carte"
+            >
+              <Trash2 size={15} color={colors.error} strokeWidth={1.8} />
+            </Pressable>
           </View>
-          <View style={styles.cardInfo}>
-            <Text style={styles.cardName}>Visa</Text>
-            <Text style={styles.cardNumber}>•••• •••• •••• 4242</Text>
-          </View>
-          <Text style={styles.cardExp}>12/27</Text>
-        </View>
+        ))}
 
         {/* Bouton ajouter une carte */}
         <Pressable
           style={styles.addCardButton}
+          onPress={() => setAddCardVisible(true)}
           accessibilityRole="button"
           accessibilityLabel="Ajouter une carte bancaire"
         >
@@ -101,6 +186,73 @@ export default function PaiementScreen() {
           showToast('Porte-monnaie rechargé !');
         }}
       />
+
+      {/* Modal ajout carte */}
+      <Modal
+        visible={addCardVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setAddCardVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Ajouter une carte</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Nom sur la carte"
+              placeholderTextColor={colors.textMuted}
+              value={cardName}
+              onChangeText={setCardName}
+              autoCapitalize="characters"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Numéro de carte"
+              placeholderTextColor={colors.textMuted}
+              value={cardNumber}
+              onChangeText={(t) => setCardNumber(formatCardNumber(t))}
+              keyboardType="numeric"
+              maxLength={19}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="MM/AA"
+              placeholderTextColor={colors.textMuted}
+              value={cardExpiry}
+              onChangeText={(t) => setCardExpiry(formatExpiry(t))}
+              keyboardType="numeric"
+              maxLength={5}
+            />
+
+            <Text style={styles.securityNote}>
+              Votre carte est sécurisée par Square. Nous ne stockons aucun numéro.
+            </Text>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.cancelBtn}
+                onPress={() => setAddCardVisible(false)}
+              >
+                <Text style={styles.cancelBtnText}>Annuler</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.saveBtn,
+                  (!cardNumber || cardNumber.length < 19 || !cardExpiry) && { opacity: 0.5 },
+                ]}
+                onPress={addCard}
+                disabled={!cardNumber || cardNumber.length < 19 || !cardExpiry}
+              >
+                <Text style={styles.saveBtnText}>Ajouter</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -205,6 +357,7 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: spacing.md,
     ...shadows.subtle,
+    marginBottom: spacing.sm,
   },
   cardIconWrap: {
     width: 40,
@@ -233,6 +386,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
   },
+  deleteCardBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FFF0EF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // Ajouter carte
   addCardButton: {
@@ -243,8 +404,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
+    borderStyle: 'dashed',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   addCardText: {
     fontFamily: fonts.bold,
@@ -259,5 +421,70 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.xxl,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  modalSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: spacing.xxl,
+    paddingBottom: 40,
+    gap: spacing.md,
+  },
+  modalTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 18,
+    color: colors.text,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  input: {
+    height: 48,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#FAFAFA',
+    paddingHorizontal: spacing.lg,
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.text,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  saveBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: colors.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnText: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
 });

@@ -33,10 +33,10 @@ verify_jwt = true
 verify_jwt = false # Appelée par Square (vérification HMAC interne)
 
 [functions.get-loyalty]
-verify_jwt = true
+verify_jwt = false
 
 [functions.manage-wallet]
 verify_jwt = true
 
 [functions.fetch-customer]
-verify_jwt = true
+verify_jwt = false

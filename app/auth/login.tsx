@@ -38,6 +38,7 @@ export default function LoginScreen() {
 
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const digits = cleanPhone(phone);
   const isValid = digits.length >= 9;
@@ -49,11 +50,16 @@ export default function LoginScreen() {
   const handleSendOtp = async () => {
     if (!isValid) return;
     setIsLoading(true);
+    setError(null);
 
     const fullPhone = `+33${digits.startsWith('0') ? digits.slice(1) : digits}`;
-    await signInWithPhone(fullPhone);
+    const result = await signInWithPhone(fullPhone);
 
     setIsLoading(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
     router.push({ pathname: '/auth/otp', params: { phone: fullPhone } });
   };
 
@@ -94,6 +100,11 @@ export default function LoginScreen() {
             accessibilityLabel="Numéro de téléphone"
           />
         </View>
+
+        {/* Erreur */}
+        {error && (
+          <Text style={styles.errorText}>{error}</Text>
+        )}
 
         {/* Bouton Recevoir le code */}
         <Pressable
@@ -231,6 +242,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     textDecorationLine: 'underline',
+  },
+
+  errorText: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.error,
+    textAlign: 'center',
+    marginBottom: spacing.md,
   },
 
   // Mention légale

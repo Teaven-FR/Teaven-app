@@ -11,9 +11,10 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, MapPin, Clock, ChevronRight } from 'lucide-react-native';
+import { Check, MapPin, Clock, ChevronRight, Star } from 'lucide-react-native';
 import { useOrderStore } from '@/stores/orderStore';
 import { useToast } from '@/contexts/ToastContext';
+import { useUser } from '@/hooks/useUser';
 import { colors, fonts, spacing, shadows } from '@/constants/theme';
 import type { OrderStatus } from '@/lib/types';
 
@@ -61,6 +62,10 @@ export default function OrderTrackingScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const [isReady, setIsReady] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+
+  const { loyalty, updateProfile } = useUser();
 
   // Animation d'entrée
   useEffect(() => {
@@ -258,6 +263,50 @@ export default function OrderTrackingScreen() {
             <Text style={styles.secondaryButtonText}>Commander autre chose</Text>
             <ChevronRight size={16} color={colors.green} strokeWidth={2} />
           </Pressable>
+
+          {/* ──── Avis + Points ──── */}
+          {isReady && !reviewSubmitted && (
+            <View style={styles.reviewCard}>
+              <Text style={styles.reviewTitle}>Donnez votre avis</Text>
+              <Text style={styles.reviewSub}>+10 pts offerts pour votre retour</Text>
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Pressable
+                    key={star}
+                    onPress={() => setRating(star)}
+                    hitSlop={8}
+                    accessibilityLabel={`${star} étoile${star > 1 ? 's' : ''}`}
+                  >
+                    <Star
+                      size={28}
+                      color={colors.gold}
+                      fill={star <= rating ? colors.gold : 'transparent'}
+                      strokeWidth={1.5}
+                    />
+                  </Pressable>
+                ))}
+              </View>
+              {rating > 0 && (
+                <Pressable
+                  style={styles.reviewSubmitBtn}
+                  onPress={() => {
+                    setReviewSubmitted(true);
+                    updateProfile({ loyaltyPoints: loyalty.points + 10 });
+                    showToast('+10 pts crédités, merci !');
+                  }}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.reviewSubmitText}>Envoyer mon avis</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+          {reviewSubmitted && (
+            <View style={styles.reviewThanks}>
+              <Check size={16} color={colors.green} strokeWidth={2} />
+              <Text style={styles.reviewThanksText}>Merci pour votre avis ! +10 pts crédités.</Text>
+            </View>
+          )}
         </Animated.View>
       </View>
     </View>
@@ -453,6 +502,61 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontFamily: fonts.bold,
     fontSize: 14,
+    color: colors.green,
+  },
+
+  // Avis
+  reviewCard: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.xxl,
+    ...shadows.card,
+  },
+  reviewTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  reviewSub: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.green,
+    marginTop: -spacing.sm,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  reviewSubmitBtn: {
+    height: 40,
+    paddingHorizontal: spacing.xxl,
+    backgroundColor: colors.green,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewSubmitText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  reviewThanks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xxl,
+    backgroundColor: colors.greenLight,
+    borderRadius: 10,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  reviewThanksText: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
     color: colors.green,
   },
 });

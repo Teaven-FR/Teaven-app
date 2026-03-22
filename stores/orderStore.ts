@@ -78,10 +78,10 @@ export const useOrderStore = create<OrderState>()(
         });
 
         const subtotal = orderItems.reduce((sum, i) => sum + i.totalPrice, 0);
-        const tax = Math.round(subtotal * 0.055);
+        const tax = 0; // Prix Square déjà TTC
         const loyaltyPoints = authUser?.loyaltyPoints ?? 0;
         const loyaltyDiscount = useCartStore.getState().getLoyaltyDiscount(usePoints, loyaltyPoints);
-        const total = subtotal + tax - loyaltyDiscount;
+        const total = subtotal - loyaltyDiscount;
 
         const order: Order = {
           id: generateOrderId(),

@@ -14,7 +14,7 @@ interface ProductCardProps {
 
 export function ProductCard({ product, onPress }: ProductCardProps) {
   const addItem = useCartStore((s) => s.addItem);
-  const buttonWidth = useRef(new Animated.Value(28)).current;
+  const buttonWidth = useRef(new Animated.Value(30)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
 
   const formatPrice = (cents: number) =>
@@ -25,7 +25,7 @@ export function ProductCard({ product, onPress }: ProductCardProps) {
 
     // Animation : étirer le bouton
     Animated.spring(buttonWidth, {
-      toValue: 76,
+      toValue: 80,
       damping: 18,
       stiffness: 200,
       mass: 0.8,
@@ -42,7 +42,7 @@ export function ProductCard({ product, onPress }: ProductCardProps) {
     // Refermer après 1.4s
     setTimeout(() => {
       Animated.spring(buttonWidth, {
-        toValue: 28,
+        toValue: 30,
         damping: 18,
         stiffness: 200,
         mass: 0.8,
@@ -138,16 +138,18 @@ const styles = StyleSheet.create({
     ...typography.price,
   },
   addButton: {
-    height: 28,
+    height: 30,
     backgroundColor: colors.green,
-    borderRadius: 14,
-    flexDirection: 'row',
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    gap: 4,
   },
   addedText: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
     color: '#FFFFFF',
     fontFamily: fonts.bold,
     fontSize: 9,

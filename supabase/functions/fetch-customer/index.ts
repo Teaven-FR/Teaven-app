@@ -60,18 +60,11 @@ serve(async (req) => {
   }
 
   try {
-    // Authentification requise
-    const authUser = await authenticateUser(req);
-    if (!authUser) {
-      return new Response(
-        JSON.stringify({ error: 'Authentification requise' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Récupérer l'utilisateur authentifié (optionnel — utilisé pour update profile)
+    const authUser = await authenticateUser(req);
 
     let body: Record<string, unknown>;
     try {
@@ -92,18 +85,29 @@ serve(async (req) => {
       );
     }
 
-    // 1. Chercher le client dans Square par téléphone
+    // 1. Chercher le client dans Square par téléphone (plusieurs formats)
     let squareCustomer = null;
     try {
-      const searchResult = await squareFetch('/v2/customers/search', 'POST', {
-        query: {
-          filter: {
-            phone_number: { exact: phone as string },
-          },
-        },
-      });
-      if (searchResult.customers && searchResult.customers.length > 0) {
-        squareCustomer = searchResult.customers[0];
+      const phoneStr = phone as string;
+      // Variantes du numéro à tester (Supabase stocke sans + : "33768...")
+      const phoneVariants: string[] = [phoneStr];
+      if (phoneStr.startsWith('+33')) {
+        phoneVariants.push('0' + phoneStr.slice(3)); // +33768... → 0768...
+      } else if (phoneStr.startsWith('33') && phoneStr.length >= 11) {
+        phoneVariants.push('+' + phoneStr);           // 33768... → +33768...
+        phoneVariants.push('0' + phoneStr.slice(2));  // 33768... → 0768...
+      } else if (phoneStr.startsWith('0')) {
+        phoneVariants.push('+33' + phoneStr.slice(1)); // 0768... → +33768...
+      }
+
+      for (const variant of phoneVariants) {
+        const searchResult = await squareFetch('/v2/customers/search', 'POST', {
+          query: { filter: { phone_number: { exact: variant } } },
+        });
+        if (searchResult.customers && searchResult.customers.length > 0) {
+          squareCustomer = searchResult.customers[0];
+          break;
+        }
       }
     } catch (err) {
       console.error('Erreur recherche client Square:', err);
@@ -124,20 +128,23 @@ serve(async (req) => {
       }
     }
 
-    // 3. Mettre à jour le profil Supabase avec le Square Customer ID
-    // Only update the authenticated user's own profile
-    if (squareCustomer) {
+    // 3. Upsert le profil Supabase avec le Square Customer ID
+    if (squareCustomer && authUser) {
+      const profileData: Record<string, unknown> = {
+        id: authUser.id,
+        square_customer_id: squareCustomer.id,
+        updated_at: new Date().toISOString(),
+      };
+      // N'écraser le prénom que s'il existe dans Square
+      if (squareCustomer.given_name) {
+        profileData.full_name = `${squareCustomer.given_name} ${squareCustomer.family_name ?? ''}`.trim();
+      }
+      if (squareCustomer.email_address) {
+        profileData.email = squareCustomer.email_address;
+      }
       await supabase
         .from('profiles')
-        .update({
-          square_customer_id: squareCustomer.id,
-          full_name: squareCustomer.given_name
-            ? `${squareCustomer.given_name} ${squareCustomer.family_name ?? ''}`.trim()
-            : undefined,
-          email: squareCustomer.email_address ?? undefined,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', authUser.id);
+        .upsert(profileData, { onConflict: 'id' });
     }
 
     // 4. Retourner les données client

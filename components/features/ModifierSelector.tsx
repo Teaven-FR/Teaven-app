@@ -1,6 +1,7 @@
-// Sélecteur de modificateurs — taille et suppléments
+// Sélecteur de modificateurs — radio (single) et checkbox (multiple)
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { colors, fonts, spacing } from '@/constants/theme';
+import { Check } from 'lucide-react-native';
+import { colors, fonts, spacing, radii } from '@/constants/theme';
 import type { ModifierGroup } from '@/lib/types';
 
 // Re-export pour compatibilité
@@ -14,25 +15,66 @@ interface ModifierSelectorProps {
 
 export function ModifierSelector({ group, selected, onToggle }: ModifierSelectorProps) {
   const formatSupplement = (cents: number) =>
-    cents > 0 ? ` +${(cents / 100).toFixed(2).replace('.', ',')}€` : '';
+    cents > 0 ? `+${(cents / 100).toFixed(2).replace('.', ',')} €` : null;
+
+  // Un groupe single est considéré obligatoire
+  const isRequired = group.type === 'single';
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{group.label}</Text>
-      <View style={styles.chips}>
+      {/* En-tête du groupe */}
+      <View style={styles.header}>
+        <Text style={styles.title}>{group.label}</Text>
+        <View style={[styles.badge, isRequired ? styles.badgeRequired : styles.badgeOptional]}>
+          <Text style={[styles.badgeText, isRequired ? styles.badgeTextRequired : styles.badgeTextOptional]}>
+            {isRequired ? 'Obligatoire' : 'Optionnel'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Options */}
+      <View style={styles.options}>
         {group.options.map((option) => {
           const isActive = selected.includes(option.id);
+          const supplement = formatSupplement(option.price);
+
           return (
             <Pressable
               key={option.id}
               onPress={() => onToggle(option.id)}
-              style={[styles.chip, isActive && styles.chipActive]}
+              style={({ pressed }) => [
+                styles.optionRow,
+                isActive && styles.optionRowActive,
+                pressed && styles.optionRowPressed,
+              ]}
               accessibilityLabel={option.label}
-              accessibilityState={{ selected: isActive }}
+              accessibilityRole={group.type === 'single' ? 'radio' : 'checkbox'}
+              accessibilityState={{ checked: isActive }}
             >
-              <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-                {option.label}{formatSupplement(option.price)}
+              {/* Indicateur radio / checkbox */}
+              <View style={[
+                group.type === 'single' ? styles.radio : styles.checkbox,
+                isActive && (group.type === 'single' ? styles.radioActive : styles.checkboxActive),
+              ]}>
+                {group.type === 'single' && isActive && (
+                  <View style={styles.radioDot} />
+                )}
+                {group.type === 'multiple' && isActive && (
+                  <Check size={11} color="#FFFFFF" strokeWidth={3} />
+                )}
+              </View>
+
+              {/* Label de l'option */}
+              <Text style={[styles.optionLabel, isActive && styles.optionLabelActive]}>
+                {option.label}
               </Text>
+
+              {/* Prix supplémentaire */}
+              {supplement && (
+                <Text style={[styles.optionPrice, isActive && styles.optionPriceActive]}>
+                  {supplement}
+                </Text>
+              )}
             </Pressable>
           );
         })}
@@ -43,37 +85,127 @@ export function ModifierSelector({ group, selected, onToggle }: ModifierSelector
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  // En-tête
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
   },
   title: {
     fontFamily: fonts.bold,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.text,
-    marginBottom: spacing.md,
+    flex: 1,
+    marginRight: spacing.sm,
   },
-  chips: {
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.badge,
+  },
+  badgeRequired: {
+    backgroundColor: '#FDF0EE',
+  },
+  badgeOptional: {
+    backgroundColor: colors.greenLight,
+  },
+  badgeText: {
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    letterSpacing: 0.3,
+  },
+  badgeTextRequired: {
+    color: '#C0524A',
+  },
+  badgeTextOptional: {
+    color: colors.green,
+  },
+
+  // Liste des options
+  options: {
+    gap: spacing.xs,
+  },
+  optionRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    height: 34,
-    paddingHorizontal: 14,
-    borderRadius: 17,
-    backgroundColor: '#F5F5F0',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: '#F9F9F6',
+    borderWidth: 1,
+    borderColor: 'transparent',
+    gap: spacing.md,
   },
-  chipActive: {
-    backgroundColor: colors.green,
+  optionRowActive: {
+    backgroundColor: '#EEF4F0',
+    borderColor: colors.green,
   },
-  chipText: {
+  optionRowPressed: {
+    opacity: 0.85,
+  },
+  optionLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.text,
+    flex: 1,
+  },
+  optionLabelActive: {
+    fontFamily: fonts.bold,
+    color: colors.greenDark,
+  },
+  optionPrice: {
     fontFamily: fonts.regular,
     fontSize: 13,
     color: colors.textSecondary,
   },
-  chipTextActive: {
+  optionPriceActive: {
     fontFamily: fonts.bold,
-    color: '#FFFFFF',
+    color: colors.green,
+  },
+
+  // Radio
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioActive: {
+    borderColor: colors.green,
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.green,
+  },
+
+  // Checkbox
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: radii.badge,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxActive: {
+    borderColor: colors.green,
+    backgroundColor: colors.green,
   },
 });

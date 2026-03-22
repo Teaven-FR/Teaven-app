@@ -28,10 +28,9 @@ interface AuthState {
 }
 
 /** Récupère les données Square (client + fidélité) et enrichit le user */
-async function enrichWithSquareData(user: User): Promise<User> {
+async function enrichWithSquareData(user: User, accessToken?: string): Promise<User> {
   try {
-    // 1. Récupérer ou créer le client Square
-    const customerResult = await fetchCustomer(user.phone);
+    const customerResult = await fetchCustomer(user.phone, accessToken);
     const customer = customerResult.data?.customer;
 
     if (customer) {
@@ -42,8 +41,7 @@ async function enrichWithSquareData(user: User): Promise<User> {
         email: user.email || customer.email || undefined,
       };
 
-      // 2. Récupérer les données de fidélité
-      const loyaltyResult = await fetchLoyalty(customer.squareCustomerId);
+      const loyaltyResult = await fetchLoyalty(customer.squareCustomerId, accessToken);
       if (loyaltyResult.data) {
         user = {
           ...user,
@@ -89,15 +87,14 @@ export const useAuthStore = create<AuthState>()(
           const { error } = await supabase.auth.signInWithOtp({ phone });
           set({ isLoading: false });
           if (error) {
-            // En développement, on continue quand même (OTP mock "000000")
-            console.log('OTP send error (dev mode will accept 000000):', error.message);
-            return { error: null };
+            console.error('OTP send error:', error.message);
+            return { error: error.message };
           }
           return { error: null };
         } catch (err) {
           set({ isLoading: false });
-          console.log('OTP send failed (dev mode will accept 000000):', err);
-          return { error: null };
+          console.error('OTP send failed:', err);
+          return { error: String(err) };
         }
       },
 
@@ -116,38 +113,68 @@ export const useAuthStore = create<AuthState>()(
             return true;
           }
 
-          const { error } = await supabase.auth.verifyOtp({
+          const { data, error } = await supabase.auth.verifyOtp({
             phone,
             token: otp,
             type: 'sms',
           });
 
-          if (error) {
+          if (error || !data.session) {
             set({ isLoading: false });
             return false;
           }
 
-          // Récupérer les infos utilisateur depuis Supabase
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            const baseUser: User = {
-              id: session.user.id,
-              fullName: session.user.user_metadata?.full_name ?? '',
-              phone: session.user.phone ?? phone,
-              email: session.user.email,
-              dietaryPreferences: [],
-              loyaltyPoints: 0,
-              loyaltyLevel: 'Bronze',
-              walletBalance: 0,
-              createdAt: session.user.created_at,
-              updatedAt: new Date().toISOString(),
-            };
-            set({ user: baseUser, isAuthenticated: true, isLoading: false, isGuest: false });
-            // Enrichir avec les données Square
-            enrichWithSquareData(baseUser).then((enriched) => {
-              set({ user: enriched });
-            });
-          }
+          const session = data.session;
+
+          // Lire le profil Supabase immédiatement après login
+          let profileFullName = '';
+          let profileSquareCustomerId: string | undefined;
+          let profileLoyaltyPoints: number | undefined;
+          let profileLoyaltyLevel: string | undefined;
+          let profileWalletBalance: number | undefined;
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name, square_customer_id, loyalty_points, loyalty_level, wallet_balance')
+              .eq('id', session.user.id)
+              .single();
+            if (profile) {
+              profileFullName = profile.full_name || '';
+              profileSquareCustomerId = profile.square_customer_id || undefined;
+              profileLoyaltyPoints = profile.loyalty_points ?? undefined;
+              profileLoyaltyLevel = profile.loyalty_level ?? undefined;
+              profileWalletBalance = profile.wallet_balance ?? undefined;
+            }
+          } catch { /* profil peut ne pas exister encore */ }
+
+          const baseUser: User = {
+            id: session.user.id,
+            fullName: profileFullName || session.user.user_metadata?.full_name || '',
+            phone: session.user.phone ?? phone,
+            email: session.user.email,
+            dietaryPreferences: [],
+            loyaltyPoints: profileLoyaltyPoints ?? 0,
+            loyaltyLevel: (profileLoyaltyLevel ?? 'Bronze') as LoyaltyLevel,
+            walletBalance: profileWalletBalance ?? 0,
+            squareCustomerId: profileSquareCustomerId,
+            createdAt: session.user.created_at,
+            updatedAt: new Date().toISOString(),
+          };
+          set({ user: baseUser, isAuthenticated: true, isLoading: false, isGuest: false });
+          enrichWithSquareData(baseUser, session.access_token).then(async (enriched) => {
+            set({ user: enriched });
+            // Persister dans Supabase les données récupérées depuis Square
+            try {
+              const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+              if (enriched.fullName) updates.full_name = enriched.fullName;
+              if (enriched.squareCustomerId) updates.square_customer_id = enriched.squareCustomerId;
+              if (enriched.loyaltyPoints !== undefined) updates.loyalty_points = enriched.loyaltyPoints;
+              if (enriched.loyaltyLevel) updates.loyalty_level = enriched.loyaltyLevel;
+              await supabase
+                .from('profiles')
+                .upsert({ id: session.user.id, ...updates }, { onConflict: 'id' });
+            } catch { /* non bloquant */ }
+          });
           return true;
         } catch (err) {
           console.log('verifyOtp error:', err);
@@ -184,25 +211,58 @@ export const useAuthStore = create<AuthState>()(
           const persistedUser = get().user;
 
           if (session?.user) {
-            // Fusionner avec les données persistées (ne pas écraser loyaltyPoints etc.)
+            // Lire le profil Supabase directement (JWT valide → RLS autorisée)
+            let profileFullName = '';
+            let profileSquareCustomerId: string | undefined;
+            let profileLoyaltyPoints: number | undefined;
+            let profileLoyaltyLevel: string | undefined;
+            let profileWalletBalance: number | undefined;
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('full_name, square_customer_id, loyalty_points, loyalty_level, wallet_balance')
+                .eq('id', session.user.id)
+                .single();
+              if (profile) {
+                profileFullName = profile.full_name || '';
+                profileSquareCustomerId = profile.square_customer_id || undefined;
+                profileLoyaltyPoints = profile.loyalty_points ?? undefined;
+                profileLoyaltyLevel = profile.loyalty_level ?? undefined;
+                profileWalletBalance = profile.wallet_balance ?? undefined;
+              }
+            } catch { /* ignore si la table n'a pas encore de ligne */ }
+
+            // Fusionner : profil Supabase > persisté > metadata Supabase
             const baseUser: User = {
               id: session.user.id,
-              fullName: persistedUser?.fullName || session.user.user_metadata?.full_name || '',
+              fullName: profileFullName || persistedUser?.fullName || session.user.user_metadata?.full_name || '',
               phone: session.user.phone ?? persistedUser?.phone ?? '',
               email: session.user.email || persistedUser?.email,
               dietaryPreferences: persistedUser?.dietaryPreferences ?? [],
-              loyaltyPoints: persistedUser?.loyaltyPoints ?? 0,
-              loyaltyLevel: persistedUser?.loyaltyLevel ?? 'Bronze',
-              walletBalance: persistedUser?.walletBalance ?? 0,
-              squareCustomerId: persistedUser?.squareCustomerId,
+              loyaltyPoints: profileLoyaltyPoints ?? persistedUser?.loyaltyPoints ?? 0,
+              loyaltyLevel: (profileLoyaltyLevel ?? persistedUser?.loyaltyLevel ?? 'Bronze') as LoyaltyLevel,
+              walletBalance: profileWalletBalance ?? persistedUser?.walletBalance ?? 0,
+              squareCustomerId: profileSquareCustomerId || persistedUser?.squareCustomerId,
               squareGiftCardId: persistedUser?.squareGiftCardId,
               createdAt: session.user.created_at,
               updatedAt: new Date().toISOString(),
             };
             set({ user: baseUser, isAuthenticated: true, isLoading: false });
             // Rafraîchir les données Square en arrière-plan
-            enrichWithSquareData(baseUser).then((enriched) => {
+            enrichWithSquareData(baseUser, session.access_token).then(async (enriched) => {
               set({ user: enriched });
+              // Persister dans Supabase les données récupérées depuis Square
+              try {
+                const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+                if (enriched.fullName) updates.full_name = enriched.fullName;
+                if (enriched.squareCustomerId) updates.square_customer_id = enriched.squareCustomerId;
+                if (enriched.loyaltyPoints !== undefined) updates.loyalty_points = enriched.loyaltyPoints;
+                if (enriched.loyaltyLevel) updates.loyalty_level = enriched.loyaltyLevel;
+                if (enriched.walletBalance !== undefined) updates.wallet_balance = enriched.walletBalance;
+                await supabase
+                  .from('profiles')
+                  .upsert({ id: session.user.id, ...updates }, { onConflict: 'id' });
+              } catch { /* non bloquant */ }
             });
           } else if (persistedUser) {
             // Pas de session Supabase mais un user persisté → rafraîchir Square

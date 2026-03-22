@@ -140,7 +140,7 @@ export function useOrders() {
         // Convertir CartItem[] en OrderItem[]
         const orderItems = cartItemsToOrderItems(items);
         const subtotal = orderItems.reduce((sum, i) => sum + i.totalPrice, 0);
-        const tax = Math.round(subtotal * 0.055);
+        const tax = 0; // Prix Square déjà TTC
 
         const newOrder: Order = {
           id: orderData.orderId,

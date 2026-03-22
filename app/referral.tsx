@@ -21,9 +21,15 @@ import {
   UserPlus,
 } from 'lucide-react-native';
 import { useToast } from '@/contexts/ToastContext';
+import { useUser } from '@/hooks/useUser';
 import { colors, fonts, spacing, radii, shadows } from '@/constants/theme';
 
-const REFERRAL_CODE = 'JOHAN-T3AV';
+/** Génère un code de parrainage à partir du numéro de téléphone */
+function generateReferralCode(phone: string, name: string): string {
+  const suffix = phone.replace(/\D/g, '').slice(-4);
+  const prefix = name ? name.slice(0, 4).toUpperCase().replace(/[^A-Z]/g, 'T') : 'TAVT';
+  return `${prefix}-${suffix}`;
+}
 
 /** Étapes du programme de parrainage */
 const STEPS = [
@@ -48,6 +54,9 @@ export default function ReferralScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showToast } = useToast();
+  const { user } = useUser();
+
+  const REFERRAL_CODE = generateReferralCode(user.phone, user.fullName ?? '');
 
   /** Copier le code — partage via Share API (pas de clipboard sans expo-clipboard) */
   const handleCopy = async () => {

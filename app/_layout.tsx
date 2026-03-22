@@ -142,6 +142,14 @@ function RootNavigator() {
         name="settings"
         options={{ animation: 'slide_from_right' }}
       />
+      <Stack.Screen
+        name="fidelite"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="faq"
+        options={{ animation: 'slide_from_right' }}
+      />
     </Stack>
   );
 }

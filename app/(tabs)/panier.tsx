@@ -31,6 +31,13 @@ import { useOrderStore } from '@/stores/orderStore';
 import { useCartStore } from '@/stores/cartStore';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 import type { TimeSlot as PickerTimeSlot } from '@/components/ui/TimeSlotPicker';
+import type { Reward } from '@/lib/types';
+
+const FALLBACK_REWARDS: Reward[] = [
+  { id: 'r1', name: 'Boisson offerte', description: 'Thé, café ou infusion', pointsCost: 200, icon: 'coffee' },
+  { id: 'r2', name: 'Dessert offert', description: 'Pâtisserie maison', pointsCost: 500, icon: 'gift' },
+  { id: 'r3', name: '-20% sur la carte', description: 'Toute la commande', pointsCost: 750, icon: 'percent' },
+];
 
 // Convertir les créneaux mock vers le format attendu par TimeSlotPicker
 const pickerSlots: PickerTimeSlot[] = mockTimeSlots.map((slot) => ({
@@ -58,17 +65,25 @@ export default function PanierScreen() {
     getItemKey,
   } = useCart();
 
-  const { loyalty } = useUser();
+  const { loyalty, rewards: squareRewards } = useUser();
   const [useLoyalty, setUseLoyalty] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
+  const [appliedReward, setAppliedReward] = useState<Reward | null>(null);
+
+  const availableRewards = (squareRewards.length > 0 ? squareRewards : FALLBACK_REWARDS)
+    .filter((r) => loyalty.points >= r.pointsCost);
+
+  const rewardDiscount = appliedReward
+    ? (appliedReward.icon === 'percent' ? Math.round(subtotal * 0.2) : 0)
+    : 0;
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
   const [isOrdering, setIsOrdering] = useState(false);
   const createOrder = useOrderStore((s) => s.createOrder);
   const cartItems = useCartStore((s) => s.items);
 
-  // Calculs récap
+  // Calculs récap — prix Square TTC, pas de TVA séparée
   const loyaltyDiscount = getLoyaltyDiscount(useLoyalty, loyalty.points);
-  const total = subtotal + tax - loyaltyDiscount;
+  const total = subtotal - loyaltyDiscount - rewardDiscount;
 
   const paymentOptions: { id: PaymentMethod; label: string }[] = [
     { id: 'card', label: 'Carte bancaire' },
@@ -205,10 +220,6 @@ export default function PanierScreen() {
             <Text style={styles.recapLabel}>Sous-total</Text>
             <Text style={styles.recapValue}>{formatPrice(subtotal)}</Text>
           </View>
-          <View style={styles.recapRow}>
-            <Text style={styles.recapLabel}>TVA (5,5%)</Text>
-            <Text style={styles.recapValue}>{formatPrice(tax)}</Text>
-          </View>
           {useLoyalty && (
             <View style={styles.recapRow}>
               <Text style={[styles.recapLabel, styles.recapDiscount]}>
@@ -216,6 +227,16 @@ export default function PanierScreen() {
               </Text>
               <Text style={[styles.recapValue, styles.recapDiscount]}>
                 -{formatPrice(loyaltyDiscount)}
+              </Text>
+            </View>
+          )}
+          {appliedReward && rewardDiscount > 0 && (
+            <View style={styles.recapRow}>
+              <Text style={[styles.recapLabel, styles.recapDiscount]}>
+                {appliedReward.name}
+              </Text>
+              <Text style={[styles.recapValue, styles.recapDiscount]}>
+                -{formatPrice(rewardDiscount)}
               </Text>
             </View>
           )}
@@ -235,6 +256,39 @@ export default function PanierScreen() {
             onSelect={setSelectedTimeSlot}
           />
         </View>
+
+        {/* ──── RÉCOMPENSES ──── */}
+        {availableRewards.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>RÉCOMPENSES DISPONIBLES</Text>
+            <View style={styles.section}>
+              {availableRewards.map((reward) => {
+                const isApplied = appliedReward?.id === reward.id;
+                return (
+                  <Pressable
+                    key={reward.id}
+                    onPress={() => setAppliedReward(isApplied ? null : reward)}
+                    style={[styles.rewardCard, isApplied && styles.rewardCardApplied]}
+                    accessibilityRole="button"
+                    accessibilityLabel={reward.name}
+                  >
+                    <View style={styles.rewardInfo}>
+                      <Text style={[styles.rewardName, isApplied && styles.rewardNameApplied]}>
+                        {reward.name}
+                      </Text>
+                      <Text style={styles.rewardDesc}>{reward.description}</Text>
+                    </View>
+                    <View style={[styles.rewardPtsBadge, isApplied && styles.rewardPtsBadgeApplied]}>
+                      <Text style={[styles.rewardPtsText, isApplied && styles.rewardPtsTextApplied]}>
+                        {isApplied ? 'Appliqué ✓' : `${reward.pointsCost} pts`}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         {/* ──── PAIEMENT ──── */}
         <Text style={styles.sectionLabel}>PAIEMENT</Text>
@@ -527,6 +581,57 @@ const styles = StyleSheet.create({
     fontFamily: fonts.monoSemiBold,
     fontSize: 18,
     color: colors.green,
+  },
+
+  // Récompenses
+  rewardCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  rewardCardApplied: {
+    borderColor: colors.green,
+    backgroundColor: '#F8FAF8',
+  },
+  rewardInfo: {
+    flex: 1,
+  },
+  rewardName: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  rewardNameApplied: {
+    color: colors.green,
+  },
+  rewardDesc: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 1,
+  },
+  rewardPtsBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F0',
+  },
+  rewardPtsBadgeApplied: {
+    backgroundColor: colors.greenLight,
+  },
+  rewardPtsText: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  rewardPtsTextApplied: {
+    color: colors.green,
+    fontFamily: fonts.monoSemiBold,
   },
 
   // Paiement

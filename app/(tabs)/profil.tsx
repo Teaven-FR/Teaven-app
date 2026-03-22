@@ -32,7 +32,9 @@ import {
   Flame,
   Trophy,
   Share2,
+  Instagram,
 } from 'lucide-react-native';
+import { Linking } from 'react-native';
 import { RechargeModal } from '@/components/ui/RechargeModal';
 import { useToast } from '@/contexts/ToastContext';
 import { useCartStore } from '@/stores/cartStore';
@@ -58,6 +60,8 @@ const SETTINGS_LINKS = [
   { id: 'settings', label: 'Paramètres', icon: Settings, route: '/settings' },
   { id: 'cgu', label: 'Mentions légales', icon: FileText, route: '/legal' },
 ] as const;
+
+const INSTAGRAM_URL = 'https://www.instagram.com/teaven.fr';
 
 export default function ProfilScreen() {
   const insets = useSafeAreaInsets();
@@ -359,6 +363,18 @@ export default function ProfilScreen() {
             );
           })}
         </View>
+
+        {/* ──── Instagram ──── */}
+        <Pressable
+          style={styles.instagramBtn}
+          onPress={() => Linking.openURL(INSTAGRAM_URL)}
+          accessibilityRole="button"
+          accessibilityLabel="Suivre Teaven sur Instagram"
+        >
+          <Instagram size={18} color="#E1306C" strokeWidth={1.6} />
+          <Text style={styles.instagramText}>Suivez-nous sur Instagram</Text>
+          <Text style={styles.instagramHandle}>@teaven.fr</Text>
+        </Pressable>
 
         {/* ──── Aide & Déconnexion ──── */}
         <View style={[styles.menu, { marginTop: spacing.md }]}>
@@ -785,5 +801,31 @@ const styles = StyleSheet.create({
     height: 0.5,
     backgroundColor: colors.border,
     marginLeft: 50,
+  },
+
+  // Instagram
+  instagramBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F0D6E0',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+  },
+  instagramText: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    color: colors.text,
+  },
+  instagramHandle: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: '#E1306C',
   },
 });
