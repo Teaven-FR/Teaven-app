@@ -112,8 +112,8 @@ export const useOrderStore = create<OrderState>()(
             throw new Error(`Produit "${invalidItems[0].name}" non synchronisé avec Square. Veuillez réessayer.`);
           }
 
-          console.log('[ORDER] Creating order with', squareItems.length, 'items');
-          console.log('[ORDER] catalogObjectIds:', squareItems.map((i) => `${i.name}: ${i.catalogObjectId}`));
+          console.warn('[ORDER] Creating order with', squareItems.length, 'items');
+          console.warn('[ORDER] catalogObjectIds:', squareItems.map((i) => `${i.name}: ${i.catalogObjectId}`));
 
           // 1. Créer la commande sur Square (callEdgeFunction gère l'auth automatiquement)
           const createResult = await callEdgeFunction<{
@@ -125,7 +125,7 @@ export const useOrderStore = create<OrderState>()(
             error?: string;
           }>('create-order', { items: squareItems });
 
-          console.log('[ORDER] create-order result:', JSON.stringify(createResult).slice(0, 500));
+          console.warn('[ORDER] create-order result:', JSON.stringify(createResult).slice(0, 500));
 
           if (createResult.error || !createResult.data?.success) {
             throw new Error(createResult.error ?? createResult.data?.error ?? 'create-order failed');
@@ -134,7 +134,7 @@ export const useOrderStore = create<OrderState>()(
           const squareOrderId = createResult.data.orderId;
           const squareTotal = createResult.data.totalAmount ?? subtotal;
 
-          console.log('[ORDER] Paying order', squareOrderId, 'amount:', squareTotal);
+          console.warn('[ORDER] Paying order', squareOrderId, 'amount:', squareTotal);
 
           // 2. Payer la commande sur Square
           const payResult = await callEdgeFunction<{
@@ -148,7 +148,7 @@ export const useOrderStore = create<OrderState>()(
             giftCardId: giftCardId ?? undefined,
           });
 
-          console.log('[ORDER] process-payment result:', JSON.stringify(payResult).slice(0, 500));
+          console.warn('[ORDER] process-payment result:', JSON.stringify(payResult).slice(0, 500));
 
           if (payResult.error || !payResult.data?.success) {
             throw new Error(payResult.error ?? payResult.data?.error ?? 'process-payment failed');

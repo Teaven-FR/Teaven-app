@@ -57,17 +57,28 @@ export default function CheckoutScreen() {
 
   const handleWebViewMessage = async (event: WebViewMessageEvent) => {
     try {
-      const data = JSON.parse(event.nativeEvent.data);
+      const raw = event.nativeEvent.data;
+      console.warn('[CHECKOUT] WebView message:', raw);
+      const data = JSON.parse(raw);
       if (data.type === 'error') { setError(data.message); return; }
       if (data.type !== 'nonce' || !data.nonce) return;
 
+      console.warn('[CHECKOUT] Nonce reçu, création commande...');
       setIsProcessing(true);
       setError(null);
-      await createOrder(cartItems, 'card', false, data.nonce);
-      router.replace('/order-confirmation');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Erreur lors du paiement');
-      setIsProcessing(false);
+
+      try {
+        await createOrder(cartItems, 'card', false, data.nonce);
+        console.warn('[CHECKOUT] Commande créée, redirection...');
+        router.replace('/order-confirmation');
+      } catch (orderErr: unknown) {
+        const msg = orderErr instanceof Error ? orderErr.message : 'Erreur lors du paiement';
+        console.warn('[CHECKOUT] Erreur commande:', msg);
+        setError(msg);
+        setIsProcessing(false);
+      }
+    } catch {
+      // Message non-JSON du WebView — ignorer
     }
   };
 
