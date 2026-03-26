@@ -11,8 +11,10 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, MapPin, Clock, ChevronRight, Star } from 'lucide-react-native';
+import { Check, MapPin, Clock, ChevronRight, Star, RefreshCw } from 'lucide-react-native';
 import { useOrderStore } from '@/stores/orderStore';
+import { useCartStore } from '@/stores/cartStore';
+import { useCatalog } from '@/hooks/useCatalog';
 import { useToast } from '@/contexts/ToastContext';
 import { useUser } from '@/hooks/useUser';
 import { useLocation } from '@/hooks/useLocation';
@@ -254,6 +256,36 @@ export default function OrderTrackingScreen() {
             accessibilityLabel="Retour à l'accueil"
           >
             <Text style={styles.primaryButtonText}>Retour à l'accueil</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              // Commander à nouveau : ajouter les articles au panier
+              if (order) {
+                const addItem = useCartStore.getState().addItem;
+                const { allProducts } = useCatalog();
+                let added = 0;
+                for (const item of order.items) {
+                  const product = allProducts.find((p) => p.id === item.productId || p.name === item.name);
+                  if (product) {
+                    addItem(product, item.quantity);
+                    added++;
+                  }
+                }
+                if (added > 0) {
+                  showToast(`${added} article${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''} au panier`);
+                  router.replace('/(tabs)/panier');
+                } else {
+                  showToast('Produits non disponibles');
+                }
+              }
+            }}
+            style={styles.secondaryButton}
+            accessibilityRole="button"
+            accessibilityLabel="Commander à nouveau"
+          >
+            <RefreshCw size={14} color={colors.green} strokeWidth={2} />
+            <Text style={styles.secondaryButtonText}>Commander à nouveau</Text>
           </Pressable>
 
           <Pressable

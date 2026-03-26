@@ -515,21 +515,26 @@ export default function ProfilScreen() {
 
             <View style={styles.ordersList}>
               {orderHistory.slice(0, 3).map((order) => (
-                <View key={order.id} style={styles.orderCard}>
+                <Pressable
+                  key={order.id}
+                  style={({ pressed }) => [styles.orderCard, pressed && { opacity: 0.7 }]}
+                  onPress={() => router.push(`/order/${order.id}`)}
+                >
                   <View style={styles.orderInfo}>
                     <View style={styles.orderIconWrap}>
                       <ClipboardList size={16} color={colors.green} strokeWidth={1.8} />
                     </View>
                     <View style={styles.orderDetails}>
                       <Text style={styles.orderName} numberOfLines={1}>
-                        {order.items.map((i) => i.name).join(', ')}
+                        {order.items.map((i: { name: string }) => i.name).join(', ')}
                       </Text>
                       <Text style={styles.orderMeta}>
-                        {order.id} · {formatPrice(order.total)}
+                        {new Date(order.createdAt).toLocaleDateString('fr-FR')} · {formatPrice(order.total)}
                       </Text>
                     </View>
+                    <ChevronRight size={16} color={colors.textMuted} strokeWidth={1.5} />
                   </View>
-                </View>
+                </Pressable>
               ))}
             </View>
           </>
