@@ -26,14 +26,69 @@ import { useLocation } from '@/hooks/useLocation';
 import { useCartStore } from '@/stores/cartStore';
 import { useOrderStore } from '@/stores/orderStore';
 import { colors, fonts, spacing } from '@/constants/theme';
-import { SUPABASE_URL } from '@/constants/config';
+const SQUARE_APP_ID = 'sq0idp-9F7C-S1CAmrls3asijyloA';
+const SQUARE_LOCATION_ID = 'LHPTGDC0XBX47';
 
-const SQUARE_APP_ID = process.env.EXPO_PUBLIC_SQUARE_APP_ID || 'sq0idp-9F7C-S1CAmrls3asijyloA';
-const SQUARE_LOCATION_ID = process.env.EXPO_PUBLIC_SQUARE_LOCATION_ID || 'LHPTGDC0XBX47';
-
-/** URL HTTPS du formulaire de paiement hébergé sur Supabase Edge Function */
-function getPaymentFormURL(amountCents: number) {
-  return `${SUPABASE_URL}/functions/v1/payment-form?app_id=${SQUARE_APP_ID}&location_id=${SQUARE_LOCATION_ID}&amount=${amountCents}`;
+function getSquareCardHTML(amountCents: number) {
+  const amt = (amountCents / 100).toFixed(2).replace('.', ',');
+  return `<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#F0F0E5;padding:16px;min-height:100vh}
+#card-container{min-height:100px;margin-bottom:16px}
+.btn{width:100%;padding:16px;border:none;border-radius:16px;font-size:16px;font-weight:700;cursor:pointer}
+#pay{background:#75967F;color:#fff}
+#pay:disabled{opacity:.4}
+.msg{text-align:center;font-size:13px;margin-top:10px;padding:8px;border-radius:8px}
+.err{background:#FEF0F0;color:#C44040}
+.loading{text-align:center;color:#738478;font-size:14px;padding:40px 0}
+</style></head><body>
+<div id="loading" class="loading">Chargement du formulaire sécurisé...</div>
+<div id="card-container" style="display:none"></div>
+<button class="btn" id="pay" style="display:none" disabled>Chargement...</button>
+<div id="msg"></div>
+<script src="https://web.squarecdn.com/v1/square.js"></script>
+<script>
+let card;
+async function init(){
+  try{
+    if(!window.Square){document.getElementById('msg').className='msg err';document.getElementById('msg').textContent='SDK non chargé. Vérifiez votre connexion.';return;}
+    const payments=Square.payments('${SQUARE_APP_ID}','${SQUARE_LOCATION_ID}');
+    card=await payments.card();
+    await card.attach('#card-container');
+    document.getElementById('loading').style.display='none';
+    document.getElementById('card-container').style.display='block';
+    document.getElementById('pay').style.display='block';
+    document.getElementById('pay').disabled=false;
+    document.getElementById('pay').textContent='Payer ${amt} €';
+  }catch(e){
+    document.getElementById('loading').style.display='none';
+    document.getElementById('msg').className='msg err';
+    document.getElementById('msg').textContent='Erreur: '+e.message;
+    window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:e.message}));
+  }
+}
+document.getElementById('pay').addEventListener('click',async()=>{
+  const b=document.getElementById('pay');b.disabled=true;b.textContent='Traitement...';
+  document.getElementById('msg').textContent='';
+  try{
+    const r=await card.tokenize();
+    if(r.status==='OK'){
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'nonce',nonce:r.token}));
+      b.textContent='Paiement en cours...';
+    }else{
+      const err=r.errors?r.errors.map(e=>e.message).join('. '):'Vérifiez vos informations.';
+      document.getElementById('msg').className='msg err';document.getElementById('msg').textContent=err;
+      b.disabled=false;b.textContent='Réessayer';
+    }
+  }catch(e){
+    document.getElementById('msg').className='msg err';document.getElementById('msg').textContent=e.message;
+    b.disabled=false;b.textContent='Réessayer';
+  }
+});
+init();
+</script></body></html>`;
 }
 
 export default function CheckoutScreen() {
@@ -165,7 +220,7 @@ export default function CheckoutScreen() {
         <Text style={styles.paymentLabel}>PAIEMENT PAR CARTE</Text>
         <View style={styles.webViewWrap}>
           <WebView
-            source={{ uri: getPaymentFormURL(total) }}
+            source={{ html: getSquareCardHTML(total), baseUrl: 'https://web.squarecdn.com' }}
             onMessage={handleWebViewMessage}
             style={styles.webview}
             javaScriptEnabled
