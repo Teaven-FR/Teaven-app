@@ -278,7 +278,7 @@ export default function HomeScreen() {
 
             {/* Première recharge incentivée OU recharge classique */}
             {wallet.balance === 0 ? (
-              <LinearGradient colors={['#75967F', '#4A6B50']} style={styles.promoCard}>
+              <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.promoCard}>
                 <View style={styles.promoContent}>
                   <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Votre première recharge</Text>
                   <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.85)' }]}>
@@ -316,14 +316,14 @@ export default function HomeScreen() {
               </View>
             </LinearGradient>
 
-            <LinearGradient colors={['#2C4A32', '#4A6B50']} style={styles.promoCard}>
+            <LinearGradient colors={['#C5DDD2', '#A8C5B8']} style={styles.promoCard}>
               <View style={styles.promoContent}>
-                <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Atmosphère</Text>
-                <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
+                <Text style={styles.promoTitle}>Atmosphère</Text>
+                <Text style={styles.promoSubtitle}>
                   Prenez soin de vous — lisez nos articles bien-être
                 </Text>
                 <Pressable onPress={() => router.push('/(tabs)/blog')}>
-                  <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Lire</Text>
+                  <Text style={[styles.promoCta, { color: '#4A6B50' }]}>Lire</Text>
                 </Pressable>
               </View>
             </LinearGradient>

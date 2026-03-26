@@ -17,7 +17,9 @@
 - Utilisé dans la strip défis sur l'accueil et la page défis
 
 ## Atmosphère (Blog)
-- Gradient foncé : `['#2C4A32', '#4A6B50']`
+- Gradient sauge brume : `['#C5DDD2', '#A8C5B8']`
+- Texte : couleur sombre standard (pas blanc)
+- CTA : `#4A6B50`
 - Utilisé dans le slide promo carrousel de l'accueil
 
 ## Programme Fidélité / Les Parenthèses
