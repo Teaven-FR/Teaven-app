@@ -13,19 +13,33 @@ export async function callEdgeFunction<T>(
   body: Record<string, unknown>,
   accessToken?: string,
 ): Promise<EdgeFunctionResponse<T>> {
-  let token = accessToken;
-  if (!token) {
-    const { data: { session } } = await supabase.auth.getSession();
-    token = session?.access_token;
-  }
-
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
   const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+  // Récupérer un token valide (refresh automatique si expiré)
+  let token = accessToken;
+  if (!token) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        // Vérifier si le token est expiré et refresh si nécessaire
+        const expiresAt = session.expires_at ?? 0;
+        if (expiresAt * 1000 < Date.now()) {
+          const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+          token = refreshed?.access_token;
+        } else {
+          token = session.access_token;
+        }
+      }
+    } catch {
+      // Pas de session — on continue avec l'anon key
+    }
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'apikey': anonKey,
-    'Authorization': `Bearer ${token ?? anonKey}`,
+    'Authorization': `Bearer ${token || anonKey}`,
   };
 
   try {
