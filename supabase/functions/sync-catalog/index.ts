@@ -90,13 +90,24 @@ serve(async (req) => {
       ? 'https://connect.squareup.com'
       : 'https://connect.squareupsandbox.com';
 
+    if (!squareAccessToken) {
+      return new Response(
+        JSON.stringify({ error: 'SQUARE_ACCESS_TOKEN manquant', success: false }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    console.log(`[sync-catalog] Env: ${squareEnvironment}, Base: ${squareBaseUrl}`);
+
     // 1. Fetch toutes les données Square en parallèle
     const [categories, items, images, modifierLists] = await Promise.all([
-      fetchAllSquareObjects(squareBaseUrl, squareAccessToken!, 'CATEGORY'),
-      fetchAllSquareObjects(squareBaseUrl, squareAccessToken!, 'ITEM'),
-      fetchAllSquareObjects(squareBaseUrl, squareAccessToken!, 'IMAGE'),
-      fetchAllSquareObjects(squareBaseUrl, squareAccessToken!, 'MODIFIER_LIST'),
+      fetchAllSquareObjects(squareBaseUrl, squareAccessToken, 'CATEGORY'),
+      fetchAllSquareObjects(squareBaseUrl, squareAccessToken, 'ITEM'),
+      fetchAllSquareObjects(squareBaseUrl, squareAccessToken, 'IMAGE'),
+      fetchAllSquareObjects(squareBaseUrl, squareAccessToken, 'MODIFIER_LIST'),
     ]);
+
+    console.log(`[sync-catalog] Fetched: ${categories.length} categories, ${items.length} items, ${images.length} images, ${modifierLists.length} modifierLists`);
 
     // 2. Construire les lookup maps
     const categoryMap = new Map<string, string>();
@@ -116,13 +127,26 @@ serve(async (req) => {
       modifierListMap.set(ml.id, ml);
     }
 
-    // Mode debug : retourner les noms de catégories sans sync
+    // Mode debug : retourner les données Square brutes sans sync
     if (debugMode) {
       const categoryNames = categories
         .filter((c) => !c.is_deleted)
         .map((c) => c.category_data?.name ?? 'unknown');
+      const itemNames = items
+        .filter((i) => !i.is_deleted)
+        .slice(0, 20)
+        .map((i) => ({
+          name: i.item_data?.name ?? 'unknown',
+          categoryId: i.item_data?.category_id ?? i.item_data?.categories?.[0]?.id ?? null,
+        }));
       return new Response(
-        JSON.stringify({ debug: true, categories: categoryNames }),
+        JSON.stringify({
+          debug: true,
+          environment: squareEnvironment,
+          categories: categoryNames,
+          items: itemNames,
+          counts: { categories: categories.length, items: items.length, images: images.length },
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -169,8 +193,11 @@ serve(async (req) => {
         ?? (itemData.categories as { id: string }[] | undefined)?.[0]?.id;
       const categoryName = categoryId ? categoryMap.get(categoryId) : undefined;
 
-      // Filtrer par catégories autorisées
-      if (!categoryName || !ALLOWED_CATEGORIES.includes(categoryName.toLowerCase().trim())) continue;
+      // Log la catégorie pour debug — ne plus filtrer strictement
+      // Si pas de catégorie, on inclut quand même avec une catégorie par défaut
+      if (!categoryName) {
+        console.log(`[sync-catalog] Item "${itemData.name}" has no category, using default`);
+      }
 
       const variations = itemData.variations ?? [];
       const firstVariation = variations[0];
@@ -226,11 +253,21 @@ serve(async (req) => {
           .upsert(variationRows, { onConflict: 'square_variation_id' });
       }
 
-      // 7. Sync modificateurs — on supprime + recrée pour éviter les données orphelines
+      // 7. Sync modificateurs — upsert sans delete pour préserver les données existantes
+      // Ne supprimer que les groupes dont le modifier_list_id n'est plus présent dans Square
       const modifierListInfo = itemData.modifier_list_info ?? [];
+      const activeModifierListIds = modifierListInfo.map((ml: { modifier_list_id: string }) => ml.modifier_list_id);
 
-      // Supprimer les anciens groupes de ce produit (les options cascadent via FK)
-      await supabase.from('modifier_groups').delete().eq('product_id', productId);
+      if (activeModifierListIds.length === 0) {
+        // Pas de modifiers dans Square pour cet item → conserver les données existantes
+      } else {
+        // Supprimer uniquement les groupes qui ne sont plus dans la liste Square
+        await supabase
+          .from('modifier_groups')
+          .delete()
+          .eq('product_id', productId)
+          .not('square_modifier_list_id', 'in', `(${activeModifierListIds.map((id: string) => `"${id}"`).join(',')})`);
+      }
 
       for (const mlInfo of modifierListInfo) {
         const mlId = mlInfo.modifier_list_id;

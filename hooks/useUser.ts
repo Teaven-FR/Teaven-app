@@ -6,33 +6,45 @@ import { fetchCustomer, fetchLoyalty, fetchWalletBalance } from '@/lib/square';
 import { mockUser } from '@/constants/mockData';
 import type { User, LoyaltyLevel, LoyaltyInfo, WalletInfo, Reward } from '@/lib/types';
 
-// Seuils de fidélité
-const LOYALTY_THRESHOLDS = {
-  Bronze: 0,
-  Argent: 200,
-  Or: 500,
-  Platine: 1000,
-} as const;
+// Seuils du programme Les Parenthèses
+const LOYALTY_THRESHOLDS: Record<string, number> = {
+  'Première Parenthèse': 0,
+  'Habitude': 2000,
+  'Rituel': 5000,
+  'Sérénité': 10000,
+  'Essentia': 20000,
+};
+
+// Multiplicateurs de points par niveau (base = 10 pts/€)
+export const LEVEL_MULTIPLIERS: Record<string, number> = {
+  'Première Parenthèse': 1,
+  'Habitude': 1,
+  'Rituel': 1.5,
+  'Sérénité': 1.7,
+  'Essentia': 2,
+};
+
+const LOYALTY_ORDER = ['Première Parenthèse', 'Habitude', 'Rituel', 'Sérénité', 'Essentia'] as const;
 
 /** Calcule le niveau de fidélité à partir des points */
-function getLoyaltyLevel(points: number): User['loyaltyLevel'] {
-  if (points >= LOYALTY_THRESHOLDS.Platine) return 'Platine';
-  if (points >= LOYALTY_THRESHOLDS.Or) return 'Or';
-  if (points >= LOYALTY_THRESHOLDS.Argent) return 'Argent';
-  return 'Bronze';
+function getLoyaltyLevel(points: number): LoyaltyLevel {
+  if (points >= 20000) return 'Essentia';
+  if (points >= 10000) return 'Sérénité';
+  if (points >= 5000) return 'Rituel';
+  if (points >= 2000) return 'Habitude';
+  return 'Première Parenthèse';
 }
 
 /** Calcule la progression vers le prochain palier */
 function getLoyaltyProgress(points: number): number {
   const level = getLoyaltyLevel(points);
-  const thresholds = Object.values(LOYALTY_THRESHOLDS);
-  const currentIdx = Object.keys(LOYALTY_THRESHOLDS).indexOf(level);
+  const currentIdx = LOYALTY_ORDER.indexOf(level);
   const nextIdx = currentIdx + 1;
 
-  if (nextIdx >= thresholds.length) return 100; // Platine = max
+  if (nextIdx >= LOYALTY_ORDER.length) return 100; // Essentia = max
 
-  const currentThreshold = thresholds[currentIdx];
-  const nextThreshold = thresholds[nextIdx];
+  const currentThreshold = LOYALTY_THRESHOLDS[level];
+  const nextThreshold = LOYALTY_THRESHOLDS[LOYALTY_ORDER[nextIdx]];
   const progress = ((points - currentThreshold) / (nextThreshold - currentThreshold)) * 100;
   return Math.min(Math.round(progress), 100);
 }
@@ -85,32 +97,56 @@ export function useUser() {
   }, [isAuthenticated]);
 
   // Charger les données de fidélité depuis Square si connecté
+  // Fallback : charger depuis Supabase si pas de squareCustomerId
   useEffect(() => {
-    if (!user.squareCustomerId) return;
-    fetchLoyalty(user.squareCustomerId, undefined, user.phone).then((result) => {
-      if (result.data) {
-        const { updateProfile } = useAuthStore.getState();
-        if (result.data.points !== user.loyaltyPoints) {
-          updateProfile({
-            loyaltyPoints: result.data.points,
-            loyaltyLevel: result.data.level as LoyaltyLevel,
+    if (!isAuthenticated) return;
+
+    if (user.squareCustomerId) {
+      // Route principale : Square Loyalty API
+      fetchLoyalty(user.squareCustomerId, undefined, user.phone).then((result) => {
+        if (result.data) {
+          const { updateProfile } = useAuthStore.getState();
+          if (result.data.points !== user.loyaltyPoints) {
+            updateProfile({
+              loyaltyPoints: result.data.points,
+              loyaltyLevel: result.data.level as LoyaltyLevel,
+            });
+          }
+          setRemoteRewards(
+            result.data.rewards.map((r) => ({
+              id: r.id,
+              name: r.name,
+              description: r.description,
+              pointsCost: r.pointsCost,
+              icon: r.icon,
+            })),
+          );
+          if (result.data.accrualRules) {
+            setAccrualRules(result.data.accrualRules);
+          }
+        }
+      });
+    } else {
+      // Fallback : charger les points depuis le profil Supabase
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session?.user) return;
+        supabase
+          .from('profiles')
+          .select('loyalty_points, loyalty_level')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data }) => {
+            if (data && data.loyalty_points != null) {
+              const { updateProfile } = useAuthStore.getState();
+              updateProfile({
+                loyaltyPoints: data.loyalty_points,
+                loyaltyLevel: (data.loyalty_level as LoyaltyLevel) ?? undefined,
+              });
+            }
           });
-        }
-        setRemoteRewards(
-          result.data.rewards.map((r) => ({
-            id: r.id,
-            name: r.name,
-            description: r.description,
-            pointsCost: r.pointsCost,
-            icon: r.icon,
-          })),
-        );
-        if (result.data.accrualRules) {
-          setAccrualRules(result.data.accrualRules);
-        }
-      }
-    });
-  }, [user.squareCustomerId]);
+      });
+    }
+  }, [isAuthenticated, user.squareCustomerId]);
 
   // Infos fidélité calculées
   const loyalty: LoyaltyInfo = useMemo(() => {
@@ -119,10 +155,11 @@ export function useUser() {
     const progress = getLoyaltyProgress(points);
 
     const nextRewards: Record<string, string> = {
-      Bronze: 'Boisson offerte à 200 pts',
-      Argent: 'Dessert offert à 500 pts',
-      Or: 'Menu complet offert à 1000 pts',
-      Platine: 'Vous êtes au niveau maximum !',
+      'Première Parenthèse': 'Boisson offerte à 2 000 pts',
+      'Habitude': 'Plat offert à 5 000 pts',
+      'Rituel': '-5% permanent à 10 000 pts',
+      'Sérénité': 'Le Cercle Intérieur à 20 000 pts',
+      'Essentia': 'Le Cercle Intérieur — ×2 pts',
     };
 
     return {
