@@ -123,7 +123,11 @@ export const useOrderStore = create<OrderState>()(
             estimatedPickup: string;
             dbOrder?: { id: string };
             error?: string;
-          }>('create-order', { items: squareItems });
+          }>('create-order', {
+            items: squareItems,
+            customerName: authUser?.fullName ?? undefined,
+            customerPhone: authUser?.phone ?? undefined,
+          });
 
           console.warn('[ORDER] create-order result:', JSON.stringify(createResult).slice(0, 500));
 

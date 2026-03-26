@@ -58,7 +58,7 @@ serve(async (req) => {
       );
     }
 
-    const { items, pickupTime } = body;
+    const { items, pickupTime, customerName, customerPhone } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return new Response(
@@ -73,6 +73,12 @@ serve(async (req) => {
       ? 'https://connect.squareup.com'
       : 'https://connect.squareupsandbox.com';
     const locationId = Deno.env.get('SQUARE_LOCATION_ID');
+
+    // Init Supabase (pour profil client + sauvegarde commande)
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
 
     console.log(`[create-order] Location: ${locationId}, items:`, JSON.stringify(items).slice(0, 500));
 
@@ -95,6 +101,29 @@ serve(async (req) => {
     // Créer la commande via Square Orders API
     const scheduledPickup = (pickupTime as string) ?? new Date(Date.now() + 20 * 60 * 1000).toISOString();
 
+    // Nom et téléphone du client
+    const displayName = (customerName as string) || 'Client Teaven';
+    const phone = (customerPhone as string) || undefined;
+
+    // Chercher le profil Supabase pour plus d'infos si on a un user authentifié
+    let profileName = displayName;
+    let profilePhone = phone;
+    if (authUser) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, phone')
+        .eq('id', authUser.id)
+        .single();
+      if (profile?.full_name) profileName = profile.full_name;
+      if (profile?.phone) profilePhone = profile.phone;
+    }
+
+    // Formater le téléphone
+    let formattedPhone = profilePhone;
+    if (formattedPhone && !formattedPhone.startsWith('+')) {
+      formattedPhone = '+' + formattedPhone;
+    }
+
     const orderResponse = await fetch(`${squareBaseUrl}/v2/orders`, {
       method: 'POST',
       headers: {
@@ -105,6 +134,7 @@ serve(async (req) => {
       body: JSON.stringify({
         order: {
           location_id: locationId,
+          reference_id: `TEAVEN-${Date.now()}`,
           line_items: lineItems,
           fulfillments: [{
             type: 'PICKUP',
@@ -113,8 +143,10 @@ serve(async (req) => {
               schedule_type: 'SCHEDULED',
               pickup_at: scheduledPickup,
               recipient: {
-                display_name: 'Client Teaven',
+                display_name: profileName,
+                ...(formattedPhone ? { phone_number: formattedPhone } : {}),
               },
+              note: `Commande via app Teaven — ${profileName}`,
             },
           }],
         },
@@ -139,12 +171,7 @@ serve(async (req) => {
 
     const squareOrder = orderData.order;
 
-    // Sauvegarder dans Supabase (service role pour bypass RLS)
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
-
+    // Sauvegarder dans Supabase
     const { data: dbOrder, error: dbError } = await supabase
       .from('orders')
       .insert({
@@ -154,6 +181,8 @@ serve(async (req) => {
         total_amount: squareOrder.total_money?.amount ?? 0,
         items: items,
         pickup_time: scheduledPickup,
+        customer_name: profileName,
+        customer_phone: formattedPhone ?? null,
         created_at: new Date().toISOString(),
       })
       .select()
