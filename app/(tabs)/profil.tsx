@@ -482,25 +482,15 @@ export default function ProfilScreen() {
                 </View>
 
                 {/* Dynamic status text */}
-                <Pressable
-                  accessibilityLabel={unlocked ? `Utiliser ${reward.name}` : `${reward.name} — non débloqué`}
-                  accessibilityRole="button"
-                  onPress={() => unlocked
-                    ? showToast(`${reward.name} — disponible dans votre panier`)
-                    : showToast(`Encore ${reward.pointsCost - loyalty.points} pts pour débloquer`)}
-                >
+                <View accessibilityLabel={unlocked ? `${reward.name} — débloqué` : `${reward.name} — ${reward.pointsCost - loyalty.points} pts restants`}>
                   {unlocked ? (
-                    <Text style={[styles.rewardCta, { color: colors.green }]}>🎉 Disponible !</Text>
-                  ) : loyalty.points >= reward.pointsCost / 2 ? (
-                    <Text style={[styles.rewardCta, { color: '#738478', fontSize: 11 }]}>
-                      Presque ! +{reward.pointsCost - loyalty.points} pts
-                    </Text>
+                    <Text style={[styles.rewardCta, { color: colors.green }]}>Débloqué</Text>
                   ) : (
                     <Text style={[styles.rewardCta, { color: colors.textMuted, fontSize: 11 }]}>
-                      Plus que {reward.pointsCost - loyalty.points} pts
+                      {reward.pointsCost - loyalty.points} pts restants
                     </Text>
                   )}
-                </Pressable>
+                </View>
               </View>
             );
           })}

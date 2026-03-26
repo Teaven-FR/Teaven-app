@@ -355,9 +355,12 @@ serve(async (req) => {
       }
 
       for (const mlInfo of modifierListInfo) {
+        // Respecter enabled flag de Square — si désactivé, ne pas syncher
+        if (mlInfo.enabled === false) continue;
+
         const mlId = mlInfo.modifier_list_id;
         const ml = modifierListMap.get(mlId);
-        if (!ml) continue;
+        if (!ml || ml.is_deleted) continue;
 
         const mlData = ml.modifier_list_data;
         if (!mlData) continue;
@@ -382,10 +385,9 @@ serve(async (req) => {
         }
 
         // Insérer les options — d'abord les modifiers intégrés, sinon les MODIFIER objects séparés
-        let modifiers = mlData.modifiers ?? [];
+        let modifiers = (mlData.modifiers ?? []).filter((m: SquareObject) => !m.is_deleted);
         if (modifiers.length === 0) {
-          // Chercher les MODIFIER objects séparés liés à cette modifier_list
-          modifiers = modifiersByListId.get(mlId) ?? [];
+          modifiers = (modifiersByListId.get(mlId) ?? []).filter((m: SquareObject) => !m.is_deleted);
         }
         const optionRows = modifiers.map((mod: SquareObject, i: number) => ({
           group_id: dbGroup.id,

@@ -68,11 +68,7 @@ function calcPromoDiscount(
   return Math.min(promo.value, subtotal);
 }
 
-const FALLBACK_REWARDS: Reward[] = [
-  { id: 'r1', name: 'Boisson offerte', description: 'Thé, café ou infusion', pointsCost: 200, icon: 'coffee' },
-  { id: 'r2', name: 'Dessert offert', description: 'Pâtisserie maison', pointsCost: 500, icon: 'gift' },
-  { id: 'r3', name: 'Formule offerte', description: 'Plat + boisson au choix', pointsCost: 750, icon: 'gift' },
-];
+// Récompenses-panier supprimées — seuls les paliers fidélité comptent (les points ne font que monter)
 
 function buildPickerSlots(openHour?: number, closeHour?: number, tomorrow = false): PickerTimeSlot[] {
   const oh = openHour ?? 9;
@@ -108,13 +104,13 @@ export default function PanierScreen() {
   } = useCart();
   const addItem = useCartStore((s) => s.addItem);
 
-  const { loyalty, wallet, rewards: squareRewards, rechargeWallet } = useUser();
+  const { loyalty, wallet, rechargeWallet } = useUser();
   const { location: storeLocation } = useLocation();
   const [rechargeVisible, setRechargeVisible] = useState(false);
   const { allProducts } = useCatalog();
   const { showToast } = useToast();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
-  const [appliedReward, setAppliedReward] = useState<Reward | null>(null);
+  // Récompenses-panier supprimées — paliers fidélité uniquement
   const storePromoCode = useCartStore((s) => s.activePromoCode);
   const setStorePromoCode = useCartStore((s) => s.setPromoCode);
 
@@ -128,23 +124,7 @@ export default function PanierScreen() {
   });
   const [promoError, setPromoError] = useState('');
 
-  const availableRewards = (squareRewards.length > 0 ? squareRewards : FALLBACK_REWARDS)
-    .filter((r) => loyalty.points >= r.pointsCost);
-
-  // Réduction récompense : estimation basée sur le type de récompense
-  // Les vraies réductions seront appliquées côté Square via loyalty/rewards
-  const rewardDiscount = appliedReward
-    ? (() => {
-        const name = appliedReward.name.toLowerCase();
-        if (name.includes('boisson chaude') || name.includes('thé glacé')) return Math.min(450, subtotal);
-        if (name.includes('pâtisserie')) return Math.min(550, subtotal);
-        if (name.includes('signature')) return Math.min(650, subtotal);
-        if (name.includes('boîte') || name.includes('tasse')) return Math.min(1500, subtotal);
-        if (name.includes('formule midi')) return Math.min(1490, subtotal);
-        if (name.includes('brunch') || name.includes('atelier')) return Math.min(2990, subtotal);
-        return 0;
-      })()
-    : 0;
+  const rewardDiscount = 0; // Récompenses-panier supprimées
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
   const [businessHours, setBusinessHours] = useState<{ open: number; close: number } | null>(null);
   useEffect(() => {
@@ -175,7 +155,7 @@ export default function PanierScreen() {
   const [addressSuggestions, setAddressSuggestions] = useState<Array<{ place_id: string; description: string; main_text: string; secondary_text: string }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const addressSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [rewardsExpanded, setRewardsExpanded] = useState(false);
+  // rewardsExpanded supprimé — plus de récompenses dans le panier
   // Auto-switch to tomorrow if no slots available today
   const todaySlots = buildPickerSlots(businessHours?.open, businessHours?.close, false);
   const hasTodaySlots = todaySlots.some((s) => s.available);
@@ -725,16 +705,7 @@ export default function PanierScreen() {
             <Text style={styles.recapLabel}>Sous-total</Text>
             <Text style={styles.recapValue}>{formatPrice(subtotal)}</Text>
           </View>
-          {appliedReward && rewardDiscount > 0 && (
-            <View style={styles.recapRow}>
-              <Text style={[styles.recapLabel, styles.recapDiscount]}>
-                {appliedReward.name}
-              </Text>
-              <Text style={[styles.recapValue, styles.recapDiscount]}>
-                -{formatPrice(rewardDiscount)}
-              </Text>
-            </View>
-          )}
+          {/* Récompenses-panier supprimées — paliers fidélité uniquement */}
           {loyaltyAutoDiscount > 0 && (
             <View style={styles.recapRow}>
               <Text style={[styles.recapLabel, styles.recapDiscount]}>
@@ -774,60 +745,7 @@ export default function PanierScreen() {
           )}
         </View>
 
-        {/* ──── RÉCOMPENSES (card dépliable) ──── */}
-        {availableRewards.length > 0 && (
-          <View style={styles.rewardsCollapsible}>
-            <Pressable
-              style={styles.rewardsHeader}
-              onPress={() => setRewardsExpanded(!rewardsExpanded)}
-            >
-              <View style={styles.rewardsHeaderLeft}>
-                <Gift size={16} color={colors.green} strokeWidth={1.5} />
-                <View>
-                  <Text style={styles.rewardsHeaderTitle}>Vos récompenses</Text>
-                  <Text style={styles.rewardsHeaderSub}>
-                    {availableRewards.length} disponible{availableRewards.length > 1 ? 's' : ''}
-                    {appliedReward ? ` · ${appliedReward.name} appliquée` : ''}
-                  </Text>
-                </View>
-              </View>
-              <ChevronRight
-                size={16}
-                color={colors.textMuted}
-                strokeWidth={1.5}
-                style={{ transform: [{ rotate: rewardsExpanded ? '90deg' : '0deg' }] }}
-              />
-            </Pressable>
-            {rewardsExpanded && (
-              <View style={styles.rewardsBody}>
-                {availableRewards.map((reward) => {
-                  const isApplied = appliedReward?.id === reward.id;
-                  return (
-                    <Pressable
-                      key={reward.id}
-                      onPress={() => setAppliedReward(isApplied ? null : reward)}
-                      style={[styles.rewardCard, isApplied && styles.rewardCardApplied]}
-                      accessibilityRole="button"
-                      accessibilityLabel={reward.name}
-                    >
-                      <View style={styles.rewardInfo}>
-                        <Text style={[styles.rewardName, isApplied && styles.rewardNameApplied]}>
-                          {reward.name}
-                        </Text>
-                        <Text style={styles.rewardDesc}>{reward.description}</Text>
-                      </View>
-                      <View style={[styles.rewardPtsBadge, isApplied && styles.rewardPtsBadgeApplied]}>
-                        <Text style={[styles.rewardPtsText, isApplied && styles.rewardPtsTextApplied]}>
-                          {isApplied ? 'Appliqué ✓' : `${reward.pointsCost} pts`}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-        )}
+        {/* Récompenses-panier supprimées — programme fidélité à paliers uniquement */}
 
         {/* ──── WALLET ──── */}
         <Pressable
@@ -935,7 +853,7 @@ export default function PanierScreen() {
               params: {
                 total: String(total),
                 pickupTime: pickupISO,
-                ...(appliedReward ? { rewardTierId: appliedReward.id } : {}),
+                // Rewards supprimés du panier
                 ...(checkoutDiscounts.length > 0 ? { discounts: JSON.stringify(checkoutDiscounts) } : {}),
               },
             });
