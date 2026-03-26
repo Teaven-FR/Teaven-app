@@ -201,7 +201,7 @@ serve(async (req) => {
               note: `Commande via app Teaven — ${profileName}`,
             },
           }],
-          ...(loyaltyRewardId ? { rewards: [{ id: loyaltyRewardId, reward_tier_id: rewardTierId as string }] } : {}),
+          // rewards est un champ read-only — le loyalty reward est appliqué automatiquement via POST /v2/loyalty/rewards
         },
         idempotency_key: crypto.randomUUID(),
       }),
