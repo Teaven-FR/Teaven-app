@@ -891,7 +891,26 @@ export default function PanierScreen() {
       {/* ──── CTA sticky ──── */}
       <View style={[styles.cta, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <Pressable
-          onPress={() => router.push({ pathname: '/checkout', params: { total: String(total) } })}
+          onPress={() => {
+            // Construire le datetime de retrait depuis le créneau sélectionné
+            let pickupISO = '';
+            const slot = pickerSlots.find((s) => s.id === selectedTimeSlot);
+            if (slot && slot.timeRange) {
+              // timeRange = "14:00 - 14:15" → extraire l'heure de début
+              const [startTime] = slot.timeRange.split(' - ');
+              const [h, m] = startTime.split(':').map(Number);
+              const d = new Date();
+              d.setDate(d.getDate() + effectiveDayOffset);
+              d.setHours(h, m, 0, 0);
+              pickupISO = d.toISOString();
+            } else {
+              // ASAP → maintenant + 20 min
+              const d = new Date(Date.now() + 20 * 60 * 1000);
+              d.setDate(d.getDate() + effectiveDayOffset);
+              pickupISO = d.toISOString();
+            }
+            router.push({ pathname: '/checkout', params: { total: String(total), pickupTime: pickupISO } });
+          }}
           style={({ pressed }) => [
             styles.ctaButton,
             pressed && styles.ctaPressed,
