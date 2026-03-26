@@ -26,80 +26,14 @@ import { useLocation } from '@/hooks/useLocation';
 import { useCartStore } from '@/stores/cartStore';
 import { useOrderStore } from '@/stores/orderStore';
 import { colors, fonts, spacing } from '@/constants/theme';
+import { SUPABASE_URL } from '@/constants/config';
 
-// Clés publiques Square (App ID + Location ID — pas des secrets)
 const SQUARE_APP_ID = process.env.EXPO_PUBLIC_SQUARE_APP_ID || 'sq0idp-9F7C-S1CAmrls3asijyloA';
 const SQUARE_LOCATION_ID = process.env.EXPO_PUBLIC_SQUARE_LOCATION_ID || 'LHPTGDC0XBX47';
 
-function getSquareCardHTML(appId: string, locationId: string, amountCents: number) {
-  const amt = (amountCents / 100).toFixed(2).replace('.', ',');
-  return `<!DOCTYPE html><html><head>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F0F0E5;padding:20px 16px;min-height:100vh}
-h3{font-size:14px;font-weight:700;color:#2A2A2A;margin-bottom:14px;letter-spacing:-0.2px}
-#card-container{min-height:90px;margin-bottom:20px}
-.btn{width:100%;padding:17px;border:none;border-radius:16px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:-0.2px}
-#pay{background:#75967F;color:#fff}
-#pay:disabled{opacity:.35}
-.msg{text-align:center;font-size:13px;margin-top:12px;padding:10px;border-radius:10px}
-.err{background:#FEF0F0;color:#C44040}
-.ok{background:#E8F0EA;color:#2C4A32}
-.loading{text-align:center;color:#738478;font-size:14px;padding:50px 0}
-.secure{text-align:center;margin-top:16px;font-size:11px;color:#9E9E8C;display:flex;align-items:center;justify-content:center;gap:4px}
-</style></head><body>
-<div id="loading" class="loading">Chargement du terminal sécurisé…</div>
-<h3 id="title" style="display:none">Informations de paiement</h3>
-<div id="card-container" style="display:none"></div>
-<button class="btn" id="pay" style="display:none" disabled>Chargement…</button>
-<div id="msg"></div>
-<div class="secure" id="sec" style="display:none">🔒 Paiement sécurisé via Square</div>
-<script src="https://web.squarecdn.com/v1/square.js"></script>
-<script>
-let card;
-async function init(){
-  try{
-    if(!window.Square){document.getElementById('msg').className='msg err';document.getElementById('msg').textContent='SDK de paiement non chargé. Vérifiez votre connexion.';return;}
-    const payments=Square.payments('${appId}','${locationId}');
-    card=await payments.card();
-    await card.attach('#card-container');
-    document.getElementById('loading').style.display='none';
-    document.getElementById('title').style.display='block';
-    document.getElementById('card-container').style.display='block';
-    document.getElementById('pay').style.display='block';
-    document.getElementById('sec').style.display='flex';
-    document.getElementById('pay').disabled=false;
-    document.getElementById('pay').textContent='Payer ${amt} €';
-  }catch(e){
-    document.getElementById('loading').style.display='none';
-    document.getElementById('msg').className='msg err';
-    document.getElementById('msg').textContent='Erreur : '+e.message;
-    window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:e.message}));
-  }
-}
-document.getElementById('pay').addEventListener('click',async()=>{
-  const b=document.getElementById('pay');b.disabled=true;b.textContent='Traitement en cours…';
-  document.getElementById('msg').textContent='';
-  try{
-    const r=await card.tokenize();
-    if(r.status==='OK'){
-      window.ReactNativeWebView.postMessage(JSON.stringify({type:'nonce',nonce:r.token}));
-      b.textContent='Paiement en cours…';
-      document.getElementById('msg').className='msg ok';
-      document.getElementById('msg').textContent='Carte validée, traitement…';
-    }else{
-      const err=r.errors?r.errors.map(e=>e.message).join('. '):'Vérifiez les informations de votre carte.';
-      document.getElementById('msg').className='msg err';document.getElementById('msg').textContent=err;
-      b.disabled=false;b.textContent='Réessayer';
-    }
-  }catch(e){
-    document.getElementById('msg').className='msg err';document.getElementById('msg').textContent=e.message;
-    b.disabled=false;b.textContent='Réessayer';
-  }
-});
-init();
-</script></body></html>`;
+/** URL HTTPS du formulaire de paiement hébergé sur Supabase Edge Function */
+function getPaymentFormURL(amountCents: number) {
+  return `${SUPABASE_URL}/functions/v1/payment-form?app_id=${SQUARE_APP_ID}&location_id=${SQUARE_LOCATION_ID}&amount=${amountCents}`;
 }
 
 export default function CheckoutScreen() {
@@ -220,15 +154,11 @@ export default function CheckoutScreen() {
         <Text style={styles.paymentLabel}>PAIEMENT PAR CARTE</Text>
         <View style={styles.webViewWrap}>
           <WebView
-            source={{
-              html: getSquareCardHTML(SQUARE_APP_ID, SQUARE_LOCATION_ID, total),
-              baseUrl: 'https://web.squarecdn.com',
-            }}
+            source={{ uri: getPaymentFormURL(total) }}
             onMessage={handleWebViewMessage}
             style={styles.webview}
             javaScriptEnabled
             domStorageEnabled
-            mixedContentMode="always"
             originWhitelist={['*']}
             onError={(e) => setError(`Erreur : ${e.nativeEvent.description}`)}
             startInLoadingState
