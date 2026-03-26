@@ -46,12 +46,12 @@ serve(async (req) => {
   }
 
   try {
-    // Authentification requise
+    // Authentification — si pas connecté, retourner solde 0 (pas d'erreur)
     const authUser = await authenticateUser(req);
     if (!authUser) {
       return new Response(
-        JSON.stringify({ error: 'Authentification requise' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({ success: true, balance: 0, giftCardId: null }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 

@@ -7,7 +7,7 @@ type EdgeFunctionResponse<T> = {
   error: string | null;
 };
 
-/** Appel générique à une Edge Function Supabase */
+/** Appel générique à une Edge Function Supabase — utilise fetch directement pour capturer les erreurs */
 export async function callEdgeFunction<T>(
   functionName: string,
   body: Record<string, unknown>,
@@ -19,28 +19,36 @@ export async function callEdgeFunction<T>(
     token = session?.access_token;
   }
 
-  const options: { body: Record<string, unknown>; headers?: Record<string, string> } = { body };
-  if (token) {
-    options.headers = { 'Authorization': `Bearer ${token}` };
-  }
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-  const { data, error } = await supabase.functions.invoke(functionName, options);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'apikey': anonKey,
+    'Authorization': `Bearer ${token ?? anonKey}`,
+  };
 
-  if (error) {
-    // Supabase retourne le body dans `data` même quand il y a une erreur HTTP
-    // Le vrai message d'erreur est souvent dans data.error
-    const detailedError = (data as Record<string, unknown>)?.error;
-    const details = (data as Record<string, unknown>)?.details;
-    const msg = typeof detailedError === 'string'
-      ? detailedError
-      : details
-        ? `${error.message}: ${JSON.stringify(details).slice(0, 200)}`
-        : error.message;
-    console.error(`[EdgeFunction:${functionName}]`, msg, data);
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      const msg = json.error ?? json.message ?? `Erreur ${res.status}`;
+      console.error(`[EdgeFunction:${functionName}]`, msg);
+      return { data: null, error: msg };
+    }
+
+    return { data: json as T, error: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Erreur réseau';
+    console.error(`[EdgeFunction:${functionName}]`, msg);
     return { data: null, error: msg };
   }
-
-  return { data: data as T, error: null };
 }
 
 /** Expose callEdgeFunction avec token pour les appels authentifiés */
