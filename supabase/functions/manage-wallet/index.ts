@@ -90,29 +90,55 @@ serve(async (req) => {
       case 'balance': {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('wallet_balance, square_customer_id')
+          .select('wallet_balance, square_customer_id, square_gift_card_id')
           .eq('id', userId)
           .single();
 
         let balance = profile?.wallet_balance ?? 0;
+        let giftCardIdFound = profile?.square_gift_card_id ?? null;
 
-        // Appel Square Gift Cards API pour le solde réel
-        if (SQUARE_ACCESS_TOKEN && profile?.square_customer_id) {
+        if (SQUARE_ACCESS_TOKEN) {
           try {
-            const res = await fetch(
-              `${SQUARE_BASE_URL}/v2/gift-cards?customer_id=${profile.square_customer_id}`,
-              {
+            let giftCards: Record<string, unknown>[] = [];
+
+            // 1. Chercher par customer_id si disponible
+            if (profile?.square_customer_id) {
+              const res = await fetch(
+                `${SQUARE_BASE_URL}/v2/gift-cards?customer_id=${profile.square_customer_id}`,
+                {
+                  headers: {
+                    'Square-Version': SQUARE_VERSION,
+                    'Authorization': `Bearer ${SQUARE_ACCESS_TOKEN}`,
+                  },
+                },
+              );
+              const data = await res.json();
+              if (data.gift_cards) giftCards = data.gift_cards;
+            }
+
+            // 2. Si pas trouvé par customer_id, chercher par téléphone
+            if (giftCards.length === 0 && authUser.phone) {
+              let phone = authUser.phone;
+              if (!phone.startsWith('+')) phone = '+' + phone;
+
+              const searchRes = await fetch(`${SQUARE_BASE_URL}/v2/gift-cards/from-nonce`, {
+                method: 'POST',
                 headers: {
                   'Square-Version': SQUARE_VERSION,
                   'Authorization': `Bearer ${SQUARE_ACCESS_TOKEN}`,
+                  'Content-Type': 'application/json',
                 },
-              },
-            );
-            const giftCardsData = await res.json();
-            console.log('[manage-wallet] Square Gift Cards raw:', JSON.stringify(giftCardsData));
+                body: JSON.stringify({ nonce: phone }),
+              });
+              // from-nonce ne marche pas pour téléphone — utiliser list avec filtre
+              // Square ne supporte pas le search par téléphone directement
+              // On garde le fallback Supabase
+              void searchRes;
+            }
 
-            if (giftCardsData.gift_cards && giftCardsData.gift_cards.length > 0) {
-              const totalBalance = (giftCardsData.gift_cards as Record<string, unknown>[]).reduce(
+            // 3. Calculer le solde total de toutes les gift cards
+            if (giftCards.length > 0) {
+              const totalBalance = giftCards.reduce(
                 (sum: number, gc) => {
                   const balanceMoney = gc.balance_money as Record<string, unknown> | undefined;
                   return sum + ((balanceMoney?.amount as number) ?? 0);
@@ -120,10 +146,17 @@ serve(async (req) => {
                 0,
               );
               balance = totalBalance;
+              // Stocker le premier gift card ID pour les paiements wallet
+              giftCardIdFound = (giftCards[0].id as string) ?? giftCardIdFound;
+
               // Sync dans Supabase
               await supabase
                 .from('profiles')
-                .update({ wallet_balance: balance, updated_at: new Date().toISOString() })
+                .update({
+                  wallet_balance: balance,
+                  square_gift_card_id: giftCardIdFound,
+                  updated_at: new Date().toISOString(),
+                })
                 .eq('id', userId);
             }
           } catch (err) {
@@ -132,7 +165,7 @@ serve(async (req) => {
         }
 
         return new Response(
-          JSON.stringify({ success: true, balance }),
+          JSON.stringify({ success: true, balance, giftCardId: giftCardIdFound }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }

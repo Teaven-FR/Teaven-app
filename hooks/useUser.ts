@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
-import { fetchCustomer, fetchLoyalty, fetchWalletBalance } from '@/lib/square';
+import { fetchCustomer, fetchLoyalty, callEdgeFunction } from '@/lib/square';
 import { mockUser } from '@/constants/mockData';
 import type { User, LoyaltyLevel, LoyaltyInfo, WalletInfo, Reward } from '@/lib/types';
 
@@ -84,12 +84,19 @@ export function useUser() {
     if (!isAuthenticated) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.access_token) return;
-      fetchWalletBalance(session.access_token).then((result) => {
-        if (result.data?.success && result.data.balance !== undefined) {
+      callEdgeFunction<{ success: boolean; balance: number; giftCardId?: string }>(
+        'manage-wallet',
+        { action: 'balance' },
+        session.access_token,
+      ).then((result) => {
+        if (result.data?.success) {
           const { setUser } = useAuthStore.getState();
           const current = useAuthStore.getState().user;
-          if (current && result.data.balance !== current.walletBalance) {
-            setUser({ ...current, walletBalance: result.data.balance });
+          if (current) {
+            const updates: Partial<User> = {};
+            if (result.data.balance !== current.walletBalance) updates.walletBalance = result.data.balance;
+            if (result.data.giftCardId && result.data.giftCardId !== current.squareGiftCardId) updates.squareGiftCardId = result.data.giftCardId;
+            if (Object.keys(updates).length > 0) setUser({ ...current, ...updates });
           }
         }
       });
