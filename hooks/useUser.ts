@@ -89,6 +89,7 @@ export function useUser() {
         { action: 'balance' },
         session.access_token,
       ).then((result) => {
+        if (result.error) return; // Silencieux — pas de popup d'erreur pour le wallet
         if (result.data?.success) {
           const { setUser } = useAuthStore.getState();
           const current = useAuthStore.getState().user;

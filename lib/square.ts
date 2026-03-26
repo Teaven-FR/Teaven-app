@@ -39,14 +39,14 @@ export async function callEdgeFunction<T>(
 
     if (!res.ok) {
       const msg = json.error ?? json.message ?? `Erreur ${res.status}`;
-      console.error(`[EdgeFunction:${functionName}]`, msg);
+      console.warn(`[EdgeFunction:${functionName}]`, msg);
       return { data: null, error: msg };
     }
 
     return { data: json as T, error: null };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Erreur réseau';
-    console.error(`[EdgeFunction:${functionName}]`, msg);
+    console.warn(`[EdgeFunction:${functionName}]`, msg);
     return { data: null, error: msg };
   }
 }
