@@ -247,7 +247,7 @@ serve(async (req) => {
               order_id: orderId,
             });
 
-          // Square Loyalty API : adjust points (plus fiable que accumulate pour notre calcul custom)
+          // Square Loyalty API : accumulate points basé sur la commande
           if (profile.square_customer_id) {
             try {
               const loyaltySearchRes = await fetch(`${squareBaseUrl}/v2/loyalty/accounts/search`, {
@@ -265,8 +265,8 @@ serve(async (req) => {
               const loyaltyAccountId = loyaltySearchData.loyalty_accounts?.[0]?.id;
 
               if (loyaltyAccountId) {
-                // Utiliser adjust au lieu de accumulate pour appliquer notre propre calcul
-                await fetch(`${squareBaseUrl}/v2/loyalty/accounts/${loyaltyAccountId}/adjust`, {
+                // Utiliser accumulate avec l'order_id — Square calcule les points automatiquement
+                const accRes = await fetch(`${squareBaseUrl}/v2/loyalty/accounts/${loyaltyAccountId}/accumulate`, {
                   method: 'POST',
                   headers: {
                     'Square-Version': '2025-01-23',
@@ -275,12 +275,38 @@ serve(async (req) => {
                   },
                   body: JSON.stringify({
                     idempotency_key: crypto.randomUUID(),
-                    adjust_points: {
-                      points: pointsEarned,
-                      reason: `Commande ${orderId} — ${level} ×${multiplier}`,
+                    accumulate_points: {
+                      order_id: orderId,
                     },
+                    location_id: Deno.env.get('SQUARE_LOCATION_ID'),
                   }),
                 });
+                const accData = await accRes.json();
+                if (accRes.ok) {
+                  // Mettre à jour les points réels depuis la réponse
+                  const newBalance = accData.event?.loyalty_event?.accumulate_points?.loyalty_program_id
+                    ? accData.event?.accumulate_points?.points
+                    : pointsEarned;
+                  console.log(`[process-payment] Loyalty accumulate OK: +${newBalance ?? pointsEarned} pts`);
+                } else {
+                  console.error('[process-payment] Loyalty accumulate error:', JSON.stringify(accData));
+                  // Fallback : adjust manuellement
+                  await fetch(`${squareBaseUrl}/v2/loyalty/accounts/${loyaltyAccountId}/adjust`, {
+                    method: 'POST',
+                    headers: {
+                      'Square-Version': '2025-01-23',
+                      'Authorization': `Bearer ${squareAccessToken}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      idempotency_key: crypto.randomUUID(),
+                      adjust_points: {
+                        points: pointsEarned,
+                        reason: `Commande ${orderId}`,
+                      },
+                    }),
+                  });
+                }
               }
             } catch (loyaltySquareErr) {
               console.error('Square Loyalty adjust error (non-fatal):', loyaltySquareErr);

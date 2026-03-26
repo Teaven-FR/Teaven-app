@@ -92,10 +92,11 @@ init();
 export default function CheckoutScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ total: string; pickupTime?: string; rewardTierId?: string }>();
+  const params = useLocalSearchParams<{ total: string; pickupTime?: string; rewardTierId?: string; discounts?: string }>();
   const total = parseInt(params.total ?? '0', 10);
   const pickupTime = params.pickupTime;
   const rewardTierId = params.rewardTierId;
+  const discounts = params.discounts ? JSON.parse(params.discounts) : undefined;
   const { loyalty, loyaltyAccountId } = useUser();
   const { location: storeLocation } = useLocation();
   const cartItems = useCartStore((s) => s.items);
@@ -117,7 +118,7 @@ export default function CheckoutScreen() {
       setIsProcessing(true);
       setError(null);
       try {
-        await createOrder(cartItems, 'card', false, data.nonce, undefined, pickupTime, rewardTierId, loyaltyAccountId ?? undefined);
+        await createOrder(cartItems, 'card', false, data.nonce, undefined, pickupTime, rewardTierId, loyaltyAccountId ?? undefined, discounts);
         router.replace('/order-confirmation');
       } catch (orderErr: unknown) {
         setError(orderErr instanceof Error ? orderErr.message : 'Erreur lors du paiement');

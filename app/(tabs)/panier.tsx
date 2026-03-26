@@ -920,12 +920,23 @@ export default function PanierScreen() {
               d.setDate(d.getDate() + effectiveDayOffset);
               pickupISO = d.toISOString();
             }
+            // Construire les discounts à passer au checkout
+            const checkoutDiscounts: Array<{ name: string; percentage?: string; amountCents?: number }> = [];
+            if (appliedPromo && promoDiscount > 0) {
+              if (appliedPromo.type === 'percent') {
+                checkoutDiscounts.push({ name: appliedPromo.description || `Code ${appliedPromo.code}`, percentage: String(appliedPromo.value) });
+              } else {
+                checkoutDiscounts.push({ name: appliedPromo.description || `Code ${appliedPromo.code}`, amountCents: promoDiscount });
+              }
+            }
+
             router.push({
               pathname: '/checkout',
               params: {
                 total: String(total),
                 pickupTime: pickupISO,
                 ...(appliedReward ? { rewardTierId: appliedReward.id } : {}),
+                ...(checkoutDiscounts.length > 0 ? { discounts: JSON.stringify(checkoutDiscounts) } : {}),
               },
             });
           }}

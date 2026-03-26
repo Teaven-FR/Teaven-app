@@ -193,24 +193,17 @@ export default function GiftScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <ChevronLeft size={24} color={colors.text} strokeWidth={1.3} />
+        {/* Header terracotta */}
+        <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.heroHeader}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.heroBack}>
+            <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
           </Pressable>
-          <Text style={styles.headerTitle}>Offrir un moment</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        {/* Intro */}
-        <View style={styles.introSection}>
-          <View style={styles.introIconWrap}>
-            <Gift size={24} color="#C27B5A" strokeWidth={1.3} />
-          </View>
-          <Text style={styles.introSubtitle}>
-            Offrez une pause gourmande à ceux que vous aimez. Le montant est crédité sur leur portefeuille Teaven.
+          <Gift size={32} color="rgba(255,255,255,0.8)" strokeWidth={1.2} />
+          <Text style={styles.heroTitle}>Offrir un moment Teaven</Text>
+          <Text style={styles.heroSubtitle}>
+            Parce que les plus beaux cadeaux sont ceux qui se partagent.{'\n'}Offrez une pause, un repas, un moment de bien-être.
           </Text>
-        </View>
+        </LinearGradient>
 
         {/* ──── Moments pré-packagés ──── */}
         <Text style={styles.sectionLabel}>NOS MOMENTS</Text>
@@ -345,9 +338,18 @@ export default function GiftScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1, backgroundColor: '#FDF6F2' },
   centered: { alignItems: 'center', justifyContent: 'center' },
   scrollContent: { paddingBottom: 40 },
+
+  // Hero header terracotta
+  heroHeader: {
+    paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xxl,
+    alignItems: 'center', gap: 10, borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+  },
+  heroBack: { position: 'absolute', top: spacing.lg, left: spacing.xl },
+  heroTitle: { fontFamily: fonts.bold, fontSize: 22, color: '#FFFFFF', textAlign: 'center', letterSpacing: -0.3 },
+  heroSubtitle: { fontFamily: fonts.regular, fontSize: 13, color: 'rgba(255,255,255,0.8)', textAlign: 'center', lineHeight: 20 },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -446,7 +448,7 @@ const styles = StyleSheet.create({
   ctaSection: { paddingHorizontal: spacing.xl, marginTop: spacing.xl },
   ctaButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-    backgroundColor: colors.green, borderRadius: radii.card, paddingVertical: 16, ...shadows.card,
+    backgroundColor: '#C27B5A', borderRadius: radii.card, paddingVertical: 16, ...shadows.card,
   },
   ctaText: { fontFamily: fonts.bold, fontSize: 16, color: '#FFFFFF' },
 

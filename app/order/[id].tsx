@@ -70,6 +70,7 @@ export default function OrderTrackingScreen() {
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
 
   const { loyalty, updateProfile } = useUser();
+  const { allProducts } = useCatalog();
 
   // Animation d'entrée
   useEffect(() => {
@@ -263,7 +264,6 @@ export default function OrderTrackingScreen() {
               // Commander à nouveau : ajouter les articles au panier
               if (order) {
                 const addItem = useCartStore.getState().addItem;
-                const { allProducts } = useCatalog();
                 let added = 0;
                 for (const item of order.items) {
                   const product = allProducts.find((p) => p.id === item.productId || p.name === item.name);

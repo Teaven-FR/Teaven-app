@@ -58,7 +58,7 @@ serve(async (req) => {
       );
     }
 
-    const { items, pickupTime, customerName, customerPhone, rewardTierId, loyaltyAccountId } = body;
+    const { items, pickupTime, customerName, customerPhone, rewardTierId, loyaltyAccountId, discounts: rawDiscounts } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return new Response(
@@ -155,6 +155,26 @@ serve(async (req) => {
       }
     }
 
+    // Construire les discounts Square
+    const squareDiscounts: Array<Record<string, unknown>> = [];
+    if (rawDiscounts && Array.isArray(rawDiscounts)) {
+      for (const d of rawDiscounts as Array<{ name: string; percentage?: string; amountCents?: number }>) {
+        if (d.percentage) {
+          squareDiscounts.push({
+            name: d.name,
+            percentage: d.percentage,
+            scope: 'ORDER',
+          });
+        } else if (d.amountCents) {
+          squareDiscounts.push({
+            name: d.name,
+            amount_money: { amount: d.amountCents, currency: 'EUR' },
+            scope: 'ORDER',
+          });
+        }
+      }
+    }
+
     const orderResponse = await fetch(`${squareBaseUrl}/v2/orders`, {
       method: 'POST',
       headers: {
@@ -167,6 +187,7 @@ serve(async (req) => {
           location_id: locationId,
           reference_id: `TEAVEN-${Date.now()}`,
           line_items: lineItems,
+          ...(squareDiscounts.length > 0 ? { discounts: squareDiscounts } : {}),
           fulfillments: [{
             type: 'PICKUP',
             state: 'PROPOSED',

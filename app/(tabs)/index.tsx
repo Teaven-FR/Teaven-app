@@ -328,17 +328,7 @@ export default function HomeScreen() {
               </View>
             </LinearGradient>
 
-            <LinearGradient colors={['#C5DDD2', '#A8C5B8']} style={styles.promoCard}>
-              <View style={styles.promoContent}>
-                <Text style={styles.promoTitle}>Atmosphère</Text>
-                <Text style={styles.promoSubtitle}>
-                  Prenez soin de vous — lisez nos articles bien-être
-                </Text>
-                <Pressable onPress={() => router.push('/(tabs)/blog')}>
-                  <Text style={[styles.promoCta, { color: '#4A6B50' }]}>Lire</Text>
-                </Pressable>
-              </View>
-            </LinearGradient>
+            {/* Atmosphère retirée de l'accueil — accessible via onglet Blog */}
           </ScrollView>
 
           {/* ──── Strip Défis (compact → pleine carte) ──── */}

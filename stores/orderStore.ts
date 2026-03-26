@@ -21,6 +21,7 @@ interface OrderState {
     pickupTime?: string,
     rewardTierId?: string,
     loyaltyAccountId?: string,
+    discounts?: Array<{ name: string; percentage?: string; amountCents?: number }>,
   ) => Promise<Order>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   getOrderById: (orderId: string) => Order | undefined;
@@ -43,7 +44,7 @@ export const useOrderStore = create<OrderState>()(
       orderHistory: [],
       isProcessing: false,
 
-      createOrder: async (cartItems, paymentMethod, _usePoints, cardNonce?, giftCardId?, pickupTime?, rewardTierId?, loyaltyAccountId?) => {
+      createOrder: async (cartItems, paymentMethod, _usePoints, cardNonce?, giftCardId?, pickupTime?, rewardTierId?, loyaltyAccountId?, discounts?) => {
         set({ isProcessing: true });
 
         const authUser = useAuthStore.getState().user;
@@ -133,6 +134,7 @@ export const useOrderStore = create<OrderState>()(
             pickupTime: pickupTime ?? undefined,
             rewardTierId: rewardTierId ?? undefined,
             loyaltyAccountId: loyaltyAccountId ?? undefined,
+            discounts: discounts ?? undefined,
           });
 
           console.warn('[ORDER] create-order result:', JSON.stringify(createResult).slice(0, 500));
