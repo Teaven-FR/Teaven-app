@@ -74,12 +74,13 @@ serve(async (req) => {
       : 'https://connect.squareupsandbox.com';
     const locationId = Deno.env.get('SQUARE_LOCATION_ID');
 
+    console.log(`[create-order] Location: ${locationId}, items:`, JSON.stringify(items).slice(0, 500));
+
     // Construire les line items Square
     const lineItems = (items as OrderLineItem[]).map((item) => {
       const lineItem: Record<string, unknown> = {
         catalog_object_id: item.catalogObjectId,
         quantity: String(item.quantity),
-        item_type: 'ITEM',
       };
 
       if (item.modifiers && item.modifiers.length > 0) {
@@ -124,9 +125,14 @@ serve(async (req) => {
     const orderData = await orderResponse.json();
 
     if (!orderResponse.ok) {
-      console.error('Square order error:', orderData);
+      console.error('Square order error:', JSON.stringify(orderData));
+      const squareErrors = orderData.errors as Array<{ detail?: string; code?: string }> | undefined;
+      const firstError = squareErrors?.[0];
+      const friendlyMsg = firstError?.code === 'NOT_FOUND'
+        ? `Produit introuvable dans Square. Veuillez vider votre panier et réessayer.`
+        : firstError?.detail ?? 'Échec de la création de commande';
       return new Response(
-        JSON.stringify({ error: 'Échec de la création de commande', details: orderData }),
+        JSON.stringify({ error: friendlyMsg, details: orderData }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

@@ -91,8 +91,14 @@ export const useOrderStore = create<OrderState>()(
                 return { squareModifierId: opt?.squareModifierId ?? optId };
               });
             });
+            // Square Orders API exige un catalog_object_id qui est un VARIATION ID (pas item ID)
+            // Priorité : variation sélectionnée > première variation du produit > squareId du produit
+            const catalogObjectId = variation?.squareVariationId
+              ?? item.product.variations?.[0]?.squareVariationId
+              ?? item.product.squareId
+              ?? item.product.id;
             return {
-              catalogObjectId: variation?.squareVariationId ?? item.product.squareId ?? item.product.id,
+              catalogObjectId,
               quantity: item.quantity,
               name: item.product.name,
               modifiers: mods.length > 0 ? mods : undefined,

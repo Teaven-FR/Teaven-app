@@ -8,7 +8,7 @@ type EdgeFunctionResponse<T> = {
 };
 
 /** Appel générique à une Edge Function Supabase */
-async function callEdgeFunction<T>(
+export async function callEdgeFunction<T>(
   functionName: string,
   body: Record<string, unknown>,
   accessToken?: string,
@@ -19,17 +19,25 @@ async function callEdgeFunction<T>(
     token = session?.access_token;
   }
 
-  const headers: Record<string, string> = token
-    ? { 'Authorization': `Bearer ${token}` }
-    : {};
+  const options: { body: Record<string, unknown>; headers?: Record<string, string> } = { body };
+  if (token) {
+    options.headers = { 'Authorization': `Bearer ${token}` };
+  }
 
-  const { data, error } = await supabase.functions.invoke(functionName, {
-    body,
-    headers,
-  });
+  const { data, error } = await supabase.functions.invoke(functionName, options);
 
   if (error) {
-    return { data: null, error: error.message };
+    // Supabase retourne le body dans `data` même quand il y a une erreur HTTP
+    // Le vrai message d'erreur est souvent dans data.error
+    const detailedError = (data as Record<string, unknown>)?.error;
+    const details = (data as Record<string, unknown>)?.details;
+    const msg = typeof detailedError === 'string'
+      ? detailedError
+      : details
+        ? `${error.message}: ${JSON.stringify(details).slice(0, 200)}`
+        : error.message;
+    console.error(`[EdgeFunction:${functionName}]`, msg, data);
+    return { data: null, error: msg };
   }
 
   return { data: data as T, error: null };
