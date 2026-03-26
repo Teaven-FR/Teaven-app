@@ -26,7 +26,6 @@ import { useCatalog } from '@/hooks/useCatalog';
 import { useUser } from '@/hooks/useUser';
 import { useInstagramFeed } from '@/hooks/useInstagramFeed';
 import { useCartStore } from '@/stores/cartStore';
-import { useOrderStore } from '@/stores/orderStore';
 import { useToast } from '@/contexts/ToastContext';
 import { RechargeModal } from '@/components/ui/RechargeModal';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
@@ -65,7 +64,6 @@ export default function HomeScreen() {
   const { user, isGuest, wallet, rechargeWallet, loyalty } = useUser();
   const { showToast } = useToast();
   const setPromoCode = useCartStore((s) => s.setPromoCode);
-  const orderHistory = useOrderStore((s) => s.orderHistory ?? []);
   const { posts: instaPosts } = useInstagramFeed(6);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -241,7 +239,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Recharger votre porte-monnaie"
             >
-              <Wallet size={13} color="#C27B5A" strokeWidth={1.5} />
+              <Wallet size={13} color="#75967F" strokeWidth={1.5} />
               <Text style={styles.walletBannerText}>
                 Solde : <Text style={styles.walletBannerAmount}>{(wallet.balance / 100).toFixed(2).replace('.', ',')} €</Text>
               </Text>
@@ -258,26 +256,25 @@ export default function HomeScreen() {
             contentContainerStyle={styles.promosContent}
           >
             {/* Bannières dynamiques contextuelles */}
-            {orderHistory.length === 0 && (
-              <LinearGradient colors={['#E8F0EA', '#D4E5D7']} style={styles.promoCard}>
-                <View style={styles.promoContent}>
-                  <Text style={styles.promoTitle}>Première commande ?</Text>
-                  <Text style={styles.promoSubtitle}>-15% avec le code BIENVENUE</Text>
-                  <Pressable
-                    onPress={() => {
-                      setPromoCode('BIENVENUE');
-                      showToast('Code BIENVENUE activé !');
-                      router.push('/(tabs)/carte');
-                    }}
-                  >
-                    <Text style={styles.promoCta}>En profiter</Text>
-                  </Pressable>
-                </View>
-                <View style={styles.promoIconWrap}>
-                  <Leaf size={36} color={colors.green} strokeWidth={1} />
-                </View>
-              </LinearGradient>
-            )}
+            {/* Bannière Bienvenue -15% — toujours en premier pour les nouveaux users */}
+            <LinearGradient colors={['#F0F0E5', '#FFFFFF']} style={styles.promoCard}>
+              <View style={styles.promoContent}>
+                <Text style={styles.promoTitle}>Première commande ?</Text>
+                <Text style={styles.promoSubtitle}>-15% avec le code BIENVENUE</Text>
+                <Pressable
+                  onPress={() => {
+                    setPromoCode('BIENVENUE');
+                    showToast('Code BIENVENUE activé !');
+                    router.push('/(tabs)/carte');
+                  }}
+                >
+                  <Text style={styles.promoCta}>En profiter</Text>
+                </Pressable>
+              </View>
+              <View style={styles.promoIconWrap}>
+                <Leaf size={36} color={colors.green} strokeWidth={1} />
+              </View>
+            </LinearGradient>
 
             {/* Première recharge incentivée OU recharge classique */}
             {wallet.balance === 0 ? (
@@ -296,7 +293,7 @@ export default function HomeScreen() {
                 </View>
               </LinearGradient>
             ) : wallet.balance < 1000 ? (
-              <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.promoCard}>
+              <LinearGradient colors={['#738478', '#75967F']} style={styles.promoCard}>
                 <View style={styles.promoContent}>
                   <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Rechargez votre wallet</Text>
                   <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
@@ -309,12 +306,12 @@ export default function HomeScreen() {
               </LinearGradient>
             ) : null}
 
-            <LinearGradient colors={['#F5EFDF', '#EDE4CC']} style={styles.promoCard}>
+            <LinearGradient colors={['#F0F0E5', '#E8EDE9']} style={styles.promoCard}>
               <View style={styles.promoContent}>
                 <Text style={styles.promoTitle}>Parrainez un proche</Text>
                 <Text style={styles.promoSubtitle}>5€ pour vous, 5€ pour lui</Text>
                 <Pressable onPress={() => router.push('/referral')}>
-                  <Text style={[styles.promoCta, { color: colors.gold }]}>Parrainer</Text>
+                  <Text style={[styles.promoCta, { color: colors.green }]}>Parrainer</Text>
                 </Pressable>
               </View>
             </LinearGradient>
@@ -772,12 +769,12 @@ const styles = StyleSheet.create({
   },
   walletBannerAmount: {
     fontFamily: fonts.bold,
-    color: '#C27B5A',
+    color: '#75967F',
   },
   walletBannerCta: {
     fontFamily: fonts.bold,
     fontSize: 12,
-    color: '#C27B5A',
+    color: '#75967F',
   },
 
   // Badge notification

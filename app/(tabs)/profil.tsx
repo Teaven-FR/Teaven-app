@@ -334,7 +334,7 @@ export default function ProfilScreen() {
         {/* ──── Wallet ──── */}
         <Pressable onPress={() => setRechargeVisible(true)} style={styles.walletWrap}>
           <LinearGradient
-            colors={['#D4937A', '#C27B5A', '#B56A4A']}
+            colors={['#75967F', '#4A6B50', '#3A5840']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.walletCard}
@@ -363,7 +363,7 @@ export default function ProfilScreen() {
                 <Text style={styles.walletBonusText}>Bonus à chaque recharge</Text>
               </View>
               <View style={styles.rechargeButton}>
-                <Plus size={13} color="#C27B5A" strokeWidth={2.5} />
+                <Plus size={13} color="#75967F" strokeWidth={2.5} />
                 <Text style={styles.rechargeText}>Recharger</Text>
               </View>
             </View>
@@ -838,7 +838,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl,
     borderRadius: 18,
     overflow: 'hidden',
-    shadowColor: '#C27B5A',
+    shadowColor: '#75967F',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
@@ -936,7 +936,7 @@ const styles = StyleSheet.create({
   rechargeText: {
     fontFamily: fonts.bold,
     fontSize: 12,
-    color: '#C27B5A',
+    color: '#75967F',
   },
 
   // Récompenses

@@ -178,9 +178,9 @@ export function useCatalog() {
     fetchProducts();
   }, [fetchProducts]);
 
-  // Ne pas afficher de mock data — si les produits ne sont pas chargés, retourner []
-  const allProducts = remoteProducts ?? [];
-  const allCategories = remoteCategories ?? [{ id: 'all', label: 'Tout' }];
+  // Fallback sur les mock products si le catalogue Supabase est vide
+  const allProducts = (remoteProducts && remoteProducts.length > 0) ? remoteProducts : mockProducts;
+  const allCategories = (remoteCategories && remoteCategories.length > 0) ? remoteCategories : mockCategories;
 
   const products: Product[] = useMemo(() => {
     if (selectedCategory === 'all') return allProducts;

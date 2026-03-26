@@ -47,7 +47,7 @@ const MOMENTS = [
     description: 'Un goûter, une pâtisserie, un moment doux',
     amount: 1200,
     icon: Coffee,
-    gradient: ['#E8D5D0', '#D4937A'] as const,
+    gradient: ['#E8EDE9', '#75967F'] as const,
   },
   {
     id: 'repas-midi',
@@ -63,7 +63,7 @@ const MOMENTS = [
     description: "L'expérience Teaven en solo",
     amount: 3000,
     icon: Heart,
-    gradient: ['#F5E6D0', '#C27B5A'] as const,
+    gradient: ['#F0F0E5', '#738478'] as const,
   },
   {
     id: 'brunch-deux',

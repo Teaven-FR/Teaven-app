@@ -28,7 +28,7 @@ const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
 
 const FALLBACK: LocationData = {
   name: 'Teaven',
-  addressFormatted: '',
+  addressFormatted: 'Adresse en cours de chargement…',
   address: { line1: '', line2: '', city: '', postalCode: '', country: 'FR' },
   open: 9,
   close: 20,
@@ -50,9 +50,13 @@ export function useLocation() {
     let cancelled = false;
     (async () => {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
         const res = await fetch(`${SUPA_URL}/functions/v1/get-business-hours`, {
           headers: { 'Authorization': `Bearer ${SUPA_KEY}`, 'apikey': SUPA_KEY },
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
         const data = await res.json();
         if (cancelled) return;
 
