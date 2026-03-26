@@ -1,4 +1,6 @@
-// Écran carte cadeau — sélection montant, message, prévisualisation et envoi
+// ✅ CHANTIER 6 — Offrir un moment Teaven
+// Fusion Carte Cadeau + Wallet : offrir du crédit wallet via un code unique
+// Montant libre (10/25/50/100€) + Moments pré-packagés
 import { useState, useRef } from 'react';
 import {
   View,
@@ -10,7 +12,7 @@ import {
   Platform,
   Animated,
   KeyboardAvoidingView,
-  Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,256 +21,323 @@ import {
   ChevronLeft,
   Gift,
   MessageSquare,
-  Smartphone,
-  Mail,
+  Heart,
+  Coffee,
+  UtensilsCrossed,
+  Users,
+  Phone,
 } from 'lucide-react-native';
 import { useToast } from '@/contexts/ToastContext';
+import { callEdgeFunction } from '@/lib/square';
 import { colors, fonts, spacing, radii, shadows } from '@/constants/theme';
 
-/** Montants prédéfinis en euros */
-const PRESET_AMOUNTS = [10, 25, 50, 100] as const;
+/** Montants libres en centimes */
+const FREE_AMOUNTS = [
+  { value: 1000, label: '10 €' },
+  { value: 2500, label: '25 €' },
+  { value: 5000, label: '50 €' },
+  { value: 10000, label: '100 €' },
+] as const;
 
-/** Longueur maximale du message */
+/** Moments pré-packagés */
+const MOMENTS = [
+  {
+    id: 'pause-sucree',
+    name: 'Une pause sucrée',
+    description: 'Un goûter, une pâtisserie, un moment doux',
+    amount: 1200,
+    icon: Coffee,
+    gradient: ['#E8D5D0', '#D4937A'] as const,
+  },
+  {
+    id: 'repas-midi',
+    name: 'Un repas du midi',
+    description: 'De quoi se faire plaisir sur la pause déjeuner',
+    amount: 2000,
+    icon: UtensilsCrossed,
+    gradient: ['#C8D9CC', '#75967F'] as const,
+  },
+  {
+    id: 'brunch',
+    name: 'Un brunch',
+    description: "L'expérience Teaven en solo",
+    amount: 3000,
+    icon: Heart,
+    gradient: ['#F5E6D0', '#C27B5A'] as const,
+  },
+  {
+    id: 'brunch-deux',
+    name: 'Un brunch pour deux',
+    description: 'Deux brunchs complets, le moment à partager',
+    amount: 6000,
+    icon: Users,
+    gradient: ['#2C4A32', '#4A6B50'] as const,
+  },
+] as const;
+
 const MAX_MESSAGE_LENGTH = 150;
+
+type SelectionMode = 'free' | 'moment';
 
 export default function GiftScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showToast } = useToast();
 
-  const [selectedAmount, setSelectedAmount] = useState<number | null>(25);
-  const [isCustom, setIsCustom] = useState(false);
-  const [customAmount, setCustomAmount] = useState('');
+  const [mode, setMode] = useState<SelectionMode>('moment');
+  const [selectedFreeAmount, setSelectedFreeAmount] = useState<number | null>(null);
+  const [selectedMoment, setSelectedMoment] = useState<string | null>('pause-sucree');
+  const [recipientPhone, setRecipientPhone] = useState('');
   const [message, setMessage] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [giftCode, setGiftCode] = useState<string | null>(null);
 
-  // Animation de scale pour la carte sélectionnée
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  /** Montant effectif en euros */
-  const effectiveAmount = isCustom
-    ? parseInt(customAmount, 10) || 0
-    : selectedAmount ?? 0;
+  const effectiveAmount = mode === 'free'
+    ? (selectedFreeAmount ?? 0)
+    : (MOMENTS.find((m) => m.id === selectedMoment)?.amount ?? 0);
 
-  /** Sélectionner un montant prédéfini */
-  const handlePresetSelect = (amount: number) => {
-    setIsCustom(false);
-    setSelectedAmount(amount);
-    // Petite animation de rebond
+  const momentName = mode === 'moment'
+    ? MOMENTS.find((m) => m.id === selectedMoment)?.name
+    : undefined;
+
+  const fmt = (cents: number) => `${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2).replace('.', ',')} €`;
+
+  const handleSelectFreeAmount = (value: number) => {
+    setMode('free');
+    setSelectedFreeAmount(value);
+    setSelectedMoment(null);
     scaleAnim.setValue(0.95);
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      tension: 200,
-      friction: 8,
-      useNativeDriver: Platform.OS !== 'web',
-    }).start();
+    Animated.spring(scaleAnim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: Platform.OS !== 'web' }).start();
   };
 
-  /** Activer le montant personnalisé */
-  const handleCustomSelect = () => {
-    setIsCustom(true);
-    setSelectedAmount(null);
+  const handleSelectMoment = (id: string) => {
+    setMode('moment');
+    setSelectedMoment(id);
+    setSelectedFreeAmount(null);
+    scaleAnim.setValue(0.95);
+    Animated.spring(scaleAnim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: Platform.OS !== 'web' }).start();
   };
 
-  /** Envoi par SMS via l'app native */
-  const handleSendSMS = () => {
+  const handleSend = async () => {
     if (effectiveAmount <= 0) {
       showToast('Veuillez choisir un montant', 'error');
       return;
     }
-    const body = message.length > 0
-      ? `Je t'offre une carte cadeau Teaven de ${effectiveAmount}\u00A0\u20AC ! \u00AB ${message} \u00BB`
-      : `Je t'offre une carte cadeau Teaven de ${effectiveAmount}\u00A0\u20AC !`;
-    const separator = Platform.OS === 'ios' ? '&' : '?';
-    Linking.openURL(`sms:${separator}body=${encodeURIComponent(body)}`).catch(() => {
-      showToast('Impossible d\'ouvrir l\'app SMS', 'error');
-    });
-  };
-
-  /** Envoi par email via l'app native */
-  const handleSendEmail = () => {
-    if (effectiveAmount <= 0) {
-      showToast('Veuillez choisir un montant', 'error');
+    const phone = recipientPhone.replace(/\s/g, '');
+    if (!phone || phone.length < 10) {
+      showToast('Veuillez entrer un numéro de téléphone valide', 'error');
       return;
     }
-    const subject = encodeURIComponent(`Carte cadeau Teaven — ${effectiveAmount}\u00A0\u20AC`);
-    const body = encodeURIComponent(
-      message.length > 0
-        ? `Bonjour,\n\nJe t'offre une carte cadeau Teaven de ${effectiveAmount}\u00A0\u20AC !\n\n\u00AB ${message} \u00BB\n\nÀ bientôt chez Teaven !`
-        : `Bonjour,\n\nJe t'offre une carte cadeau Teaven de ${effectiveAmount}\u00A0\u20AC !\n\nÀ bientôt chez Teaven !`
+
+    setIsSending(true);
+    try {
+      const result = await callEdgeFunction<{
+        success: boolean;
+        code: string;
+        error?: string;
+      }>('create-gift', {
+        recipientPhone: phone,
+        amount: effectiveAmount,
+        message,
+        momentName,
+      });
+
+      if (result.error || !result.data?.success) {
+        showToast(result.error ?? result.data?.error ?? 'Erreur', 'error');
+        return;
+      }
+
+      setGiftCode(result.data.code);
+      showToast('Cadeau envoyé avec succès !', 'success');
+    } catch (err) {
+      showToast('Erreur lors de l\'envoi', 'error');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // ── Écran de succès ──
+  if (giftCode) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }, styles.centered]}>
+        <View style={styles.successCard}>
+          <View style={styles.successIconWrap}>
+            <Gift size={32} color={colors.green} strokeWidth={1.3} />
+          </View>
+          <Text style={styles.successTitle}>Cadeau envoyé !</Text>
+          <Text style={styles.successSubtitle}>
+            {momentName
+              ? `"${momentName}" — ${fmt(effectiveAmount)}`
+              : fmt(effectiveAmount)}
+          </Text>
+          <View style={styles.codeCard}>
+            <Text style={styles.codeLabel}>Code cadeau</Text>
+            <Text style={styles.codeValue}>{giftCode}</Text>
+          </View>
+          <Text style={styles.successHint}>
+            Le destinataire pourra utiliser ce code dans l'app Teaven pour créditer son portefeuille.
+          </Text>
+          <Pressable onPress={() => router.back()} style={styles.successBtn}>
+            <Text style={styles.successBtnText}>Retour</Text>
+          </Pressable>
+        </View>
+      </View>
     );
-    Linking.openURL(`mailto:?subject=${subject}&body=${body}`).catch(() => {
-      showToast('Impossible d\'ouvrir l\'app email', 'error');
-    });
-  };
+  }
 
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* ──── Header ──── */}
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {/* Header */}
         <View style={styles.header}>
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={12}
-            accessibilityLabel="Retour"
-            accessibilityRole="button"
-          >
+          <Pressable onPress={() => router.back()} hitSlop={12}>
             <ChevronLeft size={24} color={colors.text} strokeWidth={1.3} />
           </Pressable>
           <Text style={styles.headerTitle}>Offrir un moment</Text>
-          <View style={styles.headerSpacer} />
+          <View style={{ width: 24 }} />
         </View>
 
-        {/* ──── Titre ──── */}
-        <View style={styles.titleSection}>
-          <View style={styles.titleIconWrap}>
+        {/* Intro */}
+        <View style={styles.introSection}>
+          <View style={styles.introIconWrap}>
             <Gift size={24} color={colors.green} strokeWidth={1.3} />
           </View>
-          <Text style={styles.title}>Offrir un moment Teaven</Text>
-          <Text style={styles.subtitle}>
-            Faites plaisir à vos proches avec une carte cadeau utilisable en boutique et sur l'application.
+          <Text style={styles.introTitle}>Offrir un moment Teaven</Text>
+          <Text style={styles.introSubtitle}>
+            Un geste simple pour faire découvrir notre univers à ceux que vous aimez.
           </Text>
         </View>
 
-        {/* ──── Sélection du montant ──── */}
-        <Text style={styles.sectionLabel}>MONTANT</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.amountsRow}
-        >
-          {PRESET_AMOUNTS.map((amount) => {
-            const active = !isCustom && selectedAmount === amount;
+        {/* ──── Moments pré-packagés ──── */}
+        <Text style={styles.sectionLabel}>NOS MOMENTS</Text>
+        <View style={styles.momentsGrid}>
+          {MOMENTS.map((moment) => {
+            const active = mode === 'moment' && selectedMoment === moment.id;
+            const Icon = moment.icon;
             return (
               <Pressable
-                key={amount}
-                onPress={() => handlePresetSelect(amount)}
-                style={[styles.amountCard, active && styles.amountCardActive]}
-                accessibilityLabel={`${amount} euros`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
+                key={moment.id}
+                onPress={() => handleSelectMoment(moment.id)}
+                style={[styles.momentCard, active && styles.momentCardActive]}
               >
-                <Text style={[styles.amountValue, active && styles.amountValueActive]}>
-                  {amount}\u00A0\u20AC
+                <LinearGradient
+                  colors={[...moment.gradient]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.momentGradient}
+                >
+                  <Icon size={18} color="#FFFFFF" strokeWidth={1.5} />
+                </LinearGradient>
+                <Text style={[styles.momentName, active && styles.momentNameActive]} numberOfLines={1}>
+                  {moment.name}
+                </Text>
+                <Text style={styles.momentDesc} numberOfLines={1}>{moment.description}</Text>
+                <Text style={[styles.momentPrice, active && styles.momentPriceActive]}>
+                  {fmt(moment.amount)}
                 </Text>
               </Pressable>
             );
           })}
+        </View>
+        <Text style={styles.momentFootnote}>
+          Le montant est crédité sur le portefeuille Teaven du destinataire. Il choisit ce qui lui fait envie.
+        </Text>
 
-          {/* Carte montant personnalisé */}
-          <Pressable
-            onPress={handleCustomSelect}
-            style={[styles.amountCard, isCustom && styles.amountCardActive]}
-            accessibilityLabel="Montant personnalisé"
-            accessibilityRole="button"
-            accessibilityState={{ selected: isCustom }}
-          >
-            <Text style={[styles.amountValue, isCustom && styles.amountValueActive]}>
-              Autre
-            </Text>
-          </Pressable>
+        {/* ──── Montant libre ──── */}
+        <Text style={styles.sectionLabel}>OU CHOISISSEZ UN MONTANT</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.freeRow}>
+          {FREE_AMOUNTS.map((a) => {
+            const active = mode === 'free' && selectedFreeAmount === a.value;
+            return (
+              <Pressable
+                key={a.value}
+                onPress={() => handleSelectFreeAmount(a.value)}
+                style={[styles.freeCard, active && styles.freeCardActive]}
+              >
+                <Text style={[styles.freeValue, active && styles.freeValueActive]}>{a.label}</Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
 
-        {/* ──── Champ montant personnalisé ──── */}
-        {isCustom && (
-          <View style={styles.customInputWrap}>
-            <TextInput
-              style={styles.customInput}
-              value={customAmount}
-              onChangeText={(text) => setCustomAmount(text.replace(/[^0-9]/g, ''))}
-              placeholder="Montant en euros"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="number-pad"
-              maxLength={4}
-              accessibilityLabel="Montant personnalisé"
-            />
-            <Text style={styles.customInputSuffix}>\u20AC</Text>
-          </View>
-        )}
+        {/* ──── Destinataire ──── */}
+        <Text style={styles.sectionLabel}>DESTINATAIRE</Text>
+        <View style={styles.phoneWrap}>
+          <Phone size={16} color={colors.textMuted} strokeWidth={1.5} />
+          <TextInput
+            style={styles.phoneInput}
+            value={recipientPhone}
+            onChangeText={setRecipientPhone}
+            placeholder="Numéro de téléphone"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="phone-pad"
+            maxLength={15}
+          />
+        </View>
 
         {/* ──── Message ──── */}
-        <Text style={styles.sectionLabel}>MESSAGE</Text>
+        <Text style={styles.sectionLabel}>MESSAGE (OPTIONNEL)</Text>
         <View style={styles.messageWrap}>
-          <View style={styles.messageIconRow}>
-            <MessageSquare size={16} color={colors.textMuted} strokeWidth={1.3} />
-            <Text style={styles.messageCharCount}>
-              {message.length}/{MAX_MESSAGE_LENGTH}
-            </Text>
+          <View style={styles.messageHeader}>
+            <MessageSquare size={14} color={colors.textMuted} strokeWidth={1.3} />
+            <Text style={styles.messageCount}>{message.length}/{MAX_MESSAGE_LENGTH}</Text>
           </View>
           <TextInput
             style={styles.messageInput}
             value={message}
-            onChangeText={(text) => {
-              if (text.length <= MAX_MESSAGE_LENGTH) setMessage(text);
-            }}
+            onChangeText={(t) => t.length <= MAX_MESSAGE_LENGTH && setMessage(t)}
             placeholder="Ajoutez un message..."
             placeholderTextColor={colors.textMuted}
             multiline
             maxLength={MAX_MESSAGE_LENGTH}
             textAlignVertical="top"
-            accessibilityLabel="Message de la carte cadeau"
           />
         </View>
 
-        {/* ──── Prévisualisation de la carte ──── */}
-        <Text style={styles.sectionLabel}>APERÇU</Text>
-        <Animated.View style={[styles.previewWrapper, { transform: [{ scale: scaleAnim }] }]}>
+        {/* ──── Aperçu ──── */}
+        <Animated.View style={[styles.previewWrap, { transform: [{ scale: scaleAnim }] }]}>
           <LinearGradient
             colors={['#2C4A32', '#4A6B50', '#75967F']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.previewCard}
           >
-            {/* Cercles décoratifs */}
-            <View style={styles.previewDecorCircle} />
-            <View style={styles.previewDecorCircle2} />
-
-            {/* Logo */}
+            <View style={styles.previewDecor1} />
+            <View style={styles.previewDecor2} />
             <Text style={styles.previewBrand}>TEAVEN</Text>
-
-            {/* Montant */}
+            {momentName && <Text style={styles.previewMoment}>{momentName}</Text>}
             <Text style={styles.previewAmount}>
-              {effectiveAmount > 0 ? `${effectiveAmount}\u00A0\u20AC` : '—\u00A0\u20AC'}
+              {effectiveAmount > 0 ? fmt(effectiveAmount) : '— €'}
             </Text>
-
-            {/* Sous-titre */}
-            <Text style={styles.previewLabel}>CARTE CADEAU</Text>
-
-            {/* Message (aperçu) */}
+            <Text style={styles.previewLabel}>OFFRIR UN MOMENT</Text>
             {message.length > 0 && (
-              <Text style={styles.previewMessage} numberOfLines={2}>
-                « {message} »
-              </Text>
+              <Text style={styles.previewMessage} numberOfLines={2}>« {message} »</Text>
             )}
           </LinearGradient>
         </Animated.View>
 
-        {/* ──── Boutons d'envoi ──── */}
-        <View style={styles.buttonsSection}>
+        {/* ──── CTA ──── */}
+        <View style={[styles.ctaSection, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <Pressable
-            style={styles.sendButton}
-            onPress={handleSendSMS}
-            accessibilityLabel="Envoyer par SMS"
-            accessibilityRole="button"
+            onPress={handleSend}
+            style={[styles.ctaButton, (isSending || effectiveAmount <= 0) && { opacity: 0.5 }]}
+            disabled={isSending || effectiveAmount <= 0}
           >
-            <Smartphone size={18} color="#FFFFFF" strokeWidth={1.3} />
-            <Text style={styles.sendButtonText}>Envoyer par SMS</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.sendButtonOutline}
-            onPress={handleSendEmail}
-            accessibilityLabel="Envoyer par email"
-            accessibilityRole="button"
-          >
-            <Mail size={18} color={colors.green} strokeWidth={1.3} />
-            <Text style={styles.sendButtonOutlineText}>Envoyer par email</Text>
+            {isSending ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Gift size={18} color="#FFFFFF" strokeWidth={1.5} />
+                <Text style={styles.ctaText}>
+                  Offrir {effectiveAmount > 0 ? fmt(effectiveAmount) : ''}
+                </Text>
+              </>
+            )}
           </Pressable>
         </View>
       </ScrollView>
@@ -277,252 +346,134 @@ export default function GiftScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  scrollContent: {
-    paddingBottom: 60,
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
+  centered: { alignItems: 'center', justifyContent: 'center' },
+  scrollContent: { paddingBottom: 40 },
 
-  // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl, paddingVertical: spacing.lg,
   },
-  headerTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 18,
-    color: colors.text,
-  },
-  headerSpacer: {
-    width: 24,
-  },
+  headerTitle: { fontFamily: fonts.bold, fontSize: 18, color: colors.text },
 
-  // Titre principal
-  titleSection: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.xxl,
+  introSection: { alignItems: 'center', paddingHorizontal: spacing.xl, marginBottom: spacing.xxl },
+  introIconWrap: {
+    width: 52, height: 52, borderRadius: 26, backgroundColor: colors.greenLight,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
   },
-  titleIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.greenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  title: {
-    fontFamily: fonts.bold,
-    fontSize: 20,
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    fontFamily: fonts.regular,
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  introTitle: { fontFamily: fonts.bold, fontSize: 20, color: colors.text, textAlign: 'center', marginBottom: spacing.sm },
+  introSubtitle: { fontFamily: fonts.regular, fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 },
 
-  // Section label
   sectionLabel: {
-    fontFamily: fonts.bold,
-    fontSize: 10,
-    letterSpacing: 3,
-    color: colors.textMuted,
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.md,
+    fontFamily: fonts.bold, fontSize: 10, letterSpacing: 3, color: colors.textMuted,
+    paddingHorizontal: spacing.xl, marginBottom: spacing.md, marginTop: spacing.lg,
   },
 
-  // Montants
-  amountsRow: {
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+  // Moments pré-packagés — grille 2×2
+  momentsGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.xl, gap: 12,
   },
-  amountCard: {
-    width: 80,
-    height: 80,
-    backgroundColor: colors.surface,
-    borderRadius: radii.card,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+  momentCard: {
+    width: '47%' as any, backgroundColor: colors.surface, borderRadius: radii.card,
+    borderWidth: 1.5, borderColor: colors.border, padding: 14, ...shadows.subtle,
+  },
+  momentCardActive: { borderColor: colors.green, backgroundColor: colors.greenLight },
+  momentGradient: {
+    width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+  },
+  momentName: { fontFamily: fonts.bold, fontSize: 13, color: colors.text, marginBottom: 3 },
+  momentNameActive: { color: colors.greenDark },
+  momentDesc: { fontFamily: fonts.regular, fontSize: 10.5, color: colors.textSecondary, marginBottom: 8, lineHeight: 14 },
+  momentPrice: { fontFamily: fonts.monoSemiBold, fontSize: 15, color: colors.text },
+  momentPriceActive: { color: colors.greenDark },
+  momentFootnote: {
+    fontFamily: fonts.regular, fontSize: 11, color: colors.textMuted, textAlign: 'center',
+    paddingHorizontal: spacing.xxl, marginTop: spacing.md, lineHeight: 16,
+  },
+
+  // Montants libres
+  freeRow: { paddingHorizontal: spacing.xl, gap: spacing.md },
+  freeCard: {
+    width: 76, height: 76, backgroundColor: colors.surface, borderRadius: radii.card,
+    borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
     ...shadows.subtle,
   },
-  amountCardActive: {
-    borderColor: colors.green,
-    backgroundColor: colors.greenLight,
-  },
-  amountValue: {
-    fontFamily: fonts.monoSemiBold,
-    fontSize: 18,
-    color: colors.text,
-  },
-  amountValueActive: {
-    color: colors.greenDark,
-  },
+  freeCardActive: { borderColor: colors.green, backgroundColor: colors.greenLight },
+  freeValue: { fontFamily: fonts.monoSemiBold, fontSize: 17, color: colors.text },
+  freeValueActive: { color: colors.greenDark },
 
-  // Montant personnalisé
-  customInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: spacing.xl,
-    backgroundColor: colors.surface,
-    borderRadius: radii.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
+  // Destinataire
+  phoneWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginHorizontal: spacing.xl, backgroundColor: colors.surface,
+    borderRadius: radii.card, borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: spacing.lg, paddingVertical: 4,
   },
-  customInput: {
-    flex: 1,
-    fontFamily: fonts.mono,
-    fontSize: 18,
-    color: colors.text,
-    paddingVertical: 14,
-  },
-  customInputSuffix: {
-    fontFamily: fonts.monoSemiBold,
-    fontSize: 18,
-    color: colors.textMuted,
-    marginLeft: spacing.sm,
-  },
+  phoneInput: { flex: 1, fontFamily: fonts.regular, fontSize: 15, color: colors.text, paddingVertical: 14 },
 
   // Message
   messageWrap: {
-    marginHorizontal: spacing.xl,
-    backgroundColor: colors.surface,
-    borderRadius: radii.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginBottom: spacing.xxl,
+    marginHorizontal: spacing.xl, backgroundColor: colors.surface,
+    borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, padding: spacing.lg,
   },
-  messageIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  messageCharCount: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  messageInput: {
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    color: colors.text,
-    minHeight: 80,
-    lineHeight: 22,
-  },
+  messageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  messageCount: { fontFamily: fonts.mono, fontSize: 11, color: colors.textMuted },
+  messageInput: { fontFamily: fonts.regular, fontSize: 14, color: colors.text, minHeight: 60, lineHeight: 22 },
 
-  // Prévisualisation
-  previewWrapper: {
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.xxl,
-  },
+  // Aperçu
+  previewWrap: { paddingHorizontal: spacing.xl, marginTop: spacing.xl },
   previewCard: {
-    borderRadius: 20,
-    padding: spacing.xxl,
-    overflow: 'hidden',
-    alignItems: 'center',
-    minHeight: 200,
-    justifyContent: 'center',
-    ...shadows.loyalty,
+    borderRadius: 20, padding: spacing.xxl, overflow: 'hidden',
+    alignItems: 'center', minHeight: 200, justifyContent: 'center', ...shadows.loyalty,
   },
-  previewDecorCircle: {
-    position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  previewDecor1: {
+    position: 'absolute', top: -30, right: -30, width: 120, height: 120,
+    borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  previewDecorCircle2: {
-    position: 'absolute',
-    bottom: -40,
-    left: -20,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+  previewDecor2: {
+    position: 'absolute', bottom: -40, left: -20, width: 100, height: 100,
+    borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  previewBrand: {
-    fontFamily: fonts.bold,
-    fontSize: 12,
-    letterSpacing: 6,
-    color: 'rgba(255,255,255,0.5)',
-    marginBottom: spacing.lg,
-  },
-  previewAmount: {
-    fontFamily: fonts.monoSemiBold,
-    fontSize: 40,
-    color: '#FFFFFF',
-    marginBottom: spacing.sm,
-  },
-  previewLabel: {
-    fontFamily: fonts.bold,
-    fontSize: 10,
-    letterSpacing: 3,
-    color: 'rgba(255,255,255,0.5)',
-    marginBottom: spacing.md,
-  },
+  previewBrand: { fontFamily: fonts.bold, fontSize: 12, letterSpacing: 6, color: 'rgba(255,255,255,0.5)', marginBottom: spacing.sm },
+  previewMoment: { fontFamily: fonts.bold, fontSize: 14, color: 'rgba(255,255,255,0.8)', marginBottom: spacing.xs },
+  previewAmount: { fontFamily: fonts.monoSemiBold, fontSize: 40, color: '#FFFFFF', marginBottom: spacing.sm },
+  previewLabel: { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 3, color: 'rgba(255,255,255,0.5)', marginBottom: spacing.md },
   previewMessage: {
-    fontFamily: fonts.regular,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    lineHeight: 20,
-    paddingHorizontal: spacing.lg,
+    fontFamily: fonts.regular, fontSize: 13, color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center', fontStyle: 'italic', lineHeight: 20, paddingHorizontal: spacing.lg,
   },
 
-  // Boutons d'envoi
-  buttonsSection: {
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
+  // CTA
+  ctaSection: { paddingHorizontal: spacing.xl, marginTop: spacing.xl },
+  ctaButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+    backgroundColor: colors.green, borderRadius: radii.card, paddingVertical: 16, ...shadows.card,
   },
-  sendButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.green,
-    borderRadius: radii.card,
-    paddingVertical: 14,
-    ...shadows.card,
+  ctaText: { fontFamily: fonts.bold, fontSize: 16, color: '#FFFFFF' },
+
+  // Succès
+  successCard: {
+    backgroundColor: colors.surface, borderRadius: 24, padding: 32,
+    marginHorizontal: spacing.xl, alignItems: 'center', ...shadows.card,
   },
-  sendButtonText: {
-    fontFamily: fonts.bold,
-    fontSize: 15,
-    color: '#FFFFFF',
+  successIconWrap: {
+    width: 64, height: 64, borderRadius: 32, backgroundColor: colors.greenLight,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg,
   },
-  sendButtonOutline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: radii.card,
-    borderWidth: 1.5,
-    borderColor: colors.green,
-    paddingVertical: 14,
+  successTitle: { fontFamily: fonts.bold, fontSize: 22, color: colors.text, marginBottom: spacing.sm },
+  successSubtitle: { fontFamily: fonts.regular, fontSize: 14, color: colors.textSecondary, marginBottom: spacing.xl, textAlign: 'center' },
+  codeCard: {
+    backgroundColor: colors.bg, borderRadius: 16, paddingHorizontal: 24, paddingVertical: 16,
+    alignItems: 'center', marginBottom: spacing.lg, width: '100%',
   },
-  sendButtonOutlineText: {
-    fontFamily: fonts.bold,
-    fontSize: 15,
-    color: colors.green,
+  codeLabel: { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 2, color: colors.textMuted, marginBottom: 6 },
+  codeValue: { fontFamily: fonts.monoSemiBold, fontSize: 24, color: colors.green, letterSpacing: 2 },
+  successHint: {
+    fontFamily: fonts.regular, fontSize: 12, color: colors.textMuted, textAlign: 'center',
+    lineHeight: 18, marginBottom: spacing.xl,
   },
+  successBtn: {
+    backgroundColor: colors.green, borderRadius: radii.card, paddingVertical: 14, paddingHorizontal: 40,
+  },
+  successBtnText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
 });

@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import {
   ArrowLeft,
   Flame,
@@ -68,7 +69,7 @@ const ICON_COLOR: Record<string, string> = {
   coffee: '#C4845C',
   heart: colors.error,
   star: colors.gold,
-  users: '#5B7FBF',
+  users: colors.greenSecondary,
 };
 
 const INITIAL_CHALLENGES: Challenge[] = [
@@ -214,7 +215,7 @@ export default function DefisScreen() {
 
       {/* Hero */}
       <LinearGradient
-        colors={['#2C4A32', '#4A6B50']}
+        colors={['#243D29', '#2E5235', '#3A6642']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.hero}
@@ -233,10 +234,23 @@ export default function DefisScreen() {
         </View>
       </LinearGradient>
 
-      {/* Défis en cours */}
-      <Text style={styles.sectionTitle}>Défis en cours</Text>
-      <View style={styles.challengesList}>
-        {challenges.map((ch) => {
+      {/* Défis en cours — triés par progression (plus avancé d'abord) */}
+      {[
+        { key: 'fidelite', label: 'Séries en cours', desc: 'Défis séquentiels de régularité' },
+        { key: 'boissons', label: 'Explorateur', desc: 'Découvrez notre carte sous toutes ses formes' },
+        { key: 'food', label: 'Challenge du mois', desc: 'Défi mensuel unique' },
+        { key: 'social', label: 'Social', desc: 'Partagez l\'expérience Teaven' },
+      ].map((cat) => {
+        const catChallenges = challenges
+          .filter((c) => c.category === cat.key)
+          .sort((a, b) => (b.progress / b.target) - (a.progress / a.target));
+        if (catChallenges.length === 0) return null;
+        return (
+          <View key={cat.key}>
+            <Text style={styles.sectionTitle}>{cat.label}</Text>
+            <Text style={styles.sectionDesc}>{cat.desc}</Text>
+            <View style={styles.challengesList}>
+              {catChallenges.map((ch) => {
           const Icon = ICON_MAP[ch.icon] ?? Trophy;
           const isDone = ch.progress >= ch.target;
           const pct = Math.min(100, Math.round((ch.progress / ch.target) * 100));
@@ -266,7 +280,22 @@ export default function DefisScreen() {
                 <View style={styles.progressBar}>
                   <View style={[styles.progressFill, { width: `${pct}%` as any }]} />
                 </View>
-                <Text style={styles.progressCount}>{ch.progress}/{ch.target}</Text>
+                <View style={styles.progressCircleWrap}>
+                  <Svg width={38} height={38} viewBox="0 0 38 38">
+                    <SvgCircle cx={19} cy={19} r={16} stroke="rgba(117,150,127,0.15)" strokeWidth={2.5} fill="none" />
+                    <SvgCircle
+                      cx={19} cy={19} r={16}
+                      stroke="#75967F"
+                      strokeWidth={2.5}
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 16}`}
+                      strokeDashoffset={`${2 * Math.PI * 16 * (1 - pct / 100)}`}
+                      transform="rotate(-90 19 19)"
+                    />
+                  </Svg>
+                  <Text style={styles.progressCircleText}>{ch.progress}/{ch.target}</Text>
+                </View>
               </View>
 
               {/* Footer */}
@@ -296,8 +325,11 @@ export default function DefisScreen() {
               </View>
             </View>
           );
-        })}
-      </View>
+              })}
+            </View>
+          </View>
+        );
+      })}
 
       {/* Pourquoi des défis */}
       <Text style={styles.sectionTitle}>Pourquoi des défis ?</Text>
@@ -409,10 +441,17 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontFamily: fonts.bold,
     fontSize: 16,
-    color: colors.text,
+    color: colors.green,
+    paddingHorizontal: spacing.xl,
+    marginBottom: 4,
+    marginTop: spacing.sm,
+  },
+  sectionDesc: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
     paddingHorizontal: spacing.xl,
     marginBottom: spacing.md,
-    marginTop: spacing.sm,
   },
 
   // Challenges
@@ -503,6 +542,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     minWidth: 32,
     textAlign: 'right',
+  },
+  progressCircleWrap: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressCircleText: {
+    position: 'absolute',
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 9,
+    color: colors.green,
   },
   cardFooter: {
     flexDirection: 'row',

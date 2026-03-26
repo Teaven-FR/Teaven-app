@@ -1,17 +1,18 @@
 // Écran Panier & Checkout — données dynamiques depuis cartStore + orderStore
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   Pressable,
-  Switch,
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import {
   ChevronLeft,
   ShoppingBag,
@@ -24,13 +25,24 @@ import {
   Tag,
   X,
   Check,
+  Truck,
+  Home,
+  ChevronRight,
+  Wallet,
+  Gift,
+  Sparkles,
+  Calendar,
 } from 'lucide-react-native';
 import { TextInput } from 'react-native';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { RechargeModal } from '@/components/ui/RechargeModal';
 import TimeSlotPicker from '@/components/ui/TimeSlotPicker';
-import { mockTimeSlots } from '@/constants/mockTimeSlots';
+import { getFreshTimeSlots, getTimeSlotsWithHours, getTomorrowTimeSlots, hasAvailableSlotsToday } from '@/constants/mockTimeSlots';
 import { useCart } from '@/hooks/useCart';
-import { useUser } from '@/hooks/useUser';
+import { useLocation } from '@/hooks/useLocation';
+import { useUser, LEVEL_MULTIPLIERS } from '@/hooks/useUser';
+import { useCatalog } from '@/hooks/useCatalog';
+import { useToast } from '@/contexts/ToastContext';
 import { useOrderStore } from '@/stores/orderStore';
 import { useCartStore } from '@/stores/cartStore';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
@@ -58,17 +70,25 @@ function calcPromoDiscount(
 const FALLBACK_REWARDS: Reward[] = [
   { id: 'r1', name: 'Boisson offerte', description: 'Thé, café ou infusion', pointsCost: 200, icon: 'coffee' },
   { id: 'r2', name: 'Dessert offert', description: 'Pâtisserie maison', pointsCost: 500, icon: 'gift' },
-  { id: 'r3', name: '-20% sur la carte', description: 'Toute la commande', pointsCost: 750, icon: 'percent' },
+  { id: 'r3', name: 'Formule offerte', description: 'Plat + boisson au choix', pointsCost: 750, icon: 'gift' },
 ];
 
-// Convertir les créneaux mock vers le format attendu par TimeSlotPicker
-const pickerSlots: PickerTimeSlot[] = mockTimeSlots.map((slot) => ({
-  id: slot.id,
-  timeRange: slot.id === 'asap' ? '' : slot.label,
-  queueCount: slot.ordersInQueue,
-  available: slot.available,
-  isAsap: slot.id === 'asap',
-}));
+function buildPickerSlots(openHour?: number, closeHour?: number, tomorrow = false): PickerTimeSlot[] {
+  const oh = openHour ?? 9;
+  const ch = closeHour ?? 20;
+  const slots = tomorrow
+    ? getTomorrowTimeSlots(oh, ch)
+    : (openHour != null && closeHour != null)
+      ? getTimeSlotsWithHours(openHour, closeHour)
+      : getFreshTimeSlots();
+  return slots.map((slot) => ({
+    id: slot.id,
+    timeRange: slot.id === 'asap' ? '' : slot.label,
+    queueCount: slot.ordersInQueue,
+    available: slot.available,
+    isAsap: slot.id === 'asap',
+  }));
+}
 
 type PaymentMethod = 'card' | 'wallet' | 'mixed';
 
@@ -83,14 +103,19 @@ export default function PanierScreen() {
     updateQuantity,
     removeItem,
     formatPrice,
-    getLoyaltyDiscount,
     getItemKey,
   } = useCart();
+  const addItem = useCartStore((s) => s.addItem);
 
-  const { loyalty, rewards: squareRewards } = useUser();
-  const [useLoyalty, setUseLoyalty] = useState(false);
+  const { loyalty, wallet, rewards: squareRewards, rechargeWallet } = useUser();
+  const { location: storeLocation } = useLocation();
+  const [rechargeVisible, setRechargeVisible] = useState(false);
+  const { allProducts } = useCatalog();
+  const { showToast } = useToast();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
   const [appliedReward, setAppliedReward] = useState<Reward | null>(null);
+  const storePromoCode = useCartStore((s) => s.activePromoCode);
+  const setStorePromoCode = useCartStore((s) => s.setPromoCode);
 
   // Code promo
   const [promoInput, setPromoInput] = useState('');
@@ -109,12 +134,88 @@ export default function PanierScreen() {
     ? (appliedReward.icon === 'percent' ? Math.round(subtotal * 0.2) : 0)
     : 0;
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
+  const [businessHours, setBusinessHours] = useState<{ open: number; close: number } | null>(null);
+  useEffect(() => {
+    const SUPA = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+    const KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+    fetch(`${SUPA}/functions/v1/get-business-hours`, {
+      headers: { 'Authorization': `Bearer ${KEY}`, 'apikey': KEY },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.open != null && data.close != null && !data.closed) {
+          setBusinessHours({ open: data.open, close: data.close });
+        }
+      })
+      .catch(() => {});
+  }, []);
+  // pickerSlots construit plus bas après pickupDayOffset
   const [isOrdering, setIsOrdering] = useState(false);
+  type DeliveryMode = 'pickup' | 'delivery';
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('pickup');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryComplement, setDeliveryComplement] = useState('');
+  const [deliveryCity, setDeliveryCity] = useState('');
+  const [deliveryPostal, setDeliveryPostal] = useState('');
+  const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
+  const [deliveryLng, setDeliveryLng] = useState<number | null>(null);
+  const [addressQuery, setAddressQuery] = useState('');
+  const [addressSuggestions, setAddressSuggestions] = useState<Array<{ place_id: string; description: string; main_text: string; secondary_text: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const addressSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [rewardsExpanded, setRewardsExpanded] = useState(false);
+  // Auto-switch to tomorrow if no slots available today
+  const todaySlots = buildPickerSlots(businessHours?.open, businessHours?.close, false);
+  const hasTodaySlots = todaySlots.some((s) => s.available);
+  const [pickupDayOffset, setPickupDayOffset] = useState(0);
+  const autoTomorrow = !hasTodaySlots && pickupDayOffset === 0;
+  const effectiveDayOffset = autoTomorrow ? 1 : pickupDayOffset;
+  const pickerSlots = effectiveDayOffset === 0
+    ? todaySlots
+    : buildPickerSlots(businessHours?.open, businessHours?.close, true).filter((s) => !s.isAsap);
+  const DELIVERY_FEE = 490; // 4,90€ en centimes (placeholder Uber Direct)
   const createOrder = useOrderStore((s) => s.createOrder);
   const orderHistory = useOrderStore((s) => s.orderHistory ?? []);
   const cartItems = useCartStore((s) => s.items);
-  const storePromoCode = useCartStore((s) => s.activePromoCode);
-  const setStorePromoCode = useCartStore((s) => s.setPromoCode);
+  // ─── Google Places autocomplete ──────────────────────────────────────────
+  const SUPA_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+  const SUPA_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+  const searchAddress = (text: string) => {
+    setAddressQuery(text);
+    if (text.length < 3) { setAddressSuggestions([]); setShowSuggestions(false); return; }
+    if (addressSearchTimer.current) clearTimeout(addressSearchTimer.current);
+    addressSearchTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${SUPA_URL}/functions/v1/google-places?action=autocomplete&input=${encodeURIComponent(text)}`,
+          { headers: { 'Authorization': `Bearer ${SUPA_KEY}`, 'apikey': SUPA_KEY } },
+        );
+        const json = await res.json();
+        setAddressSuggestions(json.predictions ?? []);
+        setShowSuggestions(true);
+      } catch { setAddressSuggestions([]); }
+    }, 300);
+  };
+
+  const selectAddress = async (placeId: string, description: string) => {
+    setShowSuggestions(false);
+    setAddressQuery(description);
+    try {
+      const res = await fetch(
+        `${SUPA_URL}/functions/v1/google-places?action=details&place_id=${placeId}`,
+        { headers: { 'Authorization': `Bearer ${SUPA_KEY}`, 'apikey': SUPA_KEY } },
+      );
+      const details = await res.json();
+      setDeliveryAddress(details.street || description);
+      setDeliveryCity(details.city || '');
+      setDeliveryPostal(details.postal_code || '');
+      setDeliveryLat(details.latitude ?? null);
+      setDeliveryLng(details.longitude ?? null);
+    } catch {
+      setDeliveryAddress(description);
+    }
+  };
 
   const applyPromoCode = () => {
     const code = promoInput.trim().toUpperCase();
@@ -140,9 +241,15 @@ export default function PanierScreen() {
   };
 
   // Calculs récap — prix Square TTC, pas de TVA séparée
-  const loyaltyDiscount = getLoyaltyDiscount(useLoyalty, loyalty.points);
   const promoDiscount = calcPromoDiscount(appliedPromo, subtotal);
-  const total = Math.max(0, subtotal - loyaltyDiscount - rewardDiscount - promoDiscount);
+  const deliveryFee = deliveryMode === 'delivery' ? DELIVERY_FEE : 0;
+  const sereniteOrAbove = loyalty.level === 'Sérénité' || loyalty.level === 'Essentia';
+  const loyaltyAutoDiscount = sereniteOrAbove ? Math.round(subtotal * 0.05) : 0;
+  const total = Math.max(0, subtotal - rewardDiscount - promoDiscount - loyaltyAutoDiscount) + deliveryFee;
+
+  // Estimation points gagnés
+  const multiplier = LEVEL_MULTIPLIERS[loyalty.level] ?? 1;
+  const estimatedPoints = Math.floor((subtotal / 100) * 10 * multiplier);
 
   const paymentOptions: { id: PaymentMethod; label: string }[] = [
     { id: 'card', label: 'Carte bancaire' },
@@ -236,42 +343,323 @@ export default function PanierScreen() {
           })}
         </View>
 
-        {/* ──── CLICK & COLLECT ──── */}
-        <View style={styles.collectCard}>
-          <View style={styles.collectHeader}>
-            <ShoppingBag size={14} color="#4A6B50" strokeWidth={2} />
-            <Text style={styles.collectTitle}>Click & Collect</Text>
-          </View>
-          <View style={styles.collectAddressRow}>
-            <MapPin size={12} color={colors.textSecondary} strokeWidth={1.8} />
-            <Text style={styles.collectAddress}>
-              12 rue de la Gare, 95130 Franconville
+        {/* ──── UPSELL ──── */}
+        {(() => {
+          const cartCategories = new Set(cartItems.map((item) => item.product.category));
+          const cartIds = new Set(cartItems.map((item) => item.product.id));
+          const hasBoisson = cartItems.some((item) => {
+            const cat = (item.product.category ?? '').toLowerCase();
+            const name = (item.product.name ?? '').toLowerCase();
+            return cat.includes('boisson') || name.includes('thé') || name.includes('café') || name.includes('matcha') || name.includes('jus');
+          });
+          const hasDessert = cartItems.some((item) => {
+            const cat = (item.product.category ?? '').toLowerCase();
+            return cat.includes('patisserie') || cat.includes('dessert');
+          });
+          const maxUpsellPrice = Math.max(subtotal * 0.5, 500); // Max 50% du sous-total ou 5€
+
+          const upsellItems = allProducts
+            .filter((p) => !cartIds.has(p.id) && p.price <= maxUpsellPrice)
+            .map((p) => {
+              const cat = (p.category ?? '').toLowerCase();
+              const name = (p.name ?? '').toLowerCase();
+              let score = 0;
+              const isBoisson = cat.includes('boisson') || name.includes('thé') || name.includes('café') || name.includes('matcha') || name.includes('jus');
+              const isDessert = cat.includes('patisserie') || cat.includes('dessert');
+              // Prioriser ce qui manque au panier
+              if (!hasBoisson && isBoisson) score += 10;
+              if (!hasDessert && isDessert) score += 8;
+              // Produits populaires et de saison
+              if (p.isPopular) score += 5;
+              if (p.isSeasonal) score += 4;
+              if (p.isNew) score += 3;
+              // Petits prix en complément
+              if (p.price < 600) score += 2;
+              return { product: p, score };
+            })
+            .filter((item) => item.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5)
+            .map((item) => item.product);
+          if (upsellItems.length === 0) return null;
+          return (
+            <View style={styles.upsellSection}>
+              <View style={styles.upsellHeader}>
+                <Sparkles size={13} color={colors.green} strokeWidth={1.8} />
+                <Text style={styles.upsellTitle}>Complétez votre commande</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.upsellScroll}>
+                {upsellItems.map((p) => (
+                  <Pressable
+                    key={p.id}
+                    style={styles.upsellCard}
+                    onPress={() => {
+                      addItem(p, 1);
+                      showToast(`${p.name} ajouté`);
+                    }}
+                  >
+                    {p.image ? (
+                      <Image source={{ uri: p.image }} style={styles.upsellImage} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.upsellImage, { backgroundColor: colors.greenLight }]} />
+                    )}
+                    <Text style={styles.upsellName} numberOfLines={1}>{p.name}</Text>
+                    <View style={styles.upsellBottom}>
+                      <Text style={styles.upsellPrice}>{formatPrice(p.price)}</Text>
+                      <View style={styles.upsellAddBtn}>
+                        <Plus size={12} color="#FFFFFF" strokeWidth={2.5} />
+                      </View>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          );
+        })()}
+
+        {/* ──── MODE DE RÉCUPÉRATION ──── */}
+        <Text style={styles.sectionLabel}>MODE DE RÉCUPÉRATION</Text>
+        <View style={styles.deliveryToggle}>
+          <Pressable
+            style={[styles.deliveryOption, deliveryMode === 'pickup' && styles.deliveryOptionActive]}
+            onPress={() => setDeliveryMode('pickup')}
+            accessibilityRole="button"
+            accessibilityLabel="Retrait en boutique"
+          >
+            <ShoppingBag size={15} color={deliveryMode === 'pickup' ? '#FFFFFF' : colors.textSecondary} strokeWidth={1.8} />
+            <Text style={[styles.deliveryOptionText, deliveryMode === 'pickup' && styles.deliveryOptionTextActive]}>
+              Retrait
             </Text>
-          </View>
-          <Pressable style={styles.collectSlot}>
-            <Clock size={12} color={colors.textSecondary} strokeWidth={1.8} />
-            <Text style={styles.collectSlotText}>Aujourd'hui, 14:30 – 15:00 ›</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.deliveryOption, deliveryMode === 'delivery' && styles.deliveryOptionActive]}
+            onPress={() => setDeliveryMode('delivery')}
+            accessibilityRole="button"
+            accessibilityLabel="Livraison à domicile"
+          >
+            <Truck size={15} color={deliveryMode === 'delivery' ? '#FFFFFF' : colors.textSecondary} strokeWidth={1.8} />
+            <Text style={[styles.deliveryOptionText, deliveryMode === 'delivery' && styles.deliveryOptionTextActive]}>
+              Livraison
+            </Text>
           </Pressable>
         </View>
 
-        {/* ──── FIDÉLITÉ ──── */}
-        <View style={styles.loyaltyCard}>
-          <View style={styles.loyaltyLeft}>
-            <View style={styles.loyaltyIcon}>
-              <Star size={16} color={colors.green} fill={colors.green} strokeWidth={0} />
+        {deliveryMode === 'pickup' ? (
+          <View style={styles.collectCard}>
+            <View style={styles.collectHeader}>
+              <ShoppingBag size={14} color="#4A6B50" strokeWidth={2} />
+              <Text style={styles.collectTitle}>Click & Collect</Text>
             </View>
-            <View>
-              <Text style={styles.loyaltyTitle}>Points de fidélité</Text>
-              <Text style={styles.loyaltyBalance}>Solde : {loyalty.points.toLocaleString('fr-FR')} pts</Text>
+
+            {/* Adresse du point de vente */}
+            <View style={styles.storeAddressCard}>
+              <MapPin size={14} color={colors.green} strokeWidth={1.5} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.storeAddressName}>{storeLocation.name || 'Teaven'}</Text>
+                <Text style={styles.storeAddressText}>{storeLocation.addressFormatted || 'Chargement...'}</Text>
+              </View>
             </View>
+
+            <View style={styles.collectDivider} />
+
+            {/* Sélecteur de jour */}
+            <Text style={styles.slotLabel}>JOUR DE RETRAIT</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayPicker}>
+              {Array.from({ length: 7 }, (_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() + i);
+                const dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+                const monthNames = ['jan', 'fév', 'mar', 'avr', 'mai', 'jun', 'jul', 'aoû', 'sep', 'oct', 'nov', 'déc'];
+                const label = i === 0 ? "Auj." : i === 1 ? 'Dem.' : dayNames[d.getDay()];
+                const dateLabel = `${d.getDate()} ${monthNames[d.getMonth()]}`;
+                const active = effectiveDayOffset === i;
+                const todayDisabled = i === 0 && !hasTodaySlots;
+                return (
+                  <Pressable
+                    key={i}
+                    style={[styles.dayChip, active && styles.dayChipActive, todayDisabled && { opacity: 0.4 }]}
+                    onPress={() => {
+                      if (todayDisabled) return;
+                      setPickupDayOffset(i);
+                      setSelectedTimeSlot(i === 0 ? 'asap' : '');
+                    }}
+                  >
+                    <Text style={[styles.dayChipLabel, active && styles.dayChipLabelActive]}>{label}</Text>
+                    <Text style={[styles.dayChipDate, active && styles.dayChipDateActive]}>{dateLabel}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.collectDivider} />
+
+            {/* Message fermé */}
+            {autoTomorrow && (
+              <View style={{ backgroundColor: '#FDF6ED', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: '#B8860B', textAlign: 'center' }}>
+                  Teaven est actuellement fermé. Préparez votre commande pour demain !
+                </Text>
+              </View>
+            )}
+
+            {/* Créneaux */}
+            <Text style={styles.slotLabel}>
+              {effectiveDayOffset === 0 ? 'CRÉNEAU DE RETRAIT' : 'CHOISISSEZ UN CRÉNEAU'}
+            </Text>
+            <TimeSlotPicker
+              slots={pickerSlots}
+              selectedId={selectedTimeSlot}
+              onSelect={setSelectedTimeSlot}
+            />
           </View>
-          <Switch
-            value={useLoyalty}
-            onValueChange={setUseLoyalty}
-            trackColor={{ false: '#E8E7E2', true: colors.green }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
+        ) : (
+          <View style={styles.collectCard}>
+            <View style={styles.collectHeader}>
+              <Truck size={14} color="#4A6B50" strokeWidth={2} />
+              <Text style={styles.collectTitle}>Livraison à domicile</Text>
+            </View>
+
+            {/* Adresse : état vide ou rempli */}
+            {deliveryAddress.length === 0 ? (
+              <View style={styles.addressSection}>
+                {/* Champ recherche proéminent */}
+                <Pressable style={styles.addressSearchCard}>
+                  <View style={styles.addressSearchIcon}>
+                    <MapPin size={18} color={colors.green} strokeWidth={1.5} />
+                  </View>
+                  <TextInput
+                    style={styles.addressSearchInput}
+                    placeholder="Où souhaitez-vous être livré ?"
+                    placeholderTextColor={colors.textMuted}
+                    value={addressQuery}
+                    onChangeText={searchAddress}
+                    returnKeyType="search"
+                  />
+                </Pressable>
+
+                {/* Suggestions */}
+                {showSuggestions && addressSuggestions.length > 0 && (
+                  <View style={styles.suggestionsWrap}>
+                    {addressSuggestions.map((s) => (
+                      <Pressable
+                        key={s.place_id}
+                        style={styles.suggestionRow}
+                        onPress={() => selectAddress(s.place_id, s.description)}
+                      >
+                        <View style={styles.suggestionIcon}>
+                          <MapPin size={14} color={colors.green} strokeWidth={1.5} />
+                        </View>
+                        <View style={styles.suggestionText}>
+                          <Text style={styles.suggestionMain}>{s.main_text}</Text>
+                          <Text style={styles.suggestionSub}>{s.secondary_text}</Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={styles.addressSection}>
+                {/* Adresse confirmée */}
+                <View style={styles.addressFilledCard}>
+                  <View style={styles.addressFilledLeft}>
+                    <View style={styles.addressFilledIcon}>
+                      <Check size={14} color={colors.green} strokeWidth={2.5} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.addressFilledStreet}>{deliveryAddress}</Text>
+                      {deliveryPostal ? (
+                        <Text style={styles.addressFilledCity}>{deliveryPostal} {deliveryCity}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  <Pressable
+                    onPress={() => { setDeliveryAddress(''); setAddressQuery(''); setDeliveryCity(''); setDeliveryPostal(''); }}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.addressChangeBtn}>Modifier</Text>
+                  </Pressable>
+                </View>
+
+                {/* Complément */}
+                <View style={styles.complementRow}>
+                  <Home size={14} color={colors.textSecondary} strokeWidth={1.5} />
+                  <TextInput
+                    style={styles.complementInput}
+                    placeholder="Bâtiment, étage, code d'entrée..."
+                    placeholderTextColor={colors.textMuted}
+                    value={deliveryComplement}
+                    onChangeText={setDeliveryComplement}
+                    returnKeyType="done"
+                  />
+                </View>
+              </View>
+            )}
+
+            <View style={styles.collectAddressRow}>
+              <Clock size={12} color={colors.textSecondary} strokeWidth={1.8} />
+              <Text style={styles.collectAddress}>Estimé : 25-40 min · Frais : 4,90 {'\u20AC'}</Text>
+            </View>
+            <View style={styles.collectDivider} />
+            <Text style={styles.slotLabel}>CRÉNEAU DE LIVRAISON</Text>
+            <TimeSlotPicker
+              slots={pickerSlots}
+              selectedId={selectedTimeSlot}
+              onSelect={setSelectedTimeSlot}
+            />
+          </View>
+        )}
+
+        {/* ──── FIDÉLITÉ ──── */}
+        {(() => {
+          const THEMES: Record<string, { gradient: readonly [string, string, string]; text: string; sub: string; prog: string; track: string }> = {
+            'Première Parenthèse': { gradient: ['#F7F4ED', '#EDE8D8', '#E4DFC8'], text: '#2C3A2E', sub: '#738478', prog: '#75967F', track: 'rgba(117,150,127,0.15)' },
+            'Habitude':            { gradient: ['#E8EDDF', '#D8E5D2', '#C8DCCA'], text: '#1E3022', sub: '#4A6B50', prog: '#5B7A65', track: 'rgba(117,150,127,0.18)' },
+            'Rituel':              { gradient: ['#C2D8C6', '#A8C8AE', '#8EB898'], text: '#1A2E1E', sub: '#2C4A32', prog: '#2C4A32', track: 'rgba(255,255,255,0.3)' },
+            'Sérénité':            { gradient: ['#75967F', '#5B7A65', '#4A6B50'], text: '#FFFFFF', sub: 'rgba(255,255,255,0.75)', prog: '#FFFFFF', track: 'rgba(255,255,255,0.2)' },
+            'Essentia':            { gradient: ['#3A5A3E', '#2C4A32', '#1A2E1E'], text: '#FFFFFF', sub: 'rgba(255,255,255,0.7)', prog: 'rgba(255,255,255,0.9)', track: 'rgba(255,255,255,0.12)' },
+          };
+          const t = THEMES[loyalty.level] ?? THEMES['Première Parenthèse'];
+          const circR = 18;
+          const circC = 2 * Math.PI * circR;
+          return (
+            <Pressable onPress={() => router.push('/fidelite')} style={styles.loyaltyWrap}>
+              <LinearGradient
+                colors={t.gradient as [string, string, string]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.loyaltyCard}
+              >
+                <View style={styles.loyaltyLeft}>
+                  {/* Mini-cercle progression */}
+                  <View style={styles.loyaltyCircleWrap}>
+                    <Svg width={42} height={42} viewBox="0 0 42 42">
+                      <SvgCircle cx={21} cy={21} r={circR} stroke={t.track} strokeWidth={2.5} fill="none" />
+                      <SvgCircle
+                        cx={21} cy={21} r={circR}
+                        stroke={t.prog}
+                        strokeWidth={2.5}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeDasharray={`${circC}`}
+                        strokeDashoffset={`${circC * (1 - loyalty.progressPercent / 100)}`}
+                        transform="rotate(-90 21 21)"
+                      />
+                    </Svg>
+                    <Star size={14} color={t.prog} fill={t.prog} strokeWidth={0} style={{ position: 'absolute' }} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.loyaltyTitle, { color: t.text }]}>{loyalty.level}</Text>
+                    <Text style={[styles.loyaltyBalance, { color: t.sub }]}>
+                      {loyalty.points.toLocaleString('fr-FR')} pts · {loyalty.nextReward}
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={16} color={t.sub} strokeWidth={1.5} />
+              </LinearGradient>
+            </Pressable>
+          );
+        })()}
 
         {/* ──── CODE PROMO ──── */}
         <Text style={styles.sectionLabel}>CODE PROMO</Text>
@@ -325,16 +713,6 @@ export default function PanierScreen() {
             <Text style={styles.recapLabel}>Sous-total</Text>
             <Text style={styles.recapValue}>{formatPrice(subtotal)}</Text>
           </View>
-          {useLoyalty && (
-            <View style={styles.recapRow}>
-              <Text style={[styles.recapLabel, styles.recapDiscount]}>
-                Remise fidélité
-              </Text>
-              <Text style={[styles.recapValue, styles.recapDiscount]}>
-                -{formatPrice(loyaltyDiscount)}
-              </Text>
-            </View>
-          )}
           {appliedReward && rewardDiscount > 0 && (
             <View style={styles.recapRow}>
               <Text style={[styles.recapLabel, styles.recapDiscount]}>
@@ -342,6 +720,16 @@ export default function PanierScreen() {
               </Text>
               <Text style={[styles.recapValue, styles.recapDiscount]}>
                 -{formatPrice(rewardDiscount)}
+              </Text>
+            </View>
+          )}
+          {loyaltyAutoDiscount > 0 && (
+            <View style={styles.recapRow}>
+              <Text style={[styles.recapLabel, styles.recapDiscount]}>
+                -5% fidélité
+              </Text>
+              <Text style={[styles.recapValue, styles.recapDiscount]}>
+                -{formatPrice(loyaltyAutoDiscount)}
               </Text>
             </View>
           )}
@@ -355,55 +743,116 @@ export default function PanierScreen() {
               </Text>
             </View>
           )}
+          {deliveryMode === 'delivery' && (
+            <View style={styles.recapRow}>
+              <Text style={styles.recapLabel}>Frais de livraison</Text>
+              <Text style={styles.recapValue}>{formatPrice(DELIVERY_FEE)}</Text>
+            </View>
+          )}
           <View style={styles.recapDivider} />
           <View style={styles.recapRow}>
             <Text style={styles.recapTotalLabel}>Total</Text>
             <Text style={styles.recapTotalValue}>{formatPrice(total)}</Text>
           </View>
-        </View>
-
-        {/* ──── CRÉNEAU DE RETRAIT ──── */}
-        <Text style={styles.sectionLabel}>CRÉNEAU DE RETRAIT</Text>
-        <View style={styles.timeSlotSection}>
-          <TimeSlotPicker
-            slots={pickerSlots}
-            selectedId={selectedTimeSlot}
-            onSelect={setSelectedTimeSlot}
-          />
-        </View>
-
-        {/* ──── RÉCOMPENSES ──── */}
-        {availableRewards.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>RÉCOMPENSES DISPONIBLES</Text>
-            <View style={styles.section}>
-              {availableRewards.map((reward) => {
-                const isApplied = appliedReward?.id === reward.id;
-                return (
-                  <Pressable
-                    key={reward.id}
-                    onPress={() => setAppliedReward(isApplied ? null : reward)}
-                    style={[styles.rewardCard, isApplied && styles.rewardCardApplied]}
-                    accessibilityRole="button"
-                    accessibilityLabel={reward.name}
-                  >
-                    <View style={styles.rewardInfo}>
-                      <Text style={[styles.rewardName, isApplied && styles.rewardNameApplied]}>
-                        {reward.name}
-                      </Text>
-                      <Text style={styles.rewardDesc}>{reward.description}</Text>
-                    </View>
-                    <View style={[styles.rewardPtsBadge, isApplied && styles.rewardPtsBadgeApplied]}>
-                      <Text style={[styles.rewardPtsText, isApplied && styles.rewardPtsTextApplied]}>
-                        {isApplied ? 'Appliqué ✓' : `${reward.pointsCost} pts`}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
+          {estimatedPoints > 0 && (
+            <View style={styles.recapRow}>
+              <Text style={styles.recapPointsLabel}>Points gagnés</Text>
+              <Text style={styles.recapPointsValue}>+ {estimatedPoints.toLocaleString('fr-FR')} pts{multiplier > 1 ? ` (×${multiplier})` : ''}</Text>
             </View>
-          </>
+          )}
+        </View>
+
+        {/* ──── RÉCOMPENSES (card dépliable) ──── */}
+        {availableRewards.length > 0 && (
+          <View style={styles.rewardsCollapsible}>
+            <Pressable
+              style={styles.rewardsHeader}
+              onPress={() => setRewardsExpanded(!rewardsExpanded)}
+            >
+              <View style={styles.rewardsHeaderLeft}>
+                <Gift size={16} color={colors.green} strokeWidth={1.5} />
+                <View>
+                  <Text style={styles.rewardsHeaderTitle}>Vos récompenses</Text>
+                  <Text style={styles.rewardsHeaderSub}>
+                    {availableRewards.length} disponible{availableRewards.length > 1 ? 's' : ''}
+                    {appliedReward ? ` · ${appliedReward.name} appliquée` : ''}
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight
+                size={16}
+                color={colors.textMuted}
+                strokeWidth={1.5}
+                style={{ transform: [{ rotate: rewardsExpanded ? '90deg' : '0deg' }] }}
+              />
+            </Pressable>
+            {rewardsExpanded && (
+              <View style={styles.rewardsBody}>
+                {availableRewards.map((reward) => {
+                  const isApplied = appliedReward?.id === reward.id;
+                  return (
+                    <Pressable
+                      key={reward.id}
+                      onPress={() => setAppliedReward(isApplied ? null : reward)}
+                      style={[styles.rewardCard, isApplied && styles.rewardCardApplied]}
+                      accessibilityRole="button"
+                      accessibilityLabel={reward.name}
+                    >
+                      <View style={styles.rewardInfo}>
+                        <Text style={[styles.rewardName, isApplied && styles.rewardNameApplied]}>
+                          {reward.name}
+                        </Text>
+                        <Text style={styles.rewardDesc}>{reward.description}</Text>
+                      </View>
+                      <View style={[styles.rewardPtsBadge, isApplied && styles.rewardPtsBadgeApplied]}>
+                        <Text style={[styles.rewardPtsText, isApplied && styles.rewardPtsTextApplied]}>
+                          {isApplied ? 'Appliqué ✓' : `${reward.pointsCost} pts`}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
         )}
+
+        {/* ──── WALLET ──── */}
+        <Pressable
+          style={styles.walletMiniWrap}
+          onPress={() => {
+            if (wallet.balance >= total) {
+              router.push({ pathname: '/checkout', params: { total: String(total) } });
+            } else {
+              setRechargeVisible(true);
+            }
+          }}
+        >
+          <LinearGradient
+            colors={['#D4937A', '#C27B5A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.walletMini}
+          >
+            <View style={styles.walletMiniLeft}>
+              <Wallet size={15} color="rgba(255,255,255,0.7)" strokeWidth={1.5} />
+              <View>
+                <Text style={styles.walletMiniLabel}>Porte-monnaie</Text>
+                <Text style={styles.walletMiniBalance}>{formatPrice(wallet.balance)}</Text>
+              </View>
+            </View>
+            {wallet.balance >= total ? (
+              <View style={styles.walletMiniOk}>
+                <Check size={12} color="#C27B5A" strokeWidth={2.5} />
+                <Text style={styles.walletMiniOkText}>Payer avec</Text>
+              </View>
+            ) : (
+              <View style={styles.walletMiniLow}>
+                <Text style={styles.walletMiniLowText}>Recharger</Text>
+              </View>
+            )}
+          </LinearGradient>
+        </Pressable>
 
         {/* ──── PAIEMENT ──── */}
         <Text style={styles.sectionLabel}>PAIEMENT</Text>
@@ -428,39 +877,46 @@ export default function PanierScreen() {
             );
           })}
         </View>
+        <Text style={styles.paymentMicroText}>
+          {paymentMethod === 'wallet'
+            ? 'Votre porte-monnaie Teaven est le moyen le plus rapide.'
+            : paymentMethod === 'card'
+            ? 'Paiement sécurisé par carte bancaire.'
+            : 'Combinez vos points et votre carte pour payer.'}
+        </Text>
+
       </ScrollView>
 
       {/* ──── CTA sticky ──── */}
       <View style={[styles.cta, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <Pressable
-          onPress={async () => {
-            if (isOrdering) return;
-            setIsOrdering(true);
-            const order = await createOrder(cartItems, paymentMethod, useLoyalty);
-            setIsOrdering(false);
-            router.push(`/order/${order.id}`);
-          }}
-          disabled={isOrdering}
+          onPress={() => router.push({ pathname: '/checkout', params: { total: String(total) } })}
           style={({ pressed }) => [
             styles.ctaButton,
             pressed && styles.ctaPressed,
-            isOrdering && { opacity: 0.7 },
           ]}
           accessibilityRole="button"
-          accessibilityLabel={`Valider ma commande, ${formatPrice(total)}`}
+          accessibilityLabel={`Passer au paiement, ${formatPrice(total)}`}
         >
-          {isOrdering ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
-          ) : (
-            <Text style={styles.ctaText}>
-              Valider ma commande — {formatPrice(total)}
-            </Text>
-          )}
+          <Text style={styles.ctaText}>
+            Passer au paiement — {formatPrice(total)}
+          </Text>
         </Pressable>
         <Text style={styles.ctaDisclaimer}>
           En validant, vous acceptez nos conditions générales de vente.
         </Text>
       </View>
+
+      {/* ──── CHANTIER 1 — Modal recharge wallet depuis le panier ──── */}
+      <RechargeModal
+        visible={rechargeVisible}
+        onClose={() => setRechargeVisible(false)}
+        onRecharge={(amount) => {
+          rechargeWallet(amount);
+          setRechargeVisible(false);
+          showToast(`+${(amount / 100).toFixed(0)} € crédités sur votre wallet`);
+        }}
+      />
     </View>
   );
 }
@@ -622,41 +1078,67 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
   },
+  collectDivider: {
+    height: 0.5,
+    backgroundColor: colors.border,
+    marginVertical: spacing.md,
+  },
+  slotLabel: {
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    letterSpacing: 2.5,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  addressInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F5F5F0',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  addressInput: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.text,
+  },
 
   // Fidélité
+  loyaltyWrap: {
+    marginTop: spacing.lg,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
   loyaltyCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: 12,
-    paddingHorizontal: 14,
-    marginTop: spacing.lg,
+    borderRadius: 16,
+    padding: 14,
   },
   loyaltyLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: 12,
+    flex: 1,
   },
-  loyaltyIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.greenLight,
+  loyaltyCircleWrap: {
+    width: 42,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
   },
   loyaltyTitle: {
     fontFamily: fonts.bold,
     fontSize: 13,
-    color: colors.text,
   },
   loyaltyBalance: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.regular,
     fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 1,
+    marginTop: 2,
   },
 
   // Récapitulatif
@@ -902,5 +1384,401 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary,
     marginTop: 1,
+  },
+
+  // Mode livraison
+  deliveryToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+    marginBottom: spacing.sm,
+  },
+  deliveryOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  deliveryOptionActive: {
+    backgroundColor: colors.green,
+  },
+  deliveryOptionText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  deliveryOptionTextActive: {
+    color: '#FFFFFF',
+  },
+  deliveryNote: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  paymentMicroText: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  pointsEstimate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: spacing.lg,
+    paddingVertical: 10,
+  },
+  storeAddressCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.greenLight,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 4,
+  },
+  storeAddressName: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  storeAddressText: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  dayPicker: {
+    gap: 8,
+    paddingVertical: 6,
+  },
+  dayChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 72,
+  },
+  dayChipActive: {
+    backgroundColor: colors.greenDark,
+    borderColor: colors.greenDark,
+    shadowColor: colors.green,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  dayChipLabel: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  dayChipLabelActive: {
+    color: '#FFFFFF',
+  },
+  dayChipDate: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 3,
+  },
+  dayChipDateActive: {
+    color: 'rgba(255,255,255,0.7)',
+  },
+  recapPointsLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.green,
+    marginTop: 6,
+  },
+  recapPointsValue: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.green,
+    marginTop: 6,
+  },
+  // Upsell
+  upsellSection: {
+    marginTop: spacing.lg,
+  },
+  upsellHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.md,
+  },
+  upsellTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  upsellScroll: {
+    gap: 10,
+    paddingRight: spacing.xl,
+  },
+  upsellCard: {
+    width: 120,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  upsellImage: {
+    width: '100%',
+    height: 80,
+  },
+  upsellName: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: colors.text,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+  },
+  upsellBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  upsellPrice: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  upsellAddBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Récompenses dépliable
+  rewardsCollapsible: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: spacing.lg,
+    overflow: 'hidden',
+  },
+  rewardsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+  },
+  rewardsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  rewardsHeaderTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  rewardsHeaderSub: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  rewardsBody: {
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border,
+    padding: 10,
+    gap: 8,
+  },
+  addressSection: {
+    gap: 10,
+    marginBottom: 12,
+  },
+  addressSearchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.green,
+    borderStyle: 'dashed',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  addressSearchIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addressSearchInput: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.text,
+  },
+  suggestionsWrap: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border,
+  },
+  suggestionIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: colors.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  suggestionText: {
+    flex: 1,
+  },
+  suggestionMain: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  suggestionSub: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 1,
+  },
+  addressFilledCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F0EA',
+    borderRadius: 12,
+    padding: 12,
+  },
+  addressFilledLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  addressFilledIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(117,150,127,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addressFilledStreet: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  addressFilledCity: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  addressChangeBtn: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.green,
+  },
+  complementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  complementInput: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.text,
+  },
+  walletMiniWrap: {
+    marginTop: spacing.lg,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  walletMini: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 14,
+  },
+  walletMiniLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  walletMiniLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.6)',
+  },
+  walletMiniBalance: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  walletMiniOk: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  walletMiniOkText: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: '#C27B5A',
+  },
+  walletMiniLow: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  walletMiniLowText: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: '#FFFFFF',
   },
 });

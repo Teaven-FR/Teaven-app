@@ -45,14 +45,8 @@ serve(async (req) => {
   }
 
   try {
-    // Authentification requise
+    // Authentification — optionnelle (guest allowed)
     const authUser = await authenticateUser(req);
-    if (!authUser) {
-      return new Response(
-        JSON.stringify({ error: 'Authentification requise' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
 
     let body: Record<string, unknown>;
     try {
@@ -148,7 +142,7 @@ serve(async (req) => {
     const { data: dbOrder, error: dbError } = await supabase
       .from('orders')
       .insert({
-        user_id: authUser.id,
+        user_id: authUser?.id ?? null,
         square_order_id: squareOrder.id,
         status: 'payment_pending',
         total_amount: squareOrder.total_money?.amount ?? 0,

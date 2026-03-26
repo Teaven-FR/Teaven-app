@@ -25,7 +25,9 @@ function priceAccessibilityLabel(cents: number): string {
 export function ProductGridCard({ product, onPress }: ProductGridCardProps) {
   const addItem = useCartStore((s) => s.addItem);
   const buttonWidth = useRef(new Animated.Value(30)).current;
+  const iconOpacity = useRef(new Animated.Value(1)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
+  const isAnimating = useRef(false);
 
   // Animation de retour tactile (press feedback)
   const cardScale = useRef(new Animated.Value(1)).current;
@@ -55,41 +57,26 @@ export function ProductGridCard({ product, onPress }: ProductGridCardProps) {
   }, [cardScale, useNative]);
 
   const handleAdd = useCallback(() => {
+    if (isAnimating.current) return;
+    isAnimating.current = true;
     addItem(product);
 
-    // Animation : étirer le bouton de 28px à 76px
-    Animated.spring(buttonWidth, {
-      toValue: 80,
-      damping: 18,
-      stiffness: 200,
-      mass: 0.8,
-      useNativeDriver: false,
-    }).start();
+    // Phase 1 : masquer "+", étirer le bouton, afficher "AJOUTÉ"
+    Animated.parallel([
+      Animated.timing(iconOpacity, { toValue: 0, duration: 120, useNativeDriver: false }),
+      Animated.spring(buttonWidth, { toValue: 80, damping: 18, stiffness: 200, mass: 0.8, useNativeDriver: false }),
+      Animated.timing(textOpacity, { toValue: 1, duration: 200, delay: 120, useNativeDriver: false }),
+    ]).start();
 
-    Animated.timing(textOpacity, {
-      toValue: 1,
-      duration: 200,
-      delay: 100,
-      useNativeDriver: false,
-    }).start();
-
-    // Refermer après 1.4s
+    // Phase 2 : refermer après 1.2s
     setTimeout(() => {
-      Animated.spring(buttonWidth, {
-        toValue: 30,
-        damping: 18,
-        stiffness: 200,
-        mass: 0.8,
-        useNativeDriver: false,
-      }).start();
-
-      Animated.timing(textOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: false,
-      }).start();
-    }, 1400);
-  }, [addItem, product, buttonWidth, textOpacity]);
+      Animated.parallel([
+        Animated.timing(textOpacity, { toValue: 0, duration: 150, useNativeDriver: false }),
+        Animated.spring(buttonWidth, { toValue: 30, damping: 18, stiffness: 200, mass: 0.8, useNativeDriver: false }),
+        Animated.timing(iconOpacity, { toValue: 1, duration: 200, delay: 150, useNativeDriver: false }),
+      ]).start(() => { isAnimating.current = false; });
+    }, 1200);
+  }, [addItem, product, buttonWidth, textOpacity, iconOpacity]);
 
   return (
     <Pressable
@@ -153,7 +140,9 @@ export function ProductGridCard({ product, onPress }: ProductGridCardProps) {
               accessibilityLabel={`Ajouter ${product.name} au panier`}
             >
               <Animated.View style={[styles.addButton, { width: buttonWidth }]}>
-                <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
+                <Animated.View style={{ opacity: iconOpacity }}>
+                  <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
+                </Animated.View>
                 <Animated.Text style={[styles.addedText, { opacity: textOpacity }]}>
                   AJOUTÉ
                 </Animated.Text>

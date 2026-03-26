@@ -15,6 +15,7 @@ import { Check, MapPin, Clock, ChevronRight, Star } from 'lucide-react-native';
 import { useOrderStore } from '@/stores/orderStore';
 import { useToast } from '@/contexts/ToastContext';
 import { useUser } from '@/hooks/useUser';
+import { useLocation } from '@/hooks/useLocation';
 import { colors, fonts, spacing, shadows } from '@/constants/theme';
 import type { OrderStatus } from '@/lib/types';
 
@@ -49,6 +50,7 @@ export default function OrderTrackingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
+  const { location: storeLocation } = useLocation();
 
   const currentOrder = useOrderStore((s) => s.currentOrder);
   const getOrderById = useOrderStore((s) => s.getOrderById);
@@ -185,7 +187,7 @@ export default function OrderTrackingScreen() {
             <View style={styles.infoRow}>
               <MapPin size={14} color={colors.textSecondary} strokeWidth={1.8} />
               <Text style={styles.infoText}>
-                12 rue de la Gare, 95130 Franconville
+                {storeLocation.addressFormatted || 'Chargement...'}
               </Text>
             </View>
             <View style={styles.infoRow}>

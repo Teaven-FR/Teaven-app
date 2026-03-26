@@ -1,4 +1,4 @@
-// Écran Confirmation de commande — succès après validation du panier
+// Écran Confirmation de commande — cercle animé + succès
 import { useEffect, useRef } from 'react';
 import {
   View,
@@ -10,67 +10,111 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { CheckCircle, MapPin, Clock, ChevronRight } from 'lucide-react-native';
+import { MapPin, Clock, ChevronRight, Check } from 'lucide-react-native';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
+import * as Haptics from 'expo-haptics';
 import { useCartStore } from '@/stores/cartStore';
+import { useLocation } from '@/hooks/useLocation';
 import { colors, fonts, spacing, shadows } from '@/constants/theme';
+
+const AnimatedSvgCircle = Animated.createAnimatedComponent(SvgCircle);
+const CIRCLE_SIZE = 96;
+const CIRCLE_R = 40;
+const CIRCUMFERENCE = 2 * Math.PI * CIRCLE_R;
 
 export default function OrderConfirmationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const clearCart = useCartStore((s) => s.clearCart);
+  const { location: storeLocation } = useLocation();
+  const useNative = Platform.OS !== 'web';
 
   // Animations
-  const checkScale = useRef(new Animated.Value(0)).current;
+  const circleProgress = useRef(new Animated.Value(CIRCUMFERENCE)).current;
+  const checkOpacity = useRef(new Animated.Value(0)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(40)).current;
 
   useEffect(() => {
-    // Vider le panier
     clearCart();
 
-    // Séquence d'animations
+    // Séquence : cercle se trace → check apparaît → contenu slide up
     Animated.sequence([
-      Animated.spring(checkScale, {
-        toValue: 1,
-        damping: 12,
-        stiffness: 200,
-        useNativeDriver: Platform.OS !== 'web',
+      // 1. Cercle se trace (1200ms)
+      Animated.timing(circleProgress, {
+        toValue: 0,
+        duration: 1200,
+        useNativeDriver: useNative,
       }),
+      // 2. Haptic + check
+      Animated.parallel([
+        Animated.timing(checkOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: useNative,
+        }),
+      ]),
+      // 3. Contenu
       Animated.parallel([
         Animated.timing(fadeIn, {
           toValue: 1,
           duration: 400,
-          useNativeDriver: Platform.OS !== 'web',
+          useNativeDriver: useNative,
         }),
         Animated.timing(slideUp, {
           toValue: 0,
           duration: 400,
-          useNativeDriver: Platform.OS !== 'web',
+          useNativeDriver: useNative,
         }),
       ]),
     ]).start();
-  }, [checkScale, fadeIn, slideUp, clearCart]);
 
-  // Numéro de commande simulé
+    // Haptic au moment où le cercle se complète
+    const hapticTimer = setTimeout(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }, 1200);
+
+    return () => clearTimeout(hapticTimer);
+  }, [circleProgress, checkOpacity, fadeIn, slideUp, clearCart, useNative]);
+
   const orderNumber = `TEA-${Date.now().toString(36).toUpperCase().slice(-6)}`;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.content}>
-        {/* Icône succès animée */}
-        <Animated.View
-          style={[styles.checkCircle, { transform: [{ scale: checkScale }] }]}
-        >
-          <LinearGradient
-            colors={['#4A6B50', '#75967F']}
-            style={styles.checkGradient}
-          >
-            <CheckCircle size={48} color="#FFFFFF" strokeWidth={1.5} />
-          </LinearGradient>
-        </Animated.View>
+        {/* Cercle animé */}
+        <View style={styles.circleContainer}>
+          <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE} viewBox={`0 0 ${CIRCLE_SIZE} ${CIRCLE_SIZE}`}>
+            {/* Track */}
+            <SvgCircle
+              cx={CIRCLE_SIZE / 2}
+              cy={CIRCLE_SIZE / 2}
+              r={CIRCLE_R}
+              stroke="rgba(117,150,127,0.15)"
+              strokeWidth={3}
+              fill="none"
+            />
+            {/* Animated progress */}
+            <AnimatedSvgCircle
+              cx={CIRCLE_SIZE / 2}
+              cy={CIRCLE_SIZE / 2}
+              r={CIRCLE_R}
+              stroke="#75967F"
+              strokeWidth={3}
+              fill="none"
+              strokeLinecap="round"
+              strokeDasharray={`${CIRCUMFERENCE}`}
+              strokeDashoffset={circleProgress}
+              transform={`rotate(-90 ${CIRCLE_SIZE / 2} ${CIRCLE_SIZE / 2})`}
+            />
+          </Svg>
+          {/* Check icon au centre */}
+          <Animated.View style={[styles.checkWrap, { opacity: checkOpacity }]}>
+            <Check size={32} color="#75967F" strokeWidth={2.5} />
+          </Animated.View>
+        </View>
 
-        {/* Texte principal */}
+        {/* Texte + contenu */}
         <Animated.View
           style={[
             styles.textBlock,
@@ -85,7 +129,7 @@ export default function OrderConfirmationScreen() {
           {/* Carte récapitulatif */}
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>N° commande</Text>
+              <Text style={styles.summaryLabel}>N° COMMANDE</Text>
               <Text style={styles.summaryValue}>{orderNumber}</Text>
             </View>
             <View style={styles.divider} />
@@ -93,7 +137,7 @@ export default function OrderConfirmationScreen() {
               <View style={styles.infoRow}>
                 <MapPin size={14} color={colors.textSecondary} strokeWidth={1.8} />
                 <Text style={styles.infoText}>
-                  12 rue de la Gare, 95130 Franconville
+                  {storeLocation.addressFormatted || 'Chargement...'}
                 </Text>
               </View>
             </View>
@@ -105,7 +149,7 @@ export default function OrderConfirmationScreen() {
             </View>
           </View>
 
-          {/* Barre de progression */}
+          {/* Statut */}
           <View style={styles.progressSection}>
             <Text style={styles.progressLabel}>STATUT</Text>
             <View style={styles.steps}>
@@ -163,17 +207,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl,
   },
 
-  // Check icon
-  checkCircle: {
-    marginBottom: spacing.xxl,
-  },
-  checkGradient: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  // Circle
+  circleContainer: {
+    width: CIRCLE_SIZE,
+    height: CIRCLE_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.loyalty,
+    marginBottom: spacing.xxl,
+  },
+  checkWrap: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Text

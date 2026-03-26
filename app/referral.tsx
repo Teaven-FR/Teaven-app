@@ -72,7 +72,7 @@ export default function ReferralScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Rejoins Teaven avec mon code ${REFERRAL_CODE} et reçois 100 pts de bienvenue ! 🍵`,
+        message: `Rejoignez Teaven avec mon code ${REFERRAL_CODE} et recevez 100 pts de bienvenue ! 🍵`,
       });
     } catch {
       // L'utilisateur a annulé le partage
@@ -149,13 +149,14 @@ export default function ReferralScreen() {
       </Pressable>
 
       {/* ──── Statistiques ──── */}
+      {/* TODO PRE-LAUNCH: charger les stats réelles depuis Supabase (table referrals) */}
       <View style={styles.statsCard}>
         <View style={styles.statsIconWrap}>
           <Users size={20} color={colors.green} strokeWidth={1.3} />
         </View>
         <View>
-          <Text style={styles.statsValue}>3 amis parrainés</Text>
-          <Text style={styles.statsDetail}>600 points gagnés au total</Text>
+          <Text style={styles.statsValue}>0 ami parrainé</Text>
+          <Text style={styles.statsDetail}>Partagez votre code pour commencer !</Text>
         </View>
       </View>
 

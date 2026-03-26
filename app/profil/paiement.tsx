@@ -15,11 +15,11 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, CreditCard, Plus, Wallet, Trash2, RefreshCw } from 'lucide-react-native';
+import { ChevronLeft, CreditCard, Plus, Wallet, Trash2, RefreshCw, Gift } from 'lucide-react-native';
 import { RechargeModal } from '@/components/ui/RechargeModal';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from '@/contexts/ToastContext';
-import { fetchWalletBalance } from '@/lib/square';
+import { fetchWalletBalance, callEdgeFunction } from '@/lib/square';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { colors, fonts, spacing, shadows, radii } from '@/constants/theme';
@@ -31,9 +31,7 @@ interface SavedCard {
   expiry: string;
 }
 
-const INITIAL_CARDS: SavedCard[] = [
-  { id: 'c1', brand: 'Visa', last4: '4242', expiry: '12/27' },
-];
+const INITIAL_CARDS: SavedCard[] = [];
 
 export default function PaiementScreen() {
   const router = useRouter();
@@ -45,6 +43,36 @@ export default function PaiementScreen() {
   const [cards, setCards] = useState<SavedCard[]>(INITIAL_CARDS);
   const [addCardVisible, setAddCardVisible] = useState(false);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [giftCode, setGiftCode] = useState('');
+  const [giftLoading, setGiftLoading] = useState(false);
+
+  const handleRedeemGiftCode = async () => {
+    if (!giftCode.trim()) return;
+    setGiftLoading(true);
+    try {
+      const result = await callEdgeFunction<{
+        success: boolean;
+        amount: number;
+        senderName: string;
+        momentName?: string;
+        error?: string;
+      }>('redeem-gift', { code: giftCode.trim() });
+
+      if (result.error || !result.data?.success) {
+        showToast(result.error ?? result.data?.error ?? 'Code invalide', 'error');
+        return;
+      }
+
+      const amt = (result.data.amount / 100).toFixed(0);
+      rechargeWallet(result.data.amount);
+      setGiftCode('');
+      showToast(`+${amt} € crédités de ${result.data.senderName} !`, 'success');
+    } catch {
+      showToast('Erreur lors de la vérification', 'error');
+    } finally {
+      setGiftLoading(false);
+    }
+  };
 
   // Rafraîchir le solde depuis Square Gift Cards au montage
   useEffect(() => {
@@ -173,6 +201,32 @@ export default function PaiementScreen() {
               <Text style={styles.rechargeText}>Recharger</Text>
             </Pressable>
           </View>
+        </View>
+
+        {/* Section Code cadeau */}
+        <Text style={styles.sectionLabel}>VOUS AVEZ UN CODE ?</Text>
+        <View style={styles.giftCodeWrap}>
+          <Gift size={16} color={colors.textMuted} strokeWidth={1.5} />
+          <TextInput
+            style={styles.giftCodeInput}
+            value={giftCode}
+            onChangeText={(t) => setGiftCode(t.toUpperCase())}
+            placeholder="TEAVEN-XXXXX"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="characters"
+            maxLength={15}
+          />
+          <Pressable
+            onPress={handleRedeemGiftCode}
+            disabled={giftLoading || !giftCode.trim()}
+            style={[styles.giftCodeBtn, (!giftCode.trim() || giftLoading) && { opacity: 0.4 }]}
+          >
+            {giftLoading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.giftCodeBtnText}>Valider</Text>
+            )}
+          </Pressable>
         </View>
 
         {/* Section Cartes bancaires */}
@@ -539,4 +593,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
   },
+
+  // Gift code
+  giftCodeWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: colors.surface, borderRadius: radii.card,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 4, marginBottom: spacing.xl,
+  },
+  giftCodeInput: {
+    flex: 1, fontFamily: fonts.monoSemiBold, fontSize: 15, color: colors.text,
+    paddingVertical: 12, letterSpacing: 1,
+  },
+  giftCodeBtn: {
+    backgroundColor: colors.green, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8,
+  },
+  giftCodeBtnText: { fontFamily: fonts.bold, fontSize: 13, color: '#FFFFFF' },
 });

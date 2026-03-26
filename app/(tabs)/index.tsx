@@ -15,14 +15,16 @@ import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Bell, Search, Leaf, ShoppingBag, Instagram, Trophy } from 'lucide-react-native';
+import { Bell, Search, Leaf, Instagram, Trophy, Flame, Star, Zap, ChevronRight, Wallet } from 'lucide-react-native';
 import { Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { Pill } from '@/components/ui/Pill';
 import { ProductCardCarousel } from '@/components/ui/ProductCardCarousel';
 import { SearchModal } from '@/components/ui/SearchModal';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useUser } from '@/hooks/useUser';
+import { useInstagramFeed } from '@/hooks/useInstagramFeed';
 import { useCartStore } from '@/stores/cartStore';
 import { useOrderStore } from '@/stores/orderStore';
 import { useToast } from '@/contexts/ToastContext';
@@ -60,14 +62,38 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { products, allProducts, categories, selectedCategory, setSelectedCategory, refetch } = useCatalog();
-  const { user, isGuest, wallet, rechargeWallet } = useUser();
+  const { user, isGuest, wallet, rechargeWallet, loyalty } = useUser();
   const { showToast } = useToast();
   const setPromoCode = useCartStore((s) => s.setPromoCode);
   const orderHistory = useOrderStore((s) => s.orderHistory ?? []);
+  const { posts: instaPosts } = useInstagramFeed(6);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
   const [rechargeVisible, setRechargeVisible] = useState(false);
+  const [defisExpanded, setDefisExpanded] = useState(false);
+  const defisAnim = useRef(new Animated.Value(0)).current;
+
+  const DEFI_COMPACT_H = 56;
+  const DEFI_FULL_H = 286;
+
+  const toggleDefis = () => {
+    const toValue = defisExpanded ? 0 : 1;
+    Animated.spring(defisAnim, {
+      toValue,
+      damping: 20,
+      stiffness: 160,
+      useNativeDriver: false,
+    }).start();
+    setDefisExpanded(!defisExpanded);
+  };
+
+  const defisContainerHeight = defisAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [DEFI_COMPACT_H, DEFI_FULL_H],
+  });
+  const defisStripOpacity = defisAnim.interpolate({ inputRange: [0, 0.25], outputRange: [1, 0] });
+  const defisDetailOpacity = defisAnim.interpolate({ inputRange: [0.5, 1], outputRange: [0, 1] });
 
   const formatPrice = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
@@ -151,11 +177,26 @@ export default function HomeScreen() {
         >
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {(isGuest ? 'I' : user.fullName.charAt(0))}
-                </Text>
-              </View>
+              <Pressable onPress={() => router.push('/fidelite')} style={styles.avatarWrap}>
+                <Svg width={46} height={46} viewBox="0 0 46 46" style={styles.avatarRing}>
+                  <SvgCircle cx={23} cy={23} r={21} stroke="rgba(117,150,127,0.15)" strokeWidth={2.5} fill="none" />
+                  <SvgCircle
+                    cx={23} cy={23} r={21}
+                    stroke="#75967F"
+                    strokeWidth={2.5}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 21}`}
+                    strokeDashoffset={`${2 * Math.PI * 21 * (1 - (loyalty.progressPercent / 100))}`}
+                    transform="rotate(-90 23 23)"
+                  />
+                </Svg>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {(isGuest ? 'I' : user.fullName.charAt(0))}
+                  </Text>
+                </View>
+              </Pressable>
               <View>
                 <Text style={styles.greeting}>
                   {getGreeting()}{isGuest ? '' : `, ${user.fullName.split(' ')[0]}`}
@@ -165,35 +206,33 @@ export default function HomeScreen() {
                 </Text>
               </View>
             </View>
-            <Pressable
-              style={styles.notifButton}
-              accessibilityLabel="Notifications"
-              onPress={() => router.push('/notifications')}
-            >
-              <Bell size={20} color={colors.textSecondary} strokeWidth={1.3} />
-              <View style={styles.notifBadge} />
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable
+                style={styles.notifButton}
+                accessibilityLabel="Rechercher"
+                onPress={() => setSearchVisible(true)}
+              >
+                <Search size={19} color={colors.textSecondary} strokeWidth={1.3} />
+              </Pressable>
+              <Pressable
+                style={styles.notifButton}
+                accessibilityLabel="Notifications"
+                onPress={() => router.push('/notifications')}
+              >
+                <Bell size={19} color={colors.textSecondary} strokeWidth={1.3} />
+                <View style={styles.notifBadge} />
+              </Pressable>
+            </View>
           </View>
         </Animated.View>
 
-        {/* Barre de recherche */}
+        {/* Promos + défis */}
         <Animated.View
           style={{
             opacity: sectionAnims[1].opacity,
             transform: [{ translateY: sectionAnims[1].translateY }],
           }}
         >
-          <Pressable
-            style={styles.searchContainer}
-            onPress={() => setSearchVisible(true)}
-            accessibilityLabel="Rechercher un produit"
-          >
-            <View style={styles.searchBar}>
-              <Search size={16} color={colors.textMuted} strokeWidth={1.6} />
-              <Text style={styles.searchPlaceholder}>Rechercher...</Text>
-            </View>
-          </Pressable>
-
           {/* Bandeau rechargement wallet si solde faible */}
           {!isGuest && wallet.balance < 500 && (
             <Pressable
@@ -202,15 +241,11 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Recharger votre porte-monnaie"
             >
-              <ShoppingBag size={16} color={colors.green} strokeWidth={1.8} />
+              <Wallet size={13} color="#C27B5A" strokeWidth={1.5} />
               <Text style={styles.walletBannerText}>
-                Solde porte-monnaie :{' '}
-                <Text style={styles.walletBannerAmount}>
-                  {(wallet.balance / 100).toFixed(2).replace('.', ',')} €
-                </Text>
-                {'  '}—{' '}
-                <Text style={styles.walletBannerCta}>Recharger</Text>
+                Solde : <Text style={styles.walletBannerAmount}>{(wallet.balance / 100).toFixed(2).replace('.', ',')} €</Text>
               </Text>
+              <Text style={styles.walletBannerCta}>Recharger</Text>
             </Pressable>
           )}
 
@@ -222,6 +257,7 @@ export default function HomeScreen() {
             style={styles.promosContainer}
             contentContainerStyle={styles.promosContent}
           >
+            {/* Bannières dynamiques contextuelles */}
             {orderHistory.length === 0 && (
               <LinearGradient colors={['#E8F0EA', '#D4E5D7']} style={styles.promoCard}>
                 <View style={styles.promoContent}>
@@ -230,10 +266,9 @@ export default function HomeScreen() {
                   <Pressable
                     onPress={() => {
                       setPromoCode('BIENVENUE');
-                      showToast('Code BIENVENUE activé ! -15% sur votre commande');
+                      showToast('Code BIENVENUE activé !');
                       router.push('/(tabs)/carte');
                     }}
-                    accessibilityLabel="Profiter de moins quinze pourcent sur la première commande"
                   >
                     <Text style={styles.promoCta}>En profiter</Text>
                   </Pressable>
@@ -244,14 +279,41 @@ export default function HomeScreen() {
               </LinearGradient>
             )}
 
+            {/* Première recharge incentivée OU recharge classique */}
+            {wallet.balance === 0 ? (
+              <LinearGradient colors={['#75967F', '#4A6B50']} style={styles.promoCard}>
+                <View style={styles.promoContent}>
+                  <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Votre première recharge</Text>
+                  <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.85)' }]}>
+                    20 € + 5 € offerts
+                  </Text>
+                  <Pressable onPress={() => setRechargeVisible(true)}>
+                    <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Recharger maintenant</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.promoIconWrap}>
+                  <Wallet size={36} color="rgba(255,255,255,0.3)" strokeWidth={1} />
+                </View>
+              </LinearGradient>
+            ) : wallet.balance < 1000 ? (
+              <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.promoCard}>
+                <View style={styles.promoContent}>
+                  <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Rechargez votre wallet</Text>
+                  <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
+                    Solde : {(wallet.balance / 100).toFixed(2).replace('.', ',')} €
+                  </Text>
+                  <Pressable onPress={() => setRechargeVisible(true)}>
+                    <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Recharger</Text>
+                  </Pressable>
+                </View>
+              </LinearGradient>
+            ) : null}
+
             <LinearGradient colors={['#F5EFDF', '#EDE4CC']} style={styles.promoCard}>
               <View style={styles.promoContent}>
-                <Text style={styles.promoTitle}>Parrainez un ami</Text>
-                <Text style={styles.promoSubtitle}>Gagnez 200 pts de fidélité</Text>
-                <Pressable
-                  onPress={() => router.push('/referral')}
-                  accessibilityLabel="Parrainer un ami et gagner 200 points de fidélité"
-                >
+                <Text style={styles.promoTitle}>Parrainez un proche</Text>
+                <Text style={styles.promoSubtitle}>5€ pour vous, 5€ pour lui</Text>
+                <Pressable onPress={() => router.push('/referral')}>
                   <Text style={[styles.promoCta, { color: colors.gold }]}>Parrainer</Text>
                 </Pressable>
               </View>
@@ -259,19 +321,135 @@ export default function HomeScreen() {
 
             <LinearGradient colors={['#2C4A32', '#4A6B50']} style={styles.promoCard}>
               <View style={styles.promoContent}>
-                <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Nouveau</Text>
+                <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Atmosphère</Text>
                 <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
-                  Matcha Zen Latte Glacé
+                  Prenez soin de vous — lisez nos articles bien-être
                 </Text>
-                <Pressable
-                  onPress={() => router.push('/(tabs)/carte')}
-                  accessibilityLabel="Découvrir le Matcha Zen Latte Glacé"
-                >
-                  <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Découvrir</Text>
+                <Pressable onPress={() => router.push('/(tabs)/blog')}>
+                  <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Lire</Text>
                 </Pressable>
               </View>
             </LinearGradient>
           </ScrollView>
+
+          {/* ──── Strip Défis (compact → pleine carte) ──── */}
+          <Animated.View style={[styles.defisAnimContainer, { height: defisContainerHeight }]}>
+            <Pressable
+              onPress={toggleDefis}
+              accessibilityRole="button"
+              accessibilityLabel="Défis en cours — appuyer pour développer"
+              style={{ flex: 1 }}
+            >
+              <LinearGradient
+                colors={['#243D29', '#2E5235', '#3A6642']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.defisFullGradient}
+              >
+                {/* ── Version compacte (disparaît à l'ouverture) ── */}
+                <Animated.View style={[styles.defisStripRow, { opacity: defisStripOpacity }]}>
+                  <View style={styles.defisStripLeft}>
+                    <View style={styles.defisStripIconWrap}>
+                      <Flame size={14} color={colors.gold} strokeWidth={2} />
+                    </View>
+                    <View>
+                      <Text style={styles.defisStripProgram}>DÉFIS · 3 ACTIFS</Text>
+                      <Text style={styles.defisStripChallenge}>Série en cours — 3/5 jours</Text>
+                    </View>
+                  </View>
+                  <View style={styles.defisStripBarWrap}>
+                    <View style={styles.defisStripBar}>
+                      <View style={[styles.defisStripFill, { width: '60%' }]} />
+                    </View>
+                    <Text style={styles.defisStripPts}>+500 pts</Text>
+                  </View>
+                  <ChevronRight size={16} color="rgba(255,255,255,0.4)" strokeWidth={2} />
+                </Animated.View>
+
+                {/* ── Version développée (apparaît à l'ouverture) ── */}
+                <Animated.View style={[styles.defisFullContent, { opacity: defisDetailOpacity }]}>
+                  {/* Header */}
+                  <View style={styles.defisHeader}>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.defisProgramLabel}>
+                        <Zap size={10} color={colors.gold} strokeWidth={2.5} />
+                        <Text style={styles.defisProgramText}>LES PARENTHÈSES</Text>
+                      </View>
+                      <Text style={styles.defisCardTitle}>Vos défis du mois</Text>
+                    </View>
+                    <View style={styles.defisBadge}>
+                      <Text style={styles.defisBadgeText}>3 actifs</Text>
+                    </View>
+                  </View>
+
+                  {/* Défis avec progress */}
+                  <View style={styles.defisRows}>
+                    {([
+                      { icon: 'flame', label: 'Série en cours', progress: 3, target: 5, pts: 500 },
+                      { icon: 'trophy', label: 'Challenge du mois', progress: 4, target: 10, pts: 1000 },
+                      { icon: 'star', label: 'Explorateur', progress: 3, target: 3, pts: 300 },
+                    ] as const).map((defi) => {
+                      const pct = Math.min((defi.progress / defi.target) * 100, 100);
+                      const done = defi.progress >= defi.target;
+                      const Icon = defi.icon === 'flame' ? Flame : defi.icon === 'trophy' ? Trophy : Star;
+                      const circR = 11;
+                      const circC = 2 * Math.PI * circR;
+                      return (
+                        <View key={defi.label} style={styles.defisRow}>
+                          <View style={styles.defisRowIcon}>
+                            <Svg width={26} height={26} viewBox="0 0 26 26" style={{ position: 'absolute' }}>
+                              <SvgCircle cx={13} cy={13} r={circR} stroke="rgba(255,255,255,0.1)" strokeWidth={2} fill="none" />
+                              <SvgCircle
+                                cx={13} cy={13} r={circR}
+                                stroke={done ? colors.gold : 'rgba(255,255,255,0.5)'}
+                                strokeWidth={2}
+                                fill="none"
+                                strokeLinecap="round"
+                                strokeDasharray={`${circC}`}
+                                strokeDashoffset={`${circC * (1 - pct / 100)}`}
+                                transform="rotate(-90 13 13)"
+                              />
+                            </Svg>
+                            <Icon size={10} color={done ? colors.gold : 'rgba(255,255,255,0.7)'} strokeWidth={2} />
+                          </View>
+                          <View style={styles.defisRowContent}>
+                            <View style={styles.defisRowTop}>
+                              <Text style={styles.defisRowLabel}>{defi.label}</Text>
+                              <Text style={[styles.defisRowPts, done && { color: colors.gold }]}>
+                                {done ? '✓' : `+${defi.pts} pts`}
+                              </Text>
+                            </View>
+                            <View style={styles.defisProgressTrack}>
+                              <View style={[styles.defisProgressFill, { width: `${pct}%` as `${number}%` }]} />
+                            </View>
+                            <Text style={styles.defisRowCount}>{defi.progress}/{defi.target}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  {/* Footer */}
+                  <View style={styles.defisFooter}>
+                    <View style={styles.defisFooterPoints}>
+                      <Text style={styles.defisFooterPtsLabel}>Jusqu'à</Text>
+                      <Text style={styles.defisFooterPtsValue}>1 800 pts</Text>
+                      <Text style={styles.defisFooterPtsLabel}>à gagner</Text>
+                    </View>
+                    <Pressable
+                      style={styles.defisFooterCta}
+                      onPress={() => router.push('/defis')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Voir tous les défis"
+                    >
+                      <Text style={styles.defisFooterCtaText}>Voir les défis</Text>
+                      <ChevronRight size={14} color={colors.greenDark} strokeWidth={2.5} />
+                    </Pressable>
+                  </View>
+                </Animated.View>
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
         </Animated.View>
 
         {/* Pills catégorie */}
@@ -375,37 +553,6 @@ export default function HomeScreen() {
             </>
           )}
 
-          {/* ──── Encart Défis ──── */}
-          <Pressable
-            style={styles.defisCardWrap}
-            onPress={() => router.push('/defis')}
-            accessibilityRole="button"
-            accessibilityLabel="Voir mes défis en cours"
-          >
-            <LinearGradient
-              colors={['#5a7a64', '#75967F']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.defisCard}
-            >
-              {/* Icon déco en arrière-plan */}
-              <View style={styles.defisDecoIcon}>
-                <Trophy size={80} color="rgba(255,255,255,0.08)" strokeWidth={1} />
-              </View>
-
-              {/* Badge "X défis en cours" */}
-              <View style={styles.defisBadge}>
-                <Text style={styles.defisBadgeText}>3 défis actifs</Text>
-              </View>
-
-              <Text style={styles.defisCardTitle}>Les Défis Teaven</Text>
-              <Text style={styles.defisCardSub}>Relevez nos défis et gagnez des points bonus</Text>
-
-              <View style={styles.defisCardCta}>
-                <Text style={styles.defisCardCtaText}>Voir les défis →</Text>
-              </View>
-            </LinearGradient>
-          </Pressable>
 
           {/* Section "Nos coups de cœur" */}
           <View style={styles.favoritesHeader}>
@@ -468,23 +615,45 @@ export default function HomeScreen() {
                 <Text style={styles.instagramButtonText}>Voir le profil</Text>
               </Pressable>
             </View>
-            <View style={styles.instagramGrid}>
-              {['#E8F0EA', '#F5EFDF', '#2C4A32', '#EDE4CC'].map((bg, i) => (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.instagramGrid}
+            >
+              {(instaPosts.length > 0 ? instaPosts : Array.from({ length: 6 }, (_, i) => ({ id: `ph-${i}`, image_url: '', post_url: '' }))).slice(0, 6).map((post, i) => (
                 <Pressable
-                  key={i}
-                  style={[styles.instagramPost, { backgroundColor: bg }]}
+                  key={post.id}
+                  style={styles.instagramPost}
                   onPress={() => {
-                    const deeplink = 'instagram://user?username=teaven.co';
-                    Linking.canOpenURL(deeplink).then((can) => {
-                      Linking.openURL(can ? deeplink : 'https://instagram.com/teaven.co');
-                    });
+                    const fallback = () => {
+                      const deeplink = 'instagram://user?username=teaven.co';
+                      Linking.canOpenURL(deeplink).then((can) => {
+                        Linking.openURL(can ? deeplink : 'https://instagram.com/teaven.co');
+                      });
+                    };
+                    if (post.post_url) {
+                      Linking.openURL(post.post_url).catch(fallback);
+                    } else {
+                      fallback();
+                    }
                   }}
                   accessibilityLabel={`Post Instagram ${i + 1}`}
                 >
-                  <Leaf size={22} color={i === 2 ? 'rgba(255,255,255,0.4)' : 'rgba(107,143,113,0.3)'} strokeWidth={1} />
+                  {post.image_url ? (
+                    <Image
+                      source={{ uri: post.image_url }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                      transition={300}
+                    />
+                  ) : (
+                    <View style={[{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }, { backgroundColor: ['#E8F0EA', '#F5EFDF', '#2C4A32', '#EDE4CC', '#E8F0EA', '#F5EFDF'][i] }]}>
+                      <Leaf size={28} color={i === 2 ? 'rgba(255,255,255,0.4)' : 'rgba(107,143,113,0.3)'} strokeWidth={1} />
+                    </View>
+                  )}
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
           </View>
         </Animated.View>
       </ScrollView>
@@ -515,7 +684,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   content: {
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
 
   // Header
@@ -532,30 +701,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
+  avatarWrap: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarRing: {
+    position: 'absolute',
+  },
   avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: colors.green,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     fontFamily: fonts.bold,
-    fontSize: 16,
+    fontSize: 14,
     color: '#FFFFFF',
   },
   greeting: {
     fontFamily: fonts.bold,
-    fontSize: 26,
-    letterSpacing: -0.5,
+    fontSize: 20,
+    letterSpacing: -0.3,
     color: colors.text,
+    maxWidth: '75%',
   },
   subtitle: {
     fontFamily: fonts.regular,
     fontSize: 13,
     color: colors.textSecondary,
     marginTop: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
   },
   notifButton: {
     width: 38,
@@ -572,51 +756,28 @@ const styles = StyleSheet.create({
   walletBanner: {
     marginHorizontal: spacing.xl,
     marginBottom: spacing.sm,
-    backgroundColor: colors.greenLight,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#B8D4BC',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
+    gap: 8,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    gap: spacing.sm,
+    borderRadius: 10,
+    backgroundColor: 'rgba(194,123,90,0.08)',
   },
   walletBannerText: {
     fontFamily: fonts.regular,
     fontSize: 13,
-    color: colors.text,
+    color: colors.textSecondary,
     flex: 1,
   },
   walletBannerAmount: {
     fontFamily: fonts.bold,
-    color: colors.text,
+    color: '#C27B5A',
   },
   walletBannerCta: {
     fontFamily: fonts.bold,
-    color: colors.green,
-  },
-
-  // Recherche
-  searchContainer: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.sm,
-  },
-  searchBar: {
-    height: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-  },
-  searchPlaceholder: {
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: 12,
+    color: '#C27B5A',
   },
 
   // Badge notification
@@ -829,68 +990,203 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
 
-  // Encart Défis
-  defisCardWrap: {
-    paddingHorizontal: spacing.xl,
-    marginTop: 28,
-    marginBottom: spacing.xxl,
-  },
-  defisCard: {
-    borderRadius: 16,
-    height: 170,
-    padding: 20,
+  // Défis animé — accueil (compact ↔ pleine carte)
+  defisAnimContainer: {
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    borderRadius: 14,
     overflow: 'hidden',
-    justifyContent: 'flex-end',
     ...shadows.card,
   },
-  defisDecoIcon: {
+  defisFullGradient: {
+    flex: 1,
+  },
+  defisStripRow: {
     position: 'absolute',
-    right: -10,
-    top: -10,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  defisStripLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  defisStripIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  defisStripProgram: {
+    fontFamily: fonts.bold,
+    fontSize: 9,
+    letterSpacing: 1.5,
+    color: colors.gold,
+    marginBottom: 2,
+  },
+  defisStripChallenge: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  defisStripBarWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  defisStripBar: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  defisStripFill: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderRadius: 2,
+  },
+  defisStripPts: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 10,
+    color: colors.gold,
+    alignSelf: 'flex-end',
+  },
+  // Contenu pleine carte
+  defisFullContent: {
+    padding: 16,
+    paddingBottom: 10,
+  },
+  defisHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  defisProgramLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 4,
+  },
+  defisProgramText: {
+    fontFamily: fonts.bold,
+    fontSize: 9,
+    letterSpacing: 1.5,
+    color: colors.gold,
+  },
+  defisCardTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
   },
   defisBadge: {
-    position: 'absolute',
-    top: 16,
-    left: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    marginTop: 2,
   },
   defisBadgeText: {
     fontFamily: fonts.bold,
     fontSize: 11,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  defisCardTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 22,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-    marginBottom: 4,
-  },
-  defisCardSub: {
-    fontFamily: fonts.regular,
-    fontSize: 13,
     color: 'rgba(255,255,255,0.8)',
+  },
+  defisRows: {
+    gap: 10,
     marginBottom: 12,
   },
-  defisCardCta: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+  defisRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
   },
-  defisCardCtaText: {
+  defisRowIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  defisRowContent: {
+    flex: 1,
+    gap: 4,
+  },
+  defisRowTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  defisRowLabel: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  defisRowPts: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.6)',
+  },
+  defisProgressTrack: {
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  defisProgressFill: {
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 2,
+  },
+  defisRowCount: {
+    fontFamily: fonts.regular,
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.45)',
+  },
+  defisFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 14,
+  },
+  defisFooterPoints: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  defisFooterPtsLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  defisFooterPtsValue: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: colors.gold,
+  },
+  defisFooterCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  defisFooterCtaText: {
     fontFamily: fonts.bold,
     fontSize: 12,
-    color: '#FFFFFF',
+    color: colors.greenDark,
   },
 
   // Instagram
@@ -919,7 +1215,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#C13584',
+    backgroundColor: colors.green,
     paddingHorizontal: spacing.md,
     paddingVertical: 8,
     borderRadius: 10,
@@ -931,12 +1227,13 @@ const styles = StyleSheet.create({
   },
   instagramGrid: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
+    paddingRight: spacing.xl,
   },
   instagramPost: {
-    flex: 1,
-    aspectRatio: 1,
-    borderRadius: 12,
+    width: 156,
+    height: 156,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

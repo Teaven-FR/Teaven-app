@@ -18,24 +18,8 @@ import { ChevronLeft, Home, Briefcase, MapPin, Plus, Trash2, Check } from 'lucid
 import { colors, fonts, spacing, shadows, radii } from '@/constants/theme';
 import type { Address } from '@/lib/types';
 
-const INITIAL_ADDRESSES: Address[] = [
-  {
-    id: '1',
-    label: 'Maison',
-    street: '12 rue de la Gare',
-    city: 'Franconville',
-    postalCode: '95130',
-    isDefault: true,
-  },
-  {
-    id: '2',
-    label: 'Bureau',
-    street: '45 avenue des Champs-Élysées',
-    city: 'Paris',
-    postalCode: '75008',
-    isDefault: false,
-  },
-];
+// TODO PRE-LAUNCH: charger les adresses depuis Supabase au montage
+const INITIAL_ADDRESSES: Address[] = [];
 
 const ICONS: Record<string, typeof Home> = {
   Maison: Home,

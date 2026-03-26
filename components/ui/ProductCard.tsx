@@ -1,6 +1,6 @@
-// Carte produit avec micro-interaction "+" → "AJOUTÉ"
+// Carte produit avec micro-interaction "+" → "AJOUTÉ" + scale feedback
 import { useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Plus } from 'lucide-react-native';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
@@ -15,50 +15,48 @@ interface ProductCardProps {
 export function ProductCard({ product, onPress }: ProductCardProps) {
   const addItem = useCartStore((s) => s.addItem);
   const buttonWidth = useRef(new Animated.Value(30)).current;
+  const iconOpacity = useRef(new Animated.Value(1)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
+  const isAnimating = useRef(false);
+  const useNative = Platform.OS !== 'web';
 
   const formatPrice = (cents: number) =>
     (cents / 100).toFixed(2).replace('.', ',') + ' €';
 
+  const handlePressIn = useCallback(() => {
+    Animated.spring(cardScale, { toValue: 0.97, damping: 15, stiffness: 300, useNativeDriver: useNative }).start();
+  }, [cardScale, useNative]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.spring(cardScale, { toValue: 1, damping: 15, stiffness: 300, useNativeDriver: useNative }).start();
+  }, [cardScale, useNative]);
+
   const handleAdd = useCallback(() => {
+    if (isAnimating.current) return;
+    isAnimating.current = true;
     addItem(product);
 
-    // Animation : étirer le bouton
-    Animated.spring(buttonWidth, {
-      toValue: 80,
-      damping: 18,
-      stiffness: 200,
-      mass: 0.8,
-      useNativeDriver: false,
-    }).start();
+    // Phase 1 : masquer "+", étirer le bouton, afficher "AJOUTÉ"
+    Animated.parallel([
+      Animated.timing(iconOpacity, { toValue: 0, duration: 120, useNativeDriver: false }),
+      Animated.spring(buttonWidth, { toValue: 80, damping: 18, stiffness: 200, mass: 0.8, useNativeDriver: false }),
+      Animated.timing(textOpacity, { toValue: 1, duration: 200, delay: 120, useNativeDriver: false }),
+    ]).start();
 
-    Animated.timing(textOpacity, {
-      toValue: 1,
-      duration: 200,
-      delay: 100,
-      useNativeDriver: false,
-    }).start();
-
-    // Refermer après 1.4s
+    // Phase 2 : refermer après 1.2s
     setTimeout(() => {
-      Animated.spring(buttonWidth, {
-        toValue: 30,
-        damping: 18,
-        stiffness: 200,
-        mass: 0.8,
-        useNativeDriver: false,
-      }).start();
-
-      Animated.timing(textOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: false,
-      }).start();
-    }, 1400);
-  }, [addItem, product, buttonWidth, textOpacity]);
+      Animated.parallel([
+        Animated.timing(textOpacity, { toValue: 0, duration: 150, useNativeDriver: false }),
+        Animated.spring(buttonWidth, { toValue: 30, damping: 18, stiffness: 200, mass: 0.8, useNativeDriver: false }),
+        Animated.timing(iconOpacity, { toValue: 1, duration: 200, delay: 150, useNativeDriver: false }),
+      ]).start(() => { isAnimating.current = false; });
+    }, 1200);
+  }, [addItem, product, buttonWidth, textOpacity, iconOpacity]);
 
   return (
-    <Pressable onPress={onPress} style={styles.card}>
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View style={[styles.card, { transform: [{ scale: cardScale }] }]}>
       <Image
         source={{ uri: product.image }}
         style={styles.image}
@@ -79,7 +77,9 @@ export function ProductCard({ product, onPress }: ProductCardProps) {
           <Text style={styles.price}>{formatPrice(product.price)}</Text>
           <Pressable onPress={handleAdd}>
             <Animated.View style={[styles.addButton, { width: buttonWidth }]}>
-              <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+              <Animated.View style={{ opacity: iconOpacity }}>
+                <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+              </Animated.View>
               <Animated.Text style={[styles.addedText, { opacity: textOpacity }]}>
                 AJOUTÉ
               </Animated.Text>
@@ -87,6 +87,7 @@ export function ProductCard({ product, onPress }: ProductCardProps) {
           </Pressable>
         </View>
       </View>
+      </Animated.View>
     </Pressable>
   );
 }
