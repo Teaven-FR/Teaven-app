@@ -1,5 +1,5 @@
 // Écran Mes adresses — gestion locale avec add/delete/default
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,12 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Home, Briefcase, MapPin, Plus, Trash2, Check } from 'lucide-react-native';
+import { ChevronLeft, Home, Briefcase, MapPin, Plus, Trash2, Check, Search } from 'lucide-react-native';
+import { callEdgeFunction } from '@/lib/square';
 import { colors, fonts, spacing, shadows, radii } from '@/constants/theme';
 import type { Address } from '@/lib/types';
 
@@ -38,6 +40,44 @@ export default function AdressesScreen() {
   const [formStreet, setFormStreet] = useState('');
   const [formPostal, setFormPostal] = useState('');
   const [formCity, setFormCity] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<Array<{ placeId: string; description: string; mainText: string }>>([]);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const searchAddress = (text: string) => {
+    setSearchQuery(text);
+    if (text.length < 3) { setSuggestions([]); return; }
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      const result = await callEdgeFunction<{ predictions: Array<{ place_id: string; description: string; main_text: string }> }>(
+        'google-places',
+        { action: 'autocomplete', input: text },
+      );
+      if (result.data?.predictions) {
+        setSuggestions(result.data.predictions.map((p) => ({
+          placeId: p.place_id,
+          description: p.description,
+          mainText: p.main_text,
+        })));
+      }
+    }, 300);
+  };
+
+  const selectSuggestion = async (placeId: string, description: string) => {
+    setSuggestions([]);
+    setSearchQuery(description);
+    const result = await callEdgeFunction<{ street: string; postalCode: string; city: string }>(
+      'google-places',
+      { action: 'details', place_id: placeId },
+    );
+    if (result.data) {
+      setFormStreet(result.data.street || description);
+      setFormPostal(result.data.postalCode || '');
+      setFormCity(result.data.city || '');
+    } else {
+      setFormStreet(description);
+    }
+  };
 
   const setDefault = (id: string) => {
     setAddresses((prev) =>
@@ -189,6 +229,34 @@ export default function AdressesScreen() {
               value={formLabel}
               onChangeText={setFormLabel}
             />
+            {/* Recherche adresse Google Places */}
+            <View style={styles.searchWrap}>
+              <Search size={14} color={colors.textMuted} strokeWidth={1.5} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Rechercher une adresse…"
+                placeholderTextColor={colors.textMuted}
+                value={searchQuery}
+                onChangeText={searchAddress}
+                autoCorrect={false}
+              />
+            </View>
+            {suggestions.length > 0 && (
+              <View style={styles.suggestionsWrap}>
+                {suggestions.map((s) => (
+                  <Pressable
+                    key={s.placeId}
+                    style={styles.suggestionRow}
+                    onPress={() => selectSuggestion(s.placeId, s.description)}
+                  >
+                    <MapPin size={12} color={colors.green} strokeWidth={1.5} />
+                    <Text style={styles.suggestionText} numberOfLines={1}>{s.description}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {/* Champs remplis automatiquement */}
             <TextInput
               style={styles.input}
               placeholder="Rue et numéro"
@@ -439,4 +507,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
   },
+
+  // Google Places search
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#F5F5F0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 4,
+    borderWidth: 1, borderColor: colors.green, marginBottom: 4,
+  },
+  searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.text, paddingVertical: 10 },
+  suggestionsWrap: {
+    backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+    marginBottom: 8, overflow: 'hidden',
+  },
+  suggestionRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  suggestionText: { fontFamily: fonts.regular, fontSize: 13, color: colors.text, flex: 1 },
 });
