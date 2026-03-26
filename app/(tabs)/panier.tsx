@@ -131,8 +131,19 @@ export default function PanierScreen() {
   const availableRewards = (squareRewards.length > 0 ? squareRewards : FALLBACK_REWARDS)
     .filter((r) => loyalty.points >= r.pointsCost);
 
+  // Réduction récompense : estimation basée sur le type de récompense
+  // Les vraies réductions seront appliquées côté Square via loyalty/rewards
   const rewardDiscount = appliedReward
-    ? (appliedReward.icon === 'percent' ? Math.round(subtotal * 0.2) : 0)
+    ? (() => {
+        const name = appliedReward.name.toLowerCase();
+        if (name.includes('boisson chaude') || name.includes('thé glacé')) return Math.min(450, subtotal);
+        if (name.includes('pâtisserie')) return Math.min(550, subtotal);
+        if (name.includes('signature')) return Math.min(650, subtotal);
+        if (name.includes('boîte') || name.includes('tasse')) return Math.min(1500, subtotal);
+        if (name.includes('formule midi')) return Math.min(1490, subtotal);
+        if (name.includes('brunch') || name.includes('atelier')) return Math.min(2990, subtotal);
+        return 0;
+      })()
     : 0;
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
   const [businessHours, setBusinessHours] = useState<{ open: number; close: number } | null>(null);
@@ -909,7 +920,14 @@ export default function PanierScreen() {
               d.setDate(d.getDate() + effectiveDayOffset);
               pickupISO = d.toISOString();
             }
-            router.push({ pathname: '/checkout', params: { total: String(total), pickupTime: pickupISO } });
+            router.push({
+              pathname: '/checkout',
+              params: {
+                total: String(total),
+                pickupTime: pickupISO,
+                ...(appliedReward ? { rewardTierId: appliedReward.id } : {}),
+              },
+            });
           }}
           style={({ pressed }) => [
             styles.ctaButton,

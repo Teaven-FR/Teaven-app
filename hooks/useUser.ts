@@ -53,6 +53,7 @@ export function useUser() {
   const storeUser = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [remoteRewards, setRemoteRewards] = useState<Reward[]>([]);
+  const [loyaltyAccountId, setLoyaltyAccountId] = useState<string | null>(null);
   const [accrualRules, setAccrualRules] = useState<Array<{ type: string; points: number; spendAmount?: number }>>([]);
 
   // En mode invité ou non connecté, utiliser le mockUser
@@ -129,6 +130,9 @@ export function useUser() {
               icon: r.icon,
             })),
           );
+          if (result.data.loyaltyAccountId) {
+            setLoyaltyAccountId(result.data.loyaltyAccountId);
+          }
           if (result.data.accrualRules) {
             setAccrualRules(result.data.accrualRules);
           }
@@ -231,6 +235,7 @@ export function useUser() {
     user,
     isGuest,
     loyalty,
+    loyaltyAccountId,
     wallet,
     rewards: remoteRewards,
     accrualRules,

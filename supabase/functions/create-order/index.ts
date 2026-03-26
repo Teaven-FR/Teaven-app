@@ -58,7 +58,7 @@ serve(async (req) => {
       );
     }
 
-    const { items, pickupTime, customerName, customerPhone } = body;
+    const { items, pickupTime, customerName, customerPhone, rewardTierId, loyaltyAccountId } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return new Response(
@@ -124,6 +124,37 @@ serve(async (req) => {
       formattedPhone = '+' + formattedPhone;
     }
 
+    // Créer un loyalty reward si demandé
+    let loyaltyRewardId: string | undefined;
+    if (rewardTierId && loyaltyAccountId) {
+      try {
+        const rewardRes = await fetch(`${squareBaseUrl}/v2/loyalty/rewards`, {
+          method: 'POST',
+          headers: {
+            'Square-Version': '2025-01-23',
+            'Authorization': `Bearer ${squareAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            reward: {
+              loyalty_account_id: loyaltyAccountId as string,
+              reward_tier_id: rewardTierId as string,
+            },
+            idempotency_key: crypto.randomUUID(),
+          }),
+        });
+        const rewardData = await rewardRes.json();
+        if (rewardRes.ok && rewardData.reward) {
+          loyaltyRewardId = rewardData.reward.id;
+          console.log(`[create-order] Loyalty reward created: ${loyaltyRewardId}`);
+        } else {
+          console.error('[create-order] Loyalty reward error:', JSON.stringify(rewardData));
+        }
+      } catch (err) {
+        console.error('[create-order] Loyalty reward exception:', err);
+      }
+    }
+
     const orderResponse = await fetch(`${squareBaseUrl}/v2/orders`, {
       method: 'POST',
       headers: {
@@ -149,6 +180,7 @@ serve(async (req) => {
               note: `Commande via app Teaven — ${profileName}`,
             },
           }],
+          ...(loyaltyRewardId ? { rewards: [{ id: loyaltyRewardId, reward_tier_id: rewardTierId as string }] } : {}),
         },
         idempotency_key: crypto.randomUUID(),
       }),
