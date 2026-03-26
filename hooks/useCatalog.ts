@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { syncCatalog } from '@/lib/square';
-import { mockProducts, mockCategories } from '@/constants/mockData';
+// Zéro mock — tout vient de Supabase
 import type { Product, Category, ModifierGroup, ModifierOption, ProductVariation } from '@/lib/types';
 
 /** Transforme les rows Supabase en Product[] */
@@ -187,9 +187,9 @@ export function useCatalog() {
     fetchProducts();
   }, [fetchProducts]);
 
-  // Fallback sur les mock products si le catalogue Supabase est vide
-  const allProducts = (remoteProducts && remoteProducts.length > 0) ? remoteProducts : mockProducts;
-  const allCategories = (remoteCategories && remoteCategories.length > 0) ? remoteCategories : mockCategories;
+  // Pas de mock — uniquement les vrais produits Supabase
+  const allProducts = remoteProducts ?? [];
+  const allCategories = remoteCategories ?? [{ id: 'all', label: 'Tout' }];
 
   const products: Product[] = useMemo(() => {
     if (selectedCategory === 'all') return allProducts;
