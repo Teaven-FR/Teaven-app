@@ -63,7 +63,7 @@ export function RechargeModal({ visible, onClose, onRecharge }: RechargeModalPro
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.backdrop}>
         <LinearGradient
-          colors={['#75967F', '#4A6B50', '#3A5840']}
+          colors={['#D4937A', '#C27B5A', '#B56A4A']}
           start={{ x: 0, y: 0 }}
           end={{ x: 0.3, y: 1 }}
           style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 20) + 8 }]}
@@ -105,7 +105,7 @@ export function RechargeModal({ visible, onClose, onRecharge }: RechargeModalPro
                 >
                   {i === 1 && (
                     <View style={styles.popBadge}>
-                      <Sparkles size={7} color="#75967F" strokeWidth={2.5} />
+                      <Sparkles size={7} color="#C27B5A" strokeWidth={2.5} />
                       <Text style={styles.popText}>Populaire</Text>
                     </View>
                   )}
@@ -114,7 +114,7 @@ export function RechargeModal({ visible, onClose, onRecharge }: RechargeModalPro
                   </Text>
                   <Text style={[styles.cardTag, active && styles.cardTagActive]}>{opt.tagline}</Text>
                   <View style={styles.cardBonus}>
-                    <Gift size={10} color={active ? '#75967F' : 'rgba(255,255,255,0.5)'} strokeWidth={1.8} />
+                    <Gift size={10} color={active ? '#C27B5A' : 'rgba(255,255,255,0.5)'} strokeWidth={1.8} />
                     <Text style={[styles.cardBonusText, active && styles.cardBonusTextActive]}>
                       +{fmt(opt.bonus)} offerts
                     </Text>
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
   },
   cardBonusTextActive: {
-    color: '#75967F',
+    color: '#C27B5A',
   },
 
   // Recap

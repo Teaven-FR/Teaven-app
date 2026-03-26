@@ -829,7 +829,7 @@ export default function PanierScreen() {
           }}
         >
           <LinearGradient
-            colors={['#75967F', '#4A6B50']}
+            colors={['#D4937A', '#C27B5A']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.walletMini}
@@ -843,7 +843,7 @@ export default function PanierScreen() {
             </View>
             {wallet.balance >= total ? (
               <View style={styles.walletMiniOk}>
-                <Check size={12} color="#FFFFFF" strokeWidth={2.5} />
+                <Check size={12} color="#C27B5A" strokeWidth={2.5} />
                 <Text style={styles.walletMiniOkText}>Payer avec</Text>
               </View>
             ) : (
@@ -1768,7 +1768,7 @@ const styles = StyleSheet.create({
   walletMiniOkText: {
     fontFamily: fonts.bold,
     fontSize: 11,
-    color: '#FFFFFF',
+    color: '#C27B5A',
   },
   walletMiniLow: {
     backgroundColor: 'rgba(255,255,255,0.2)',

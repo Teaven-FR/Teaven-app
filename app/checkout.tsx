@@ -265,7 +265,7 @@ export default function CheckoutScreen() {
         </View>
       ) : (
         <View style={styles.walletPaySection}>
-          <LinearGradient colors={['#75967F', '#4A6B50']} style={styles.walletPayCard}>
+          <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.walletPayCard}>
             <Wallet size={24} color="rgba(255,255,255,0.7)" strokeWidth={1.3} />
             <Text style={styles.walletPayAmount}>{fmt(total)}</Text>
             <Text style={styles.walletPayLabel}>Solde après : {fmt(wallet.balance - total)}</Text>
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border,
   },
   methodTabActive: { backgroundColor: colors.green, borderColor: colors.green },
-  methodTabWallet: { backgroundColor: '#738478', borderColor: '#738478' },
+  methodTabWallet: { backgroundColor: '#C27B5A', borderColor: '#C27B5A' },
   methodDisabled: { opacity: 0.4 },
   methodTabText: { fontFamily: fonts.bold, fontSize: 13, color: colors.text },
   methodTabTextActive: { color: '#FFFFFF' },
