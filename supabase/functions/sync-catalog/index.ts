@@ -10,20 +10,101 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Catégories Square autorisées (whitelist, case-insensitive)
-const ALLOWED_CATEGORIES = ['🍽 food teaven', 'boissons ☕️🍵', 'food - formules teaven', '🍰 food – pâtisseries'];
-
-// Mapping des catégories Square vers Teaven (case-insensitive)
+// Mapping des catégories Square → slug Teaven (case-insensitive, match partiel)
+// Toutes les catégories non mappées sont exclues (B2B, fidélisation, etc.)
 const CATEGORY_MAP: Record<string, string> = {
-  '🍽 food teaven': 'food-teaven',
-  'boissons ☕️🍵': 'boissons',
+  // Food principal
+  '🍽 food teaven': 'nourrir',
+  'food – toasts': 'nourrir',
+  'food – assiettes & bowls': 'nourrir',
+  'food – salades': 'nourrir',
+  'food – petit-déjeuner': 'nourrir',
+  'food - veloutés et soupes': 'nourrir',
+  'food - cartes saisonnales': 'nourrir',
   'food - formules teaven': 'formules',
+  // Pâtisseries
   '🍰 food – pâtisseries': 'patisseries',
-  'nourrir': 'nourrir',
-  'savourer': 'savourer',
-  'emporter': 'emporter',
-  'pâtisseries': 'patisseries',
-  'patisseries': 'patisseries',
+  'les pâtisseries/desserts ✨🍰💚': 'patisseries',
+  'mini cakes 🍰💚': 'patisseries',
+  'cakes et muffins 🍰🧁💚': 'patisseries',
+  'cookies 🍪✨💚': 'patisseries',
+  'cake sans gluten 🍰💚✨': 'patisseries',
+  'brioches 🥮✨💚': 'patisseries',
+  'véganes 🍃🍰': 'patisseries',
+  'cakes et cookies': 'patisseries',
+  'brioches': 'patisseries',
+  'véganes': 'patisseries',
+  'sans gluten': 'patisseries',
+  'pâtisseries maison ✨🍰': 'patisseries',
+  'desserts ✨🍰💚': 'patisseries',
+  'cakes/cookies/muffins ✨💚': 'patisseries',
+  // Boissons
+  'boissons ☕️🍵': 'boissons',
+  'boissons – café': 'boissons',
+  'boissons – matcha': 'boissons',
+  'boissons – chaï': 'boissons',
+  'boissons – thés': 'boissons',
+  'boissons – infusions&rooibos': 'boissons',
+  'boissons artisanales – thés glacés': 'boissons',
+  'boissons – smootea': 'boissons',
+  'boissons – jus bien-être': 'boissons',
+  'boissons – eau': 'boissons',
+  'boissons – signatures&lattés': 'boissons',
+  'les boissons 🍹✨💚': 'boissons',
+  'cafés ✨☕️': 'boissons',
+  'cafés ✨☕️💚': 'boissons',
+  'café chaud ✨☕️': 'boissons',
+  'café froid ✨☕️🧊': 'boissons',
+  'café froid ✨🧊 ☕️': 'boissons',
+  'matcha chaud ✨🧊🍵': 'boissons',
+  'matcha froid ✨🧊🍵': 'boissons',
+  'matcha, chaï & signatures ✨🍵': 'boissons',
+  'matcha, chaï & signatures': 'boissons',
+  'signatures ✨🍵': 'boissons',
+  'rooibos ✨❤️': 'boissons',
+  'boissons fraîches ✨🧊': 'boissons',
+  'boissons fraîches ✨🍹🧊': 'boissons',
+  'smooteas ✨🥭': 'boissons',
+  'infusions ✨🍃': 'boissons',
+  'thés ✨🍃': 'boissons',
+  'eaux ✨💧': 'boissons',
+  'jus bien-être 🍃💫💚': 'boissons',
+  // Formules
+  'les formules midi ✨💚': 'formules',
+  'les formules après-midi/soir ✨💚': 'formules',
+  'les formules et les plats ✨🥪💚': 'formules',
+  'formules ✨💚⭐': 'formules',
+  'formules ✨💚': 'formules',
+  'formules 🧡✨': 'formules',
+  'formules': 'formules',
+  'brunch&tea ✨💚': 'formules',
+  'midi / brunch ✨🥪💚': 'formules',
+  '⭐ rituels du matin (formules)': 'formules',
+  'rituel du matin ✨☀️': 'formules',
+  // Nourrir (plats salés)
+  'bowls et assiettes 🍽️🥗💚': 'nourrir',
+  'les salades ✨🥗': 'nourrir',
+  'les toasts et triangles 🥪💚': 'nourrir',
+  'les veloutés ✨🍲': 'nourrir',
+  'les salades et veloutés 🥗🍜✨': 'nourrir',
+  'toasts signature ✨💚': 'nourrir',
+  'assiettes&bowls&salades ✨🥗💚': 'nourrir',
+  'bowls et granola 💫☀️🥥': 'nourrir',
+  'bowls ✨💚': 'nourrir',
+  'salée ✨💚': 'nourrir',
+  'petit-déjeuner ✨🥮': 'nourrir',
+  'petit-déjeuner': 'nourrir',
+  'pour les enfants ✨💚': 'nourrir',
+  'toasts et plats hc 🥪✨': 'nourrir',
+  // Saisonnières
+  '✨💙❄️ l\'hivernal - la carte d\'hiver ❄️💙✨': 'nourrir',
+  '💛☀️✨ l\'estival la carte d\'été 💛☀️✨': 'nourrir',
+  'saint-valentin': 'nourrir',
+  // Emporter (boutique thé/accessoires)
+  '🫖 retail': 'emporter',
+  'boutique teaven': 'emporter',
+  'boutique - thés': 'emporter',
+  'boutique - accessoires': 'emporter',
 };
 
 interface SquareObject {
@@ -64,8 +145,8 @@ async function fetchAllSquareObjects(
 }
 
 /** Résout le slug de catégorie depuis un nom Square (case-insensitive) */
-function resolveCategory(name: string): string {
-  return CATEGORY_MAP[name.toLowerCase().trim()] ?? name.toLowerCase().replace(/\s+/g, '-');
+function resolveCategory(name: string): string | null {
+  return CATEGORY_MAP[name.toLowerCase().trim()] ?? null;
 }
 
 serve(async (req) => {
@@ -159,12 +240,12 @@ serve(async (req) => {
 
     // 4. Upsert catégories
     const categoryRows = categories
-      .filter((c) => !c.is_deleted)
+      .filter((c) => !c.is_deleted && resolveCategory(c.category_data?.name ?? '') !== null)
       .map((c, i) => {
         const name = c.category_data?.name ?? 'unknown';
         return {
           square_category_id: c.id,
-          slug: resolveCategory(name),
+          slug: resolveCategory(name)!,
           label: name,
           ordinal: i + 1,
         };
@@ -176,8 +257,15 @@ serve(async (req) => {
         .upsert(categoryRows, { onConflict: 'square_category_id' });
     }
 
-    // 5. Désactiver tous les produits existants avant sync (on réactivera ceux du whitelist)
-    await supabase.from('products').update({ available: false }).neq('id', '00000000-0000-0000-0000-000000000000');
+    // 5. Désactiver les produits UNIQUEMENT si Square a retourné des items
+    // Sinon on garde l'état actuel (évite de tout casser si le token Square est invalide)
+    if (items.length > 0) {
+      await supabase.from('products').update({ available: false }).neq('id', '00000000-0000-0000-0000-000000000000');
+    } else {
+      console.log('[sync-catalog] Aucun item Square reçu — on ne désactive pas les produits existants');
+      // Réactiver tous les produits existants (ils avaient été désactivés par un sync précédent)
+      await supabase.from('products').update({ available: true }).eq('available', false);
+    }
 
     // 6. Transformer et upsert les produits
     let syncedProducts = 0;
@@ -193,11 +281,9 @@ serve(async (req) => {
         ?? (itemData.categories as { id: string }[] | undefined)?.[0]?.id;
       const categoryName = categoryId ? categoryMap.get(categoryId) : undefined;
 
-      // Log la catégorie pour debug — ne plus filtrer strictement
-      // Si pas de catégorie, on inclut quand même avec une catégorie par défaut
-      if (!categoryName) {
-        console.log(`[sync-catalog] Item "${itemData.name}" has no category, using default`);
-      }
+      // Filtrer : n'inclure que les catégories mappées (exclut B2B, fidélisation, etc.)
+      const slug = categoryName ? resolveCategory(categoryName) : null;
+      if (!slug) continue;
 
       const variations = itemData.variations ?? [];
       const firstVariation = variations[0];
@@ -216,7 +302,7 @@ serve(async (req) => {
             name: itemData.name ?? 'Sans nom',
             description: itemData.description ?? '',
             price: firstPrice,
-            category: categoryName ? resolveCategory(categoryName) : 'savourer',
+            category: slug!,
             image: imageUrl,
             square_image_url: imageUrl,
             available: true,
@@ -333,6 +419,7 @@ serve(async (req) => {
           images: images.length,
           modifierLists: modifierLists.length,
         },
+        reactivatedExisting: items.length === 0,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );

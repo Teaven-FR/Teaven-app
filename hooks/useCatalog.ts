@@ -78,13 +78,13 @@ async function queryProducts() {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  'food-teaven': 'Food',
+  'nourrir': 'Nourrir',
   'boissons': 'Boissons',
   'formules': 'Formules',
   'patisseries': 'Pâtisseries',
-  'nourrir': 'Nourrir',
-  'savourer': 'Savourer',
   'emporter': 'Emporter',
+  'savourer': 'Savourer',
+  'food-teaven': 'Food',
 };
 
 /** Dérive les catégories depuis les produits actifs */
@@ -129,8 +129,18 @@ export function useCatalog() {
     setSyncError(null);
     try {
       // 1. Fetch depuis Supabase (cache local) — affichage immédiat
-      const productsRes = await queryProducts();
-      const hasProducts = !productsRes.error && productsRes.data && productsRes.data.length > 0;
+      let productsRes = await queryProducts();
+      let hasProducts = !productsRes.error && productsRes.data && productsRes.data.length > 0;
+
+      // Si aucun produit available, chercher tous les produits (même unavailable)
+      // Cela arrive quand sync-catalog a désactivé les produits sans pouvoir les réactiver
+      if (!hasProducts) {
+        productsRes = await supabase
+          .from('products')
+          .select(`*, product_variations (*), modifier_groups (*, modifier_options (*))`)
+          .order('name');
+        hasProducts = !productsRes.error && productsRes.data && productsRes.data.length > 0;
+      }
 
       if (hasProducts) {
         const mapped = mapProducts(productsRes.data as Record<string, unknown>[]);
