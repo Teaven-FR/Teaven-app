@@ -10,6 +10,7 @@ interface RechargeModalProps {
   visible: boolean;
   onClose: () => void;
   onRecharge: (amount: number) => void;
+  onPayByCard?: (amount: number) => void; // Naviguer vers le paiement carte pour recharger
 }
 
 const PRESET_OPTIONS = [
@@ -18,7 +19,7 @@ const PRESET_OPTIONS = [
   { charge: 10000, bonus: 1200, tagline: 'Le meilleur bonus' },
 ];
 
-export function RechargeModal({ visible, onClose, onRecharge }: RechargeModalProps) {
+export function RechargeModal({ visible, onClose, onRecharge, onPayByCard }: RechargeModalProps) {
   const insets = useSafeAreaInsets();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
@@ -47,8 +48,14 @@ export function RechargeModal({ visible, onClose, onRecharge }: RechargeModalPro
 
   const handleRecharge = () => {
     const charge = getCharge();
-    const bonus = getBonus();
-    if (charge > 0) {
+    if (charge <= 0) return;
+    if (onPayByCard) {
+      // Naviguer vers le paiement par carte pour recharger
+      onPayByCard(charge);
+      onClose();
+    } else {
+      // Fallback local (dev)
+      const bonus = getBonus();
       onRecharge(charge + bonus);
       setSelectedIndex(null);
       setCustomAmount('');

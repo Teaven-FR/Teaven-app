@@ -632,6 +632,7 @@ export default function ProfilScreen() {
       <RechargeModal
         visible={rechargeVisible}
         onClose={() => setRechargeVisible(false)}
+        onPayByCard={(amount) => { setRechargeVisible(false); router.push({ pathname: '/recharge', params: { amount: String(amount) } }); }}
         onRecharge={(amount) => {
           rechargeWallet(amount);
           showToast('Porte-monnaie rechargé !');

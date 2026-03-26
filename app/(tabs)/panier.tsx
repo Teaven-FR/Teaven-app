@@ -912,6 +912,7 @@ export default function PanierScreen() {
       <RechargeModal
         visible={rechargeVisible}
         onClose={() => setRechargeVisible(false)}
+        onPayByCard={(amount) => { setRechargeVisible(false); router.push({ pathname: '/recharge', params: { amount: String(amount) } }); }}
         onRecharge={(amount) => {
           rechargeWallet(amount);
           setRechargeVisible(false);
