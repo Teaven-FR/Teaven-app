@@ -1,5 +1,5 @@
-// Fiche produit — hero parallax + modificateurs dynamiques + suggestions
-import { useState, useRef, useCallback } from 'react';
+// Fiche produit — hero parallax + modificateurs dynamiques + suggestions + story
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Animated,
   Platform,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,8 +32,31 @@ import { ProductMiniCard } from '@/components/features/ProductMiniCard';
 import { useCartStore } from '@/stores/cartStore';
 import { useToast } from '@/contexts/ToastContext';
 import { useProduct, useCatalog } from '@/hooks/useCatalog';
-import { mockProducts } from '@/constants/mockData';
+// Zéro mock — tout depuis Supabase/Square
+import { supabase } from '@/lib/supabase';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
+
+// Story de l'Assiette — chargée depuis Supabase si disponible
+interface ProductStory {
+  fact_text?: string | null;
+  origin_text?: string | null;
+  preparation_text?: string | null;
+}
+
+function useProductStory(squareId?: string) {
+  const [story, setStory] = useState<ProductStory | null>(null);
+  useEffect(() => {
+    if (!squareId) return;
+    supabase
+      .from('product_stories')
+      .select('fact_text, origin_text, preparation_text')
+      .eq('square_item_id', squareId)
+      .eq('is_active', true)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setStory(data); });
+  }, [squareId]);
+  return story;
+}
 
 const HERO_HEIGHT = 340;
 
@@ -52,6 +76,7 @@ export default function ProductScreen() {
 
   // Parallax scroll
   const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<any>(null);
   const heroTranslate = scrollY.interpolate({
     inputRange: [-100, 0, HERO_HEIGHT],
     outputRange: [-50, 0, HERO_HEIGHT * 0.4],
@@ -62,8 +87,18 @@ export default function ProductScreen() {
   const addScale = useRef(new Animated.Value(1)).current;
   const orderScale = useRef(new Animated.Value(1)).current;
 
-  // Fallback : essayer aussi dans les mockProducts si pas trouvé
-  const resolvedProduct = product ?? (isUsingMockData ? mockProducts.find((p) => p.id === id) : undefined);
+  const resolvedProduct = product;
+
+  // Story de l'Assiette — depuis Supabase (AVANT les early returns)
+  const story = useProductStory(resolvedProduct?.squareId);
+
+  const handleShare = useCallback(() => {
+    if (!resolvedProduct) return;
+    Share.share({
+      title: resolvedProduct.name,
+      message: `Découvrez "${resolvedProduct.name}" chez Teaven — ${(resolvedProduct.price / 100).toFixed(2).replace('.', ',')} €`,
+    });
+  }, [resolvedProduct]);
 
   if (isLoading && !resolvedProduct) {
     return (
@@ -81,8 +116,8 @@ export default function ProductScreen() {
     );
   }
 
-  // Modificateurs : depuis Square (dynamiques) ou fallback vide
-  const modifiers = resolvedProduct.modifiers ?? [];
+  // Modificateurs depuis Square — filtrer les groupes sans options
+  const modifiers = (resolvedProduct.modifiers ?? []).filter((g: { options: unknown[] }) => g.options.length > 0);
   const variations = resolvedProduct.variations ?? [];
 
   // Variation sélectionnée (ou première par défaut)
@@ -172,6 +207,7 @@ export default function ProductScreen() {
   return (
     <View style={styles.container}>
       <Animated.ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
@@ -213,7 +249,8 @@ export default function ProductScreen() {
         {/* Bouton partage */}
         <Pressable
           style={[styles.navButton, { top: insets.top + 12, right: 20 }]}
-          accessibilityLabel="Partager"
+          onPress={handleShare}
+          accessibilityLabel="Partager ce produit"
         >
           <Share2 size={16} color="#FFFFFF" strokeWidth={2} />
         </Pressable>
@@ -320,6 +357,22 @@ export default function ProductScreen() {
             ))}
           </View>
 
+          {/* ──── Story de l'Assiette ──── */}
+          {story && (story.fact_text || story.origin_text || story.preparation_text) && (
+            <View style={styles.storyCard}>
+              <Text style={styles.storyLabel}>Le saviez-vous ?</Text>
+              {story.fact_text ? (
+                <Text style={styles.storyText}>{story.fact_text}</Text>
+              ) : null}
+              {story.origin_text ? (
+                <Text style={styles.storyText}>{story.origin_text}</Text>
+              ) : null}
+              {story.preparation_text ? (
+                <Text style={styles.storyText}>{story.preparation_text}</Text>
+              ) : null}
+            </View>
+          )}
+
           {/* ──── Avis clients ──── */}
           <View style={styles.reviewsSection}>
             <View style={styles.reviewsHeader}>
@@ -369,8 +422,13 @@ export default function ProductScreen() {
               </View>
             ))}
 
-            {/* Lien vers tous les avis */}
-            <Pressable style={styles.allReviewsLink}>
+            {/* Lien vers tous les avis — scroll vers le haut de la fiche pour l'instant */}
+            <Pressable
+              style={styles.allReviewsLink}
+              onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+              accessibilityRole="button"
+              accessibilityLabel="Revenir en haut de la fiche"
+            >
               <Text style={styles.allReviewsText}>Voir tous les avis</Text>
             </Pressable>
           </View>
@@ -639,6 +697,29 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     color: colors.green,
     textTransform: 'uppercase',
+  },
+
+  // Story de l'Assiette
+  storyCard: {
+    backgroundColor: '#F0F0E5',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: spacing.lg,
+    gap: 6,
+  },
+  storyLabel: {
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: '#738478',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  storyText: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: '#4A5C4E',
+    lineHeight: 18,
   },
 
   // Avis clients

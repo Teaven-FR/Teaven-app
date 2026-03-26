@@ -174,12 +174,13 @@ serve(async (req) => {
 
     console.log(`[sync-catalog] Env: ${squareEnvironment}, Base: ${squareBaseUrl}`);
 
-    // 1. Fetch toutes les données Square en parallèle
-    const [categories, items, images, modifierLists] = await Promise.all([
+    // 1. Fetch toutes les données Square en parallèle (incluant MODIFIER séparés)
+    const [categories, items, images, modifierLists, modifierObjects] = await Promise.all([
       fetchAllSquareObjects(squareBaseUrl, squareAccessToken, 'CATEGORY'),
       fetchAllSquareObjects(squareBaseUrl, squareAccessToken, 'ITEM'),
       fetchAllSquareObjects(squareBaseUrl, squareAccessToken, 'IMAGE'),
       fetchAllSquareObjects(squareBaseUrl, squareAccessToken, 'MODIFIER_LIST'),
+      fetchAllSquareObjects(squareBaseUrl, squareAccessToken, 'MODIFIER'),
     ]);
 
     console.log(`[sync-catalog] Fetched: ${categories.length} categories, ${items.length} items, ${images.length} images, ${modifierLists.length} modifierLists`);
@@ -201,6 +202,18 @@ serve(async (req) => {
     for (const ml of modifierLists) {
       modifierListMap.set(ml.id, ml);
     }
+
+    // Index des MODIFIER objects séparés par leur modifier_list_id
+    const modifiersByListId = new Map<string, SquareObject[]>();
+    for (const mod of modifierObjects) {
+      if (mod.is_deleted) continue;
+      const listId = mod.modifier_data?.modifier_list_id;
+      if (!listId) continue;
+      if (!modifiersByListId.has(listId)) modifiersByListId.set(listId, []);
+      modifiersByListId.get(listId)!.push(mod);
+    }
+
+    console.log(`[sync-catalog] ${modifierObjects.length} MODIFIER objects, ${modifiersByListId.size} lists avec modifiers séparés`);
 
     // Mode debug : retourner les données Square brutes sans sync
     if (debugMode) {
@@ -368,22 +381,37 @@ serve(async (req) => {
           continue;
         }
 
-        // Insérer les options
-        const modifiers = mlData.modifiers ?? [];
+        // Insérer les options — d'abord les modifiers intégrés, sinon les MODIFIER objects séparés
+        let modifiers = mlData.modifiers ?? [];
+        if (modifiers.length === 0) {
+          // Chercher les MODIFIER objects séparés liés à cette modifier_list
+          modifiers = modifiersByListId.get(mlId) ?? [];
+        }
         const optionRows = modifiers.map((mod: SquareObject, i: number) => ({
           group_id: dbGroup.id,
           label: mod.modifier_data?.name ?? 'Option',
           price: mod.modifier_data?.price_money?.amount ?? 0,
           square_modifier_id: mod.id,
-          ordinal: i,
+          ordinal: mod.modifier_data?.ordinal ?? i,
         }));
 
         if (optionRows.length > 0) {
+          // Insert simple — les anciennes options sont supprimées via CASCADE du group
           const { error: optError } = await supabase
             .from('modifier_options')
-            .insert(optionRows);
+            .insert(optionRows.map(({ square_modifier_id: _sid, ...rest }) => rest));
           if (optError) {
             console.error('Modifier options insert error:', optError.message);
+            // Retry sans square_modifier_id si contrainte unique bloque
+            const { error: retryError } = await supabase
+              .from('modifier_options')
+              .insert(optionRows.map(({ square_modifier_id, ...rest }) => ({
+                ...rest,
+                square_modifier_id: `${square_modifier_id}_${dbGroup.id}`,
+              })));
+            if (retryError) {
+              console.error('Modifier options retry error:', retryError.message);
+            }
           }
         }
       }
