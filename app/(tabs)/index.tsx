@@ -306,6 +306,18 @@ export default function HomeScreen() {
               </LinearGradient>
             ) : null}
 
+            <LinearGradient colors={['#E8D5D0', '#D4937A']} style={styles.promoCard}>
+              <View style={styles.promoContent}>
+                <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Offrez un moment Teaven</Text>
+                <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.85)' }]}>
+                  Un geste simple pour vos proches
+                </Text>
+                <Pressable onPress={() => router.push('/gift')}>
+                  <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Découvrir</Text>
+                </Pressable>
+              </View>
+            </LinearGradient>
+
             <LinearGradient colors={['#F5EFDF', '#EDE4CC']} style={styles.promoCard}>
               <View style={styles.promoContent}>
                 <Text style={styles.promoTitle}>Parrainez un proche</Text>

@@ -55,7 +55,7 @@ const MOMENTS = [
     description: 'De quoi se faire plaisir sur la pause déjeuner',
     amount: 2000,
     icon: UtensilsCrossed,
-    gradient: ['#C8D9CC', '#75967F'] as const,
+    gradient: ['#DEC4B5', '#C27B5A'] as const,
   },
   {
     id: 'brunch',
@@ -63,7 +63,7 @@ const MOMENTS = [
     description: "L'expérience Teaven en solo",
     amount: 3000,
     icon: Heart,
-    gradient: ['#F5E6D0', '#C27B5A'] as const,
+    gradient: ['#D4937A', '#B56A4A'] as const,
   },
   {
     id: 'brunch-deux',
@@ -71,7 +71,7 @@ const MOMENTS = [
     description: 'Deux brunchs complets, le moment à partager',
     amount: 6000,
     icon: Users,
-    gradient: ['#2C4A32', '#4A6B50'] as const,
+    gradient: ['#C27B5A', '#A05A3A'] as const,
   },
 ] as const;
 
@@ -205,11 +205,10 @@ export default function GiftScreen() {
         {/* Intro */}
         <View style={styles.introSection}>
           <View style={styles.introIconWrap}>
-            <Gift size={24} color={colors.green} strokeWidth={1.3} />
+            <Gift size={24} color="#C27B5A" strokeWidth={1.3} />
           </View>
-          <Text style={styles.introTitle}>Offrir un moment Teaven</Text>
           <Text style={styles.introSubtitle}>
-            Un geste simple pour faire découvrir notre univers à ceux que vous aimez.
+            Offrez une pause gourmande à ceux que vous aimez. Le montant est crédité sur leur portefeuille Teaven.
           </Text>
         </View>
 
