@@ -27,8 +27,9 @@ import { useCartStore } from '@/stores/cartStore';
 import { useOrderStore } from '@/stores/orderStore';
 import { colors, fonts, spacing } from '@/constants/theme';
 
-const SQUARE_APP_ID = process.env.EXPO_PUBLIC_SQUARE_APP_ID ?? '';
-const SQUARE_LOCATION_ID = process.env.EXPO_PUBLIC_SQUARE_LOCATION_ID ?? '';
+// Clés publiques Square (App ID + Location ID — pas des secrets)
+const SQUARE_APP_ID = process.env.EXPO_PUBLIC_SQUARE_APP_ID || 'sq0idp-9F7C-S1CAmrls3asijyloA';
+const SQUARE_LOCATION_ID = process.env.EXPO_PUBLIC_SQUARE_LOCATION_ID || 'LHPTGDC0XBX47';
 
 function getSquareCardHTML(appId: string, locationId: string, amountCents: number) {
   const amt = (amountCents / 100).toFixed(2).replace('.', ',');

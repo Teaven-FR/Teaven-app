@@ -3,8 +3,9 @@
 // Les données sont récupérées via l'Edge Function get-business-hours qui appelle Square GET /v2/locations
 import { useState, useEffect } from 'react';
 
-const SUPA_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const SUPA_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/constants/config';
+const SUPA_URL = SUPABASE_URL;
+const SUPA_KEY = SUPABASE_ANON_KEY;
 
 export interface LocationData {
   name: string;

@@ -180,7 +180,7 @@ export const useOrderStore = create<OrderState>()(
           return order;
 
         } catch (err) {
-          console.error('Order flow error:', err);
+          console.warn('Order flow error:', err);
           set({ isProcessing: false });
           throw err;
         }

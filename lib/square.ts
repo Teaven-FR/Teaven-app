@@ -1,14 +1,15 @@
 // Helpers Square — appels via Edge Functions Supabase
 // Les clés Square ne sont jamais exposées côté client
 import { supabase } from './supabase';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/constants/config';
 
 type EdgeFunctionResponse<T> = {
   data: T | null;
   error: string | null;
 };
 
-const SUPA_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const SUPA_URL = SUPABASE_URL;
+const ANON_KEY = SUPABASE_ANON_KEY;
 
 /** Appel HTTP à une Edge Function Supabase */
 async function fetchEdgeFunction<T>(

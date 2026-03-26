@@ -46,6 +46,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { useOrderStore } from '@/stores/orderStore';
 import { useCartStore } from '@/stores/cartStore';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/constants/config';
 import type { TimeSlot as PickerTimeSlot } from '@/components/ui/TimeSlotPicker';
 import type { Reward } from '@/lib/types';
 
@@ -136,8 +137,8 @@ export default function PanierScreen() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
   const [businessHours, setBusinessHours] = useState<{ open: number; close: number } | null>(null);
   useEffect(() => {
-    const SUPA = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-    const KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+    const SUPA = SUPABASE_URL;
+    const KEY = SUPABASE_ANON_KEY;
     fetch(`${SUPA}/functions/v1/get-business-hours`, {
       headers: { 'Authorization': `Bearer ${KEY}`, 'apikey': KEY },
     })
@@ -178,8 +179,8 @@ export default function PanierScreen() {
   const orderHistory = useOrderStore((s) => s.orderHistory ?? []);
   const cartItems = useCartStore((s) => s.items);
   // ─── Google Places autocomplete ──────────────────────────────────────────
-  const SUPA_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-  const SUPA_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+  const SUPA_URL = SUPABASE_URL;
+  const SUPA_KEY = SUPABASE_ANON_KEY;
 
   const searchAddress = (text: string) => {
     setAddressQuery(text);
