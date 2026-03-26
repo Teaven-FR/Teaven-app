@@ -29,9 +29,9 @@
 ## Bannière Bienvenue -15%
 - Vert léger : `['#E8F0EA', '#D4E5D7']`
 
-## Bannière Parrainage
-- Doré/beige : `['#F5EFDF', '#EDE4CC']`
-- CTA : `colors.gold`
+## Parrainage
+- Gradient : `['#5A6F96', '#7B8EB5']` (bleu-violet doux)
+- Bannière accueil : `['#F5EFDF', '#EDE4CC']` + CTA `colors.gold`
 
 ## Wallet Banner (accueil, solde faible)
 - Fond : `colors.greenLight`

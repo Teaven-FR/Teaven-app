@@ -102,7 +102,7 @@ export default function ReferralScreen() {
       {/* ──── Carte premium avec gradient ──── */}
       <View style={styles.cardWrapper}>
         <LinearGradient
-          colors={['#2C4A32', '#4A6B50']}
+          colors={['#5A6F96', '#7B8EB5']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.premiumCard}
