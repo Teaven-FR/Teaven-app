@@ -7,100 +7,68 @@ type EdgeFunctionResponse<T> = {
   error: string | null;
 };
 
-/** Appel générique à une Edge Function Supabase — utilise fetch directement pour capturer les erreurs */
+const SUPA_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+/** Appel HTTP à une Edge Function Supabase */
+async function fetchEdgeFunction<T>(
+  functionName: string,
+  body: Record<string, unknown>,
+  bearerToken: string,
+): Promise<EdgeFunctionResponse<T>> {
+  const res = await fetch(`${SUPA_URL}/functions/v1/${functionName}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': ANON_KEY,
+      'Authorization': `Bearer ${bearerToken}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    return { data: null, error: json.error ?? json.message ?? `Erreur ${res.status}` };
+  }
+
+  return { data: json as T, error: null };
+}
+
+/** Appel générique à une Edge Function — retry automatique avec anon key si JWT invalide */
 export async function callEdgeFunction<T>(
   functionName: string,
   body: Record<string, unknown>,
   accessToken?: string,
 ): Promise<EdgeFunctionResponse<T>> {
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
-
-  // Récupérer un token valide (refresh automatique si expiré)
+  // 1. Essayer avec le token user si disponible
   let token = accessToken;
   if (!token) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        // Vérifier si le token est expiré et refresh si nécessaire
-        const expiresAt = session.expires_at ?? 0;
-        if (expiresAt * 1000 < Date.now()) {
-          const { data: { session: refreshed } } = await supabase.auth.refreshSession();
-          token = refreshed?.access_token;
-        } else {
-          token = session.access_token;
-        }
-      }
-    } catch {
-      // Pas de session — on continue avec l'anon key
-    }
+      token = session?.access_token ?? undefined;
+    } catch { /* pas de session */ }
   }
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'apikey': anonKey,
-    'Authorization': `Bearer ${token || anonKey}`,
-  };
-
-  try {
-    const res = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) {
-      const msg = json.error ?? json.message ?? `Erreur ${res.status}`;
-      console.warn(`[EdgeFunction:${functionName}]`, msg);
-      return { data: null, error: msg };
+  if (token) {
+    const result = await fetchEdgeFunction<T>(functionName, body, token);
+    // Si ça marche → retourner
+    if (!result.error) return result;
+    // Si "Invalid JWT" → retry avec anon key
+    if (result.error.includes('Invalid JWT') || result.error.includes('invalid_jwt')) {
+      console.warn(`[${functionName}] Token invalide, retry avec anon key`);
+      return fetchEdgeFunction<T>(functionName, body, ANON_KEY);
     }
-
-    return { data: json as T, error: null };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Erreur réseau';
-    console.warn(`[EdgeFunction:${functionName}]`, msg);
-    return { data: null, error: msg };
+    return result;
   }
-}
 
-/** Expose callEdgeFunction avec token pour les appels authentifiés */
-export async function callAuthenticatedFunction<T>(
-  functionName: string,
-  body: Record<string, unknown>,
-  accessToken: string,
-): Promise<EdgeFunctionResponse<T>> {
-  return callEdgeFunction<T>(functionName, body, accessToken);
+  // 2. Pas de token → utiliser anon key directement
+  return fetchEdgeFunction<T>(functionName, body, ANON_KEY);
 }
 
 /** Synchroniser le catalogue Square → Supabase */
 export async function syncCatalog() {
   return callEdgeFunction('sync-catalog', {});
-}
-
-/** Créer une commande Square avec variations et modificateurs */
-export async function createOrder(
-  items: {
-    catalogObjectId: string;
-    quantity: number;
-    name: string;
-    modifiers?: { squareModifierId: string }[];
-  }[],
-  userId?: string,
-  pickupTime?: string,
-) {
-  return callEdgeFunction('create-order', { items, userId, pickupTime });
-}
-
-/** Traiter un paiement */
-export async function processPayment(payload: {
-  orderId: string;
-  sourceId: string;
-  amount: number;
-  giftCardAmount?: number;
-}) {
-  return callEdgeFunction('process-payment', payload);
 }
 
 /** Récupérer ou créer un client Square par téléphone */
@@ -119,11 +87,30 @@ export async function fetchCustomer(phone: string, accessToken?: string) {
 
 /** Récupérer le solde du wallet (Square Gift Cards) */
 export async function fetchWalletBalance(accessToken?: string) {
-  return callEdgeFunction<{ success: boolean; balance: number }>(
+  return callEdgeFunction<{ success: boolean; balance: number; giftCardId?: string }>(
     'manage-wallet',
     { action: 'balance' },
     accessToken,
   );
+}
+
+/** Créer une commande Square */
+export async function createOrder(
+  items: { catalogObjectId: string; quantity: number; name: string; modifiers?: { squareModifierId: string }[] }[],
+  userId?: string,
+  pickupTime?: string,
+) {
+  return callEdgeFunction('create-order', { items, userId, pickupTime });
+}
+
+/** Traiter un paiement */
+export async function processPayment(payload: {
+  orderId: string;
+  sourceId: string;
+  amount: number;
+  giftCardAmount?: number;
+}) {
+  return callEdgeFunction('process-payment', payload);
 }
 
 /** Récupérer les données de fidélité */

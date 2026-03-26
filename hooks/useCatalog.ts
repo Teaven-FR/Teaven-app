@@ -151,10 +151,11 @@ export function useCatalog() {
       // 2. Déverrouiller l'UI immédiatement — pas besoin d'attendre Square
       setIsLoading(false);
 
-      // 3. Sync Square → Supabase en arrière-plan (sans bloquer)
-      const isFirstSync = syncPromise === null;
+      // 3. Sync Square → Supabase en arrière-plan
+      // Ne PAS syncher au démarrage si on a déjà des produits (trop lent)
+      // Sync uniquement si forceSync (pull-to-refresh) ou si la base est vide
       if (forceSync) syncPromise = null;
-      const shouldSync = forceSync || isFirstSync || !hasProducts;
+      const shouldSync = forceSync || !hasProducts;
 
       if (shouldSync) {
         sharedSyncCatalog()
