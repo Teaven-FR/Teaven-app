@@ -78,13 +78,11 @@ async function queryProducts() {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  'nourrir': 'Nourrir',
-  'boissons': 'Boissons',
-  'formules': 'Formules',
   'patisseries': 'Pâtisseries',
-  'emporter': 'Emporter',
-  'savourer': 'Savourer',
-  'food-teaven': 'Food',
+  'boissons': 'Boissons',
+  'toasts': 'Toasts',
+  'assiettes-bowls': 'Assiettes & Bowls',
+  'salades': 'Salades',
 };
 
 /** Dérive les catégories depuis les produits actifs */

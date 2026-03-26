@@ -10,19 +10,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mapping des catégories Square → slug Teaven (case-insensitive, match partiel)
-// Toutes les catégories non mappées sont exclues (B2B, fidélisation, etc.)
+// 5 catégories Teaven : patisseries, boissons, toasts, assiettes-bowls, salades
 const CATEGORY_MAP: Record<string, string> = {
-  // Food principal
-  '🍽 food teaven': 'nourrir',
-  'food – toasts': 'nourrir',
-  'food – assiettes & bowls': 'nourrir',
-  'food – salades': 'nourrir',
-  'food – petit-déjeuner': 'nourrir',
-  'food - veloutés et soupes': 'nourrir',
-  'food - cartes saisonnales': 'nourrir',
-  'food - formules teaven': 'formules',
-  // Pâtisseries
+  // ── Pâtisseries ──
   '🍰 food – pâtisseries': 'patisseries',
   'les pâtisseries/desserts ✨🍰💚': 'patisseries',
   'mini cakes 🍰💚': 'patisseries',
@@ -38,7 +28,7 @@ const CATEGORY_MAP: Record<string, string> = {
   'pâtisseries maison ✨🍰': 'patisseries',
   'desserts ✨🍰💚': 'patisseries',
   'cakes/cookies/muffins ✨💚': 'patisseries',
-  // Boissons
+  // ── Boissons ──
   'boissons ☕️🍵': 'boissons',
   'boissons – café': 'boissons',
   'boissons – matcha': 'boissons',
@@ -69,42 +59,46 @@ const CATEGORY_MAP: Record<string, string> = {
   'thés ✨🍃': 'boissons',
   'eaux ✨💧': 'boissons',
   'jus bien-être 🍃💫💚': 'boissons',
-  // Formules
-  'les formules midi ✨💚': 'formules',
-  'les formules après-midi/soir ✨💚': 'formules',
-  'les formules et les plats ✨🥪💚': 'formules',
-  'formules ✨💚⭐': 'formules',
-  'formules ✨💚': 'formules',
-  'formules 🧡✨': 'formules',
-  'formules': 'formules',
-  'brunch&tea ✨💚': 'formules',
-  'midi / brunch ✨🥪💚': 'formules',
-  '⭐ rituels du matin (formules)': 'formules',
-  'rituel du matin ✨☀️': 'formules',
-  // Nourrir (plats salés)
-  'bowls et assiettes 🍽️🥗💚': 'nourrir',
-  'les salades ✨🥗': 'nourrir',
-  'les toasts et triangles 🥪💚': 'nourrir',
-  'les veloutés ✨🍲': 'nourrir',
-  'les salades et veloutés 🥗🍜✨': 'nourrir',
-  'toasts signature ✨💚': 'nourrir',
-  'assiettes&bowls&salades ✨🥗💚': 'nourrir',
-  'bowls et granola 💫☀️🥥': 'nourrir',
-  'bowls ✨💚': 'nourrir',
-  'salée ✨💚': 'nourrir',
-  'petit-déjeuner ✨🥮': 'nourrir',
-  'petit-déjeuner': 'nourrir',
-  'pour les enfants ✨💚': 'nourrir',
-  'toasts et plats hc 🥪✨': 'nourrir',
-  // Saisonnières
-  '✨💙❄️ l\'hivernal - la carte d\'hiver ❄️💙✨': 'nourrir',
-  '💛☀️✨ l\'estival la carte d\'été 💛☀️✨': 'nourrir',
-  'saint-valentin': 'nourrir',
-  // Emporter (boutique thé/accessoires)
-  '🫖 retail': 'emporter',
-  'boutique teaven': 'emporter',
-  'boutique - thés': 'emporter',
-  'boutique - accessoires': 'emporter',
+  // ── Toasts ──
+  'food – toasts': 'toasts',
+  'les toasts et triangles 🥪💚': 'toasts',
+  'toasts signature ✨💚': 'toasts',
+  'toasts et plats hc 🥪✨': 'toasts',
+  // ── Assiettes & Bowls ──
+  'food – assiettes & bowls': 'assiettes-bowls',
+  'bowls et assiettes 🍽️🥗💚': 'assiettes-bowls',
+  'assiettes&bowls&salades ✨🥗💚': 'assiettes-bowls',
+  'bowls et granola 💫☀️🥥': 'assiettes-bowls',
+  'bowls ✨💚': 'assiettes-bowls',
+  'petit-déjeuner ✨🥮': 'assiettes-bowls',
+  'petit-déjeuner': 'assiettes-bowls',
+  'food – petit-déjeuner': 'assiettes-bowls',
+  '🍽 food teaven': 'assiettes-bowls',
+  'salée ✨💚': 'assiettes-bowls',
+  'pour les enfants ✨💚': 'assiettes-bowls',
+  'food - veloutés et soupes': 'assiettes-bowls',
+  'les veloutés ✨🍲': 'assiettes-bowls',
+  'food - cartes saisonnales': 'assiettes-bowls',
+  '✨💙❄️ l\'hivernal - la carte d\'hiver ❄️💙✨': 'assiettes-bowls',
+  '💛☀️✨ l\'estival la carte d\'été 💛☀️✨': 'assiettes-bowls',
+  'saint-valentin': 'assiettes-bowls',
+  // ── Salades ──
+  'food – salades': 'salades',
+  'les salades ✨🥗': 'salades',
+  'les salades et veloutés 🥗🍜✨': 'salades',
+  // ── Formules (rattachées aux assiettes-bowls) ──
+  'food - formules teaven': 'assiettes-bowls',
+  'les formules midi ✨💚': 'assiettes-bowls',
+  'les formules après-midi/soir ✨💚': 'assiettes-bowls',
+  'les formules et les plats ✨🥪💚': 'assiettes-bowls',
+  'formules ✨💚⭐': 'assiettes-bowls',
+  'formules ✨💚': 'assiettes-bowls',
+  'formules 🧡✨': 'assiettes-bowls',
+  'formules': 'assiettes-bowls',
+  'brunch&tea ✨💚': 'assiettes-bowls',
+  'midi / brunch ✨🥪💚': 'assiettes-bowls',
+  '⭐ rituels du matin (formules)': 'assiettes-bowls',
+  'rituel du matin ✨☀️': 'assiettes-bowls',
 };
 
 interface SquareObject {
@@ -339,20 +333,12 @@ serve(async (req) => {
           .upsert(variationRows, { onConflict: 'square_variation_id' });
       }
 
-      // 7. Sync modificateurs — upsert sans delete pour préserver les données existantes
-      // Ne supprimer que les groupes dont le modifier_list_id n'est plus présent dans Square
+      // 7. Sync modificateurs
       const modifierListInfo = itemData.modifier_list_info ?? [];
-      const activeModifierListIds = modifierListInfo.map((ml: { modifier_list_id: string }) => ml.modifier_list_id);
 
-      if (activeModifierListIds.length === 0) {
-        // Pas de modifiers dans Square pour cet item → conserver les données existantes
-      } else {
-        // Supprimer uniquement les groupes qui ne sont plus dans la liste Square
-        await supabase
-          .from('modifier_groups')
-          .delete()
-          .eq('product_id', productId)
-          .not('square_modifier_list_id', 'in', `(${activeModifierListIds.map((id: string) => `"${id}"`).join(',')})`);
+      // Supprimer les anciens groupes de ce produit et re-créer
+      if (modifierListInfo.length > 0) {
+        await supabase.from('modifier_groups').delete().eq('product_id', productId);
       }
 
       for (const mlInfo of modifierListInfo) {
@@ -365,44 +351,39 @@ serve(async (req) => {
 
         const selectionType = mlData.selection_type === 'SINGLE' ? 'single' : 'multiple';
 
-        // Upsert le modifier_group avec clé composite (product_id, square_modifier_list_id)
-        // pour permettre à plusieurs produits de partager la même modifier list Square
+        // Insérer le groupe (pas d'upsert — on a supprimé avant)
         const { data: dbGroup, error: groupError } = await supabase
           .from('modifier_groups')
-          .upsert(
-            {
-              product_id: productId,
-              square_modifier_list_id: mlId,
-              label: mlData.name ?? 'Options',
-              type: selectionType,
-              ordinal: 0,
-            },
-            { onConflict: 'product_id,square_modifier_list_id' },
-          )
+          .insert({
+            product_id: productId,
+            label: mlData.name ?? 'Options',
+            type: selectionType,
+            ordinal: 0,
+          })
           .select('id')
           .single();
 
         if (groupError || !dbGroup) {
-          console.error('Modifier group upsert error:', groupError);
+          console.error('Modifier group insert error:', groupError?.message);
           continue;
         }
 
-        // Upsert les options du modifier
+        // Insérer les options
         const modifiers = mlData.modifiers ?? [];
         const optionRows = modifiers.map((mod: SquareObject, i: number) => ({
           group_id: dbGroup.id,
-          square_modifier_id: mod.id,
           label: mod.modifier_data?.name ?? 'Option',
           price: mod.modifier_data?.price_money?.amount ?? 0,
+          square_modifier_id: mod.id,
           ordinal: i,
         }));
 
         if (optionRows.length > 0) {
           const { error: optError } = await supabase
             .from('modifier_options')
-            .upsert(optionRows, { onConflict: 'group_id,square_modifier_id' });
+            .insert(optionRows);
           if (optError) {
-            console.error('Modifier options upsert error:', optError.message);
+            console.error('Modifier options insert error:', optError.message);
           }
         }
       }
