@@ -14,7 +14,7 @@ import {
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, X, SearchX } from 'lucide-react-native';
-import { mockProducts } from '@/constants/mockData';
+import { useCatalog } from '@/hooks/useCatalog';
 import { colors, fonts, spacing, radii } from '@/constants/theme';
 import type { Product } from '@/lib/types';
 
@@ -25,6 +25,7 @@ interface SearchModalProps {
 }
 
 export function SearchModal({ visible, onClose, onSelect }: SearchModalProps) {
+  const { allProducts } = useCatalog();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const inputRef = useRef<TextInput>(null);
@@ -40,7 +41,7 @@ export function SearchModal({ visible, onClose, onSelect }: SearchModalProps) {
 
   // Recherche dans les produits
   const results = query.length >= 1
-    ? mockProducts.filter(
+    ? allProducts.filter(
         (p) =>
           p.name.toLowerCase().includes(query.toLowerCase()) ||
           p.description.toLowerCase().includes(query.toLowerCase()),
