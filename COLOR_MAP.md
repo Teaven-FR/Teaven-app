@@ -16,11 +16,14 @@
 - Gradient foncé : `['#243D29', '#2E5235', '#3A6642']`
 - Utilisé dans la strip défis sur l'accueil et la page défis
 
+## Offrir un moment
+- Gradient doré miel : `['#D4BC8B', '#C8A96E']`
+- Fond page : `#FAF6EE`
+- CTA : `#C8A96E`
+- Distinct du terracotta (wallet), du vert (principal), et du bleu-violet (parrainage)
+
 ## Atmosphère (Blog)
-- Gradient sauge brume : `['#C5DDD2', '#A8C5B8']`
-- Texte : couleur sombre standard (pas blanc)
-- CTA : `#4A6B50`
-- Utilisé dans le slide promo carrousel de l'accueil
+- Accessible via l'onglet Blog (retirée de l'accueil)
 
 ## Programme Fidélité / Les Parenthèses
 - Gradient foncé : `['#2C4A32', '#4A6B50']` (carte fidélité profil)

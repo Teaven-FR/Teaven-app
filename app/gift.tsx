@@ -47,7 +47,7 @@ const MOMENTS = [
     description: 'Un goûter, une pâtisserie, un moment doux',
     amount: 1200,
     icon: Coffee,
-    gradient: ['#E8D5D0', '#D4937A'] as const,
+    gradient: ['#E8DCC8', '#D4BC8B'] as const,
   },
   {
     id: 'repas-midi',
@@ -55,7 +55,7 @@ const MOMENTS = [
     description: 'De quoi se faire plaisir sur la pause déjeuner',
     amount: 2000,
     icon: UtensilsCrossed,
-    gradient: ['#DEC4B5', '#C27B5A'] as const,
+    gradient: ['#D4C4A0', '#C8A96E'] as const,
   },
   {
     id: 'brunch',
@@ -63,7 +63,7 @@ const MOMENTS = [
     description: "L'expérience Teaven en solo",
     amount: 3000,
     icon: Heart,
-    gradient: ['#D4937A', '#B56A4A'] as const,
+    gradient: ['#C8A96E', '#B59A5E'] as const,
   },
   {
     id: 'brunch-deux',
@@ -71,7 +71,7 @@ const MOMENTS = [
     description: 'Deux brunchs complets, le moment à partager',
     amount: 6000,
     icon: Users,
-    gradient: ['#C27B5A', '#A05A3A'] as const,
+    gradient: ['#B59A5E', '#A08A50'] as const,
   },
 ] as const;
 
@@ -193,12 +193,12 @@ export default function GiftScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {/* Header terracotta */}
-        <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.heroHeader}>
+        {/* Header doré miel — univers Offrir */}
+        <LinearGradient colors={['#D4BC8B', '#C8A96E']} style={styles.heroHeader}>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.heroBack}>
             <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
           </Pressable>
-          <Gift size={32} color="rgba(255,255,255,0.8)" strokeWidth={1.2} />
+          <Gift size={32} color="#FFFFFF" strokeWidth={1.2} />
           <Text style={styles.heroTitle}>Offrir un moment Teaven</Text>
           <Text style={styles.heroSubtitle}>
             Parce que les plus beaux cadeaux sont ceux qui se partagent.{'\n'}Offrez une pause, un repas, un moment de bien-être.
@@ -338,7 +338,7 @@ export default function GiftScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FDF6F2' },
+  container: { flex: 1, backgroundColor: '#FAF6EE' },
   centered: { alignItems: 'center', justifyContent: 'center' },
   scrollContent: { paddingBottom: 40 },
 
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
   ctaSection: { paddingHorizontal: spacing.xl, marginTop: spacing.xl },
   ctaButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-    backgroundColor: '#C27B5A', borderRadius: radii.card, paddingVertical: 16, ...shadows.card,
+    backgroundColor: '#C8A96E', borderRadius: radii.card, paddingVertical: 16, ...shadows.card,
   },
   ctaText: { fontFamily: fonts.bold, fontSize: 16, color: '#FFFFFF' },
 
