@@ -481,7 +481,12 @@ export default function HomeScreen() {
             transform: [{ translateY: sectionAnims[3].translateY }],
           }}
         >
-          <Text style={styles.sectionLabel}>À LA CARTE</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.xl }}>
+            <Text style={styles.sectionLabel}>À LA UNE</Text>
+            <Pressable onPress={() => router.push('/(tabs)/carte')}>
+              <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.green }}>Voir la carte</Text>
+            </Pressable>
+          </View>
 
           <ScrollView
             horizontal
@@ -493,7 +498,7 @@ export default function HomeScreen() {
             onScroll={handleCarouselScroll}
             scrollEventThrottle={16}
           >
-            {carouselProducts.map((product) => (
+            {carouselProducts.slice(0, 6).map((product) => (
               <ProductCardCarousel
                 key={product.id}
                 product={product}

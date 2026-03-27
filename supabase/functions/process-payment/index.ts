@@ -318,6 +318,19 @@ serve(async (req) => {
       console.error('Loyalty points error (non-fatal):', loyaltyErr);
     }
 
+    // Créer une notification pour le client
+    if (authUser) {
+      try {
+        await supabase.from('notifications').insert({
+          user_id: authUser.id,
+          type: 'order',
+          title: 'Commande confirmée',
+          body: `Votre commande est confirmée. ${pointsEarned > 0 ? `+${pointsEarned} pts fidélité gagnés !` : ''}`,
+          data: { orderId, pointsEarned },
+        });
+      } catch { /* non bloquant */ }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

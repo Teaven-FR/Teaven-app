@@ -1,5 +1,5 @@
 // Centre de notifications — liste complète avec état lu/non-lu interactif
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,10 +17,8 @@ import {
   Info,
   CheckCheck,
 } from 'lucide-react-native';
-import {
-  mockNotifications,
-  type AppNotification,
-} from '@/constants/mockNotifications';
+import { type AppNotification } from '@/constants/mockNotifications';
+import { supabase } from '@/lib/supabase';
 import { colors, fonts, spacing, radii, shadows } from '@/constants/theme';
 
 /** Type de notification */
@@ -30,7 +28,7 @@ type NotificationType = AppNotification['type'];
 const TYPE_COLORS: Record<NotificationType, string> = {
   order: colors.green,
   promo: colors.gold,
-  loyalty: colors.violet,
+  loyalty: colors.greenDark,
   system: colors.textSecondary,
 };
 
@@ -120,8 +118,31 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  // État local des notifications (read/unread géré en local)
-  const [notifications, setNotifications] = useState<AppNotification[]>(mockNotifications);
+  // Charger les notifications depuis Supabase
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.user) return;
+      supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(50)
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            setNotifications(data.map((n: Record<string, unknown>) => ({
+              id: n.id as string,
+              type: ((n.type as string) || 'info') as AppNotification['type'],
+              title: n.title as string,
+              description: (n.body as string) || '',
+              timestamp: n.created_at as string,
+              read: n.read as boolean,
+            })));
+          }
+        });
+    });
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
