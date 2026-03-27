@@ -135,6 +135,11 @@ serve(async (req) => {
           order_id: orderId,
           autocomplete: true,
           location_id: Deno.env.get('SQUARE_LOCATION_ID'),
+          // Lier le paiement au client Square pour l'historique et la carte enregistrée
+          ...(orderRow?.user_id ? await (async () => {
+            const { data: p } = await supabase.from('profiles').select('square_customer_id').eq('id', orderRow.user_id).single();
+            return p?.square_customer_id ? { customer_id: p.square_customer_id } : {};
+          })() : {}),
         }),
       });
 
