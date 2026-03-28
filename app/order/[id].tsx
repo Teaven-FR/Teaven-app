@@ -261,7 +261,7 @@ export default function OrderTrackingScreen() {
 
           <Pressable
             onPress={() => {
-              // Commander à nouveau : ajouter les articles au panier
+              // Ajouter au panier : ajouter les articles au panier
               if (order) {
                 const addItem = useCartStore.getState().addItem;
                 let added = 0;
@@ -282,10 +282,10 @@ export default function OrderTrackingScreen() {
             }}
             style={styles.secondaryButton}
             accessibilityRole="button"
-            accessibilityLabel="Commander à nouveau"
+            accessibilityLabel="Ajouter au panier"
           >
             <RefreshCw size={14} color={colors.green} strokeWidth={2} />
-            <Text style={styles.secondaryButtonText}>Commander à nouveau</Text>
+            <Text style={styles.secondaryButtonText}>Ajouter au panier</Text>
           </Pressable>
 
           <Pressable

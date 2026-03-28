@@ -108,14 +108,17 @@ serve(async (req) => {
     // Chercher le profil Supabase pour plus d'infos si on a un user authentifié
     let profileName = displayName;
     let profilePhone = phone;
+    let profileEmail: string | undefined;
     if (authUser) {
+      profileEmail = authUser.email ?? undefined;
       const { data: profile } = await supabase
         .from('profiles')
-        .select('full_name, phone')
+        .select('full_name, phone, email')
         .eq('id', authUser.id)
         .single();
       if (profile?.full_name) profileName = profile.full_name;
       if (profile?.phone) profilePhone = profile.phone;
+      if (profile?.email) profileEmail = profile.email as string;
     }
 
     // Formater le téléphone
@@ -197,6 +200,7 @@ serve(async (req) => {
               recipient: {
                 display_name: profileName,
                 ...(formattedPhone ? { phone_number: formattedPhone } : {}),
+                ...(profileEmail ? { email_address: profileEmail } : {}),
               },
               note: `Commande via app Teaven — ${profileName}`,
             },
