@@ -11,13 +11,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
+import { Switch } from 'react-native';
 import {
   ArrowLeft,
   Shield,
   AlertCircle,
   Star,
   MapPin,
+  Wallet,
 } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useUser, LEVEL_MULTIPLIERS } from '@/hooks/useUser';
 import { useLocation } from '@/hooks/useLocation';
 import { useCartStore } from '@/stores/cartStore';
@@ -96,13 +99,18 @@ export default function CheckoutScreen() {
   const total = parseInt(params.total ?? '0', 10);
   const pickupTime = params.pickupTime;
   const discounts = params.discounts ? JSON.parse(params.discounts) : undefined;
-  const { loyalty, loyaltyAccountId } = useUser();
+  const { loyalty, loyaltyAccountId, wallet } = useUser();
   const { location: storeLocation } = useLocation();
   const cartItems = useCartStore((s) => s.items);
   const createOrder = useOrderStore((s) => s.createOrder);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useWallet, setUseWallet] = useState(wallet.balance > 0);
+
+  const walletCoversAll = useWallet && wallet.balance >= total;
+  const walletPartial = useWallet && wallet.balance > 0 && wallet.balance < total;
+  const cardAmount = walletPartial ? total - wallet.balance : total;
 
   const fmt = (cents: number) => `${(cents / 100).toFixed(2).replace('.', ',')} €`;
   const multiplier = LEVEL_MULTIPLIERS[loyalty.level] ?? 1;
@@ -176,25 +184,84 @@ export default function CheckoutScreen() {
         <Text style={styles.recapTotal}>{fmt(total)}</Text>
       </View>
 
-      {/* WebView Square — HORS du ScrollView, prend tout l'espace */}
-      <View style={styles.webViewContainer}>
-        <WebView
-          source={{ html: getSquareCardHTML(total), baseUrl: 'https://web.squarecdn.com' }}
-          onMessage={handleWebViewMessage}
-          style={styles.webview}
-          javaScriptEnabled
-          domStorageEnabled
-          mixedContentMode="always"
-          originWhitelist={['*']}
-          onError={(e) => setError(`Erreur: ${e.nativeEvent.description}`)}
-          startInLoadingState
-          renderLoading={() => (
-            <View style={styles.webviewLoading}>
-              <ActivityIndicator color={colors.green} size="large" />
-            </View>
-          )}
-        />
+      {/* ──── Toggle Wallet ──── */}
+      <View style={styles.walletToggle}>
+        <LinearGradient colors={useWallet ? ['#D4937A', '#C27B5A'] : ['#E8E8E4', '#E0E0DC']} style={styles.walletToggleCard}>
+          <Wallet size={16} color={useWallet ? '#FFFFFF' : colors.textMuted} strokeWidth={1.5} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.walletToggleLabel, useWallet && { color: '#FFFFFF' }]}>
+              Portefeuille Teaven
+            </Text>
+            <Text style={[styles.walletToggleBalance, useWallet && { color: 'rgba(255,255,255,0.8)' }]}>
+              Solde : {fmt(wallet.balance)}
+            </Text>
+          </View>
+          <Switch
+            value={useWallet}
+            onValueChange={setUseWallet}
+            trackColor={{ false: '#D0D0CC', true: 'rgba(255,255,255,0.4)' }}
+            thumbColor={useWallet ? '#FFFFFF' : '#FAFAFA'}
+          />
+        </LinearGradient>
+
+        {/* Info mix */}
+        {walletPartial && (
+          <View style={styles.mixInfo}>
+            <Text style={styles.mixInfoText}>Portefeuille : -{fmt(wallet.balance)}</Text>
+            <Text style={styles.mixInfoText}>Carte : -{fmt(cardAmount)}</Text>
+          </View>
+        )}
+
+        {/* Wallet vide */}
+        {useWallet && wallet.balance === 0 && (
+          <Pressable style={styles.rechargeLink} onPress={() => router.push('/recharge')}>
+            <Text style={styles.rechargeLinkText}>Portefeuille vide — Recharger</Text>
+          </Pressable>
+        )}
       </View>
+
+      {/* ──── Paiement wallet seul ──── */}
+      {walletCoversAll ? (
+        <View style={styles.walletPaySection}>
+          <Pressable
+            style={styles.walletPayBtn}
+            onPress={async () => {
+              if (!wallet.giftCardId) { setError('Wallet non configuré'); return; }
+              setIsProcessing(true);
+              try {
+                await createOrder(cartItems, 'wallet', false, undefined, wallet.giftCardId, pickupTime, undefined, loyaltyAccountId ?? undefined, discounts);
+                router.replace('/order-confirmation');
+              } catch (err: unknown) {
+                setError(err instanceof Error ? err.message : 'Erreur');
+                setIsProcessing(false);
+              }
+            }}
+          >
+            <Wallet size={18} color="#FFFFFF" strokeWidth={1.5} />
+            <Text style={styles.walletPayBtnText}>Payer {fmt(total)} avec le portefeuille</Text>
+          </Pressable>
+        </View>
+      ) : (
+        /* ──── Formulaire carte (total ou complément) ──── */
+        <View style={styles.webViewContainer}>
+          <WebView
+            source={{ html: getSquareCardHTML(cardAmount), baseUrl: 'https://web.squarecdn.com' }}
+            onMessage={handleWebViewMessage}
+            style={styles.webview}
+            javaScriptEnabled
+            domStorageEnabled
+            mixedContentMode="always"
+            originWhitelist={['*']}
+            onError={(e) => setError(`Erreur: ${e.nativeEvent.description}`)}
+            startInLoadingState
+            renderLoading={() => (
+              <View style={styles.webviewLoading}>
+                <ActivityIndicator color={colors.green} size="large" />
+              </View>
+            )}
+          />
+        </View>
+      )}
 
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
@@ -250,4 +317,31 @@ const styles = StyleSheet.create({
 
   processingText: { fontFamily: fonts.bold, fontSize: 16, color: colors.text, marginTop: 16 },
   processingSub: { fontFamily: fonts.regular, fontSize: 13, color: colors.textMuted, marginTop: 4 },
+
+  // Wallet toggle
+  walletToggle: { paddingHorizontal: spacing.xl, paddingVertical: 10 },
+  walletToggleCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: 14, padding: 14,
+  },
+  walletToggleLabel: { fontFamily: fonts.bold, fontSize: 13, color: colors.text },
+  walletToggleBalance: { fontFamily: fonts.regular, fontSize: 11, color: colors.textSecondary, marginTop: 1 },
+  mixInfo: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    backgroundColor: colors.surface, borderRadius: 10, padding: 10, marginTop: 8,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  mixInfoText: { fontFamily: fonts.monoSemiBold, fontSize: 12, color: colors.text },
+  rechargeLink: {
+    backgroundColor: '#FDF0EE', borderRadius: 10, padding: 12, marginTop: 8, alignItems: 'center',
+  },
+  rechargeLinkText: { fontFamily: fonts.bold, fontSize: 13, color: '#C27B5A' },
+
+  // Wallet pay
+  walletPaySection: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.xl },
+  walletPayBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: '#C27B5A', borderRadius: 16, paddingVertical: 18,
+  },
+  walletPayBtnText: { fontFamily: fonts.bold, fontSize: 16, color: '#FFFFFF' },
 });
