@@ -124,7 +124,7 @@ export default function PanierScreen() {
   });
   const [promoError, setPromoError] = useState('');
 
-  const rewardDiscount = 0; // Récompenses-panier supprimées
+  // Récompenses-panier supprimées — points ne font que monter
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
   const [businessHours, setBusinessHours] = useState<{ open: number; close: number } | null>(null);
   useEffect(() => {
@@ -237,7 +237,7 @@ export default function PanierScreen() {
   const deliveryFee = deliveryMode === 'delivery' ? DELIVERY_FEE : 0;
   const sereniteOrAbove = loyalty.level === 'Sérénité' || loyalty.level === 'Essentia';
   const loyaltyAutoDiscount = sereniteOrAbove ? Math.round(subtotal * 0.05) : 0;
-  const total = Math.max(0, subtotal - rewardDiscount - promoDiscount - loyaltyAutoDiscount) + deliveryFee;
+  const total = Math.max(0, subtotal - promoDiscount - loyaltyAutoDiscount) + deliveryFee;
 
   // Estimation points gagnés
   const multiplier = LEVEL_MULTIPLIERS[loyalty.level] ?? 1;

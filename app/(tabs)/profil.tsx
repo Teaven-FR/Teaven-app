@@ -138,15 +138,9 @@ export default function ProfilScreen() {
   const router = useRouter();
   const { showToast } = useToast();
   const addItem = useCartStore((s) => s.addItem);
-  const { user, isGuest, loyalty, wallet, rechargeWallet, rewards: squareRewards } = useUser();
+  const { user, isGuest, loyalty, wallet, rechargeWallet } = useUser();
 
-  // Récompenses live Square ou fallback
-  const FALLBACK_REWARDS = [
-    { id: 'f1', name: 'Boisson offerte', pointsCost: 200, icon: 'coffee' },
-    { id: 'f2', name: 'Dessert offert', pointsCost: 500, icon: 'gift' },
-    { id: 'f3', name: 'Formule offerte', pointsCost: 750, icon: 'gift' },
-  ];
-  const rewards = squareRewards.length > 0 ? squareRewards : FALLBACK_REWARDS;
+  // Récompenses supprimées — paliers fidélité uniquement
   const signOut = useAuthStore((s) => s.signOut);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const orderHistory = useOrderStore((s) => s.orderHistory);
@@ -446,55 +440,7 @@ export default function ProfilScreen() {
           </LinearGradient>
         </Pressable>
 
-        {/* ──── Récompenses ──── */}
-        <View style={styles.rewardsHeader}>
-          <Text style={styles.rewardsTitle}>Récompenses</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.push('/fidelite')}>
-            <Text style={styles.rewardsSeeAll}>Tout voir</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.rewardsSectionNote}>
-          Vos parenthèses débloquent des récompenses exclusives.
-        </Text>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.rewardsScroll}
-        >
-          {rewards.map((reward) => {
-            const Icon = REWARD_ICON_MAP[reward.icon] ?? Gift;
-            const unlocked = loyalty.points >= reward.pointsCost;
-            return (
-              <View key={reward.id} style={styles.rewardCard}>
-                <View style={styles.rewardIconWrap}>
-                  <Icon size={18} color={unlocked ? colors.green : colors.textMuted} strokeWidth={1.8} />
-                </View>
-                <Text style={styles.rewardName}>{reward.name}</Text>
-                <Text style={styles.rewardSub}>{reward.pointsCost} pts</Text>
-
-                {/* Progress bar */}
-                <View style={styles.rewardProgressBg}>
-                  <View style={[
-                    styles.rewardProgressFill,
-                    { width: `${Math.min(Math.round((loyalty.points / reward.pointsCost) * 100), 100)}%` as `${number}%` }
-                  ]} />
-                </View>
-
-                {/* Dynamic status text */}
-                <View accessibilityLabel={unlocked ? `${reward.name} — débloqué` : `${reward.name} — ${reward.pointsCost - loyalty.points} pts restants`}>
-                  {unlocked ? (
-                    <Text style={[styles.rewardCta, { color: colors.green }]}>Débloqué</Text>
-                  ) : (
-                    <Text style={[styles.rewardCta, { color: colors.textMuted, fontSize: 11 }]}>
-                      {reward.pointsCost - loyalty.points} pts restants
-                    </Text>
-                  )}
-                </View>
-              </View>
-            );
-          })}
-        </ScrollView>
+        {/* Récompenses supprimées — programme fidélité à paliers uniquement */}
 
         {/* ──── Historique commandes ──── */}
         {orderHistory.length > 0 && (

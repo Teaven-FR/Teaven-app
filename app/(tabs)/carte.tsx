@@ -8,6 +8,7 @@ import { Search, Gift } from 'lucide-react-native';
 import { Pill } from '@/components/ui/Pill';
 import { ProductGridCard } from '@/components/ui/ProductGridCard';
 import { SearchModal } from '@/components/ui/SearchModal';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useUser } from '@/hooks/useUser';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
@@ -16,14 +17,10 @@ import type { Product } from '@/lib/types';
 export default function CarteScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { products, categories, selectedCategory, setSelectedCategory, refetch } = useCatalog();
-  const { loyalty, rewards } = useUser();
+  const { products, categories, selectedCategory, setSelectedCategory, refetch, isLoading } = useCatalog();
+  const { loyalty } = useUser();
   const [refreshing, setRefreshing] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
-
-  // Récompense la moins chère accessible (ou prochaine proche)
-  const availableReward = rewards.find((r) => r.pointsCost <= loyalty.points)
-    ?? rewards.slice().sort((a, b) => a.pointsCost - b.pointsCost)[0];
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -31,12 +28,8 @@ export default function CarteScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  // En-tête de la grille (header + bannière récompense + pills sticky + compteur)
-  const ListHeader = () => {
-    const hasUnlockedReward = availableReward && availableReward.pointsCost <= loyalty.points;
-    return (
+  const ListHeader = () => (
     <>
-      {/* Header : titre + sous-titre + loupe */}
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Notre carte</Text>
@@ -46,37 +39,27 @@ export default function CarteScreen() {
           <Search size={17} color={colors.textSecondary} strokeWidth={1.6} />
         </Pressable>
       </View>
-
-      {/* Bannière récompense */}
-      {availableReward && (
-        <Pressable
-          style={[styles.rewardBanner, hasUnlockedReward && styles.rewardBannerActive]}
-          onPress={() => router.push('/(tabs)/panier')}
-          accessibilityRole="button"
-          accessibilityLabel={hasUnlockedReward ? `Utiliser votre récompense : ${availableReward.name}` : `Plus que ${availableReward.pointsCost - loyalty.points} pts pour ${availableReward.name}`}
-        >
-          <View style={styles.rewardBannerLeft}>
-            <Gift size={16} color={hasUnlockedReward ? colors.gold : colors.textSecondary} strokeWidth={1.8} />
-            <Text style={[styles.rewardBannerText, hasUnlockedReward && styles.rewardBannerTextActive]}>
-              {hasUnlockedReward
-                ? `Récompense dispo : ${availableReward.name}`
-                : `Plus que ${availableReward.pointsCost - loyalty.points} pts pour ${availableReward.name}`
-              }
-            </Text>
-          </View>
-          {hasUnlockedReward && (
-            <Text style={styles.rewardBannerCta}>Utiliser →</Text>
-          )}
-        </Pressable>
-      )}
     </>
   );
-  };
 
   // Compteur produits
   const ProductCount = () => (
     <View style={styles.countContainer}>
       <Text style={styles.countText}>{products.length} PRODUITS</Text>
+    </View>
+  );
+
+  const SkeletonGrid = () => (
+    <View style={styles.row}>
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <View key={i} style={[styles.gridItem, i % 2 === 0 ? styles.gridItemLeft : styles.gridItemRight]}>
+          <Skeleton width="100%" height={220} borderRadius={14} />
+          <View style={{ marginTop: 8 }}>
+            <Skeleton width="60%" height={12} borderRadius={6} style={{ marginBottom: 6 }} />
+            <Skeleton width="40%" height={10} borderRadius={6} />
+          </View>
+        </View>
+      ))}
     </View>
   );
 
@@ -141,6 +124,11 @@ export default function CarteScreen() {
           </>
         }
         stickyHeaderIndices={[]}
+        ListEmptyComponent={isLoading ? <SkeletonGrid /> : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>Aucun produit disponible</Text>
+          </View>
+        )}
       />
     </View>
   );
@@ -258,4 +246,13 @@ const styles = StyleSheet.create({
   },
   gridItemLeft: {},
   gridItemRight: {},
+  emptyState: {
+    paddingTop: 60,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
 });
