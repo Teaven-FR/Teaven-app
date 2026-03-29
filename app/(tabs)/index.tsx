@@ -28,6 +28,7 @@ import { useInstagramFeed } from '@/hooks/useInstagramFeed';
 import { useCartStore } from '@/stores/cartStore';
 import { useToast } from '@/contexts/ToastContext';
 import { RechargeModal } from '@/components/ui/RechargeModal';
+import { GiftModal } from '@/components/ui/GiftModal';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
 
 // Largeur d'une card carrousel + gap
@@ -69,6 +70,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
   const [rechargeVisible, setRechargeVisible] = useState(false);
+  const [giftVisible, setGiftVisible] = useState(false);
   const [defisExpanded, setDefisExpanded] = useState(false);
   const defisAnim = useRef(new Animated.Value(0)).current;
 
@@ -312,7 +314,7 @@ export default function HomeScreen() {
                 <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.85)' }]}>
                   Un geste simple pour vos proches
                 </Text>
-                <Pressable onPress={() => router.push('/gift')}>
+                <Pressable onPress={() => setGiftVisible(true)}>
                   <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Découvrir</Text>
                 </Pressable>
               </View>
@@ -679,6 +681,7 @@ export default function HomeScreen() {
           showToast('Porte-monnaie rechargé !');
         }}
       />
+      <GiftModal visible={giftVisible} onClose={() => setGiftVisible(false)} />
     </>
   );
 }
