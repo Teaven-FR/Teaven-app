@@ -178,7 +178,7 @@ export default function ProductScreen() {
 
   const handleAddToCart = () => {
     addItem(resolvedProduct, quantity, activeVariation, selectedModifiers);
-    showToast('Ajouté au panier');
+    showToast(`${resolvedProduct.name} ajouté au panier`);
   };
 
   const handleOrder = () => {

@@ -1,18 +1,18 @@
-// Contexte Toast — notifications éphémères globales
+// Contexte Toast — notifications éphémères slide from top, design Teaven
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, AlertCircle } from 'lucide-react-native';
+import { Check, AlertCircle, Info } from 'lucide-react-native';
 import { colors, fonts, spacing } from '@/constants/theme';
 
 interface ToastMessage {
   id: number;
   text: string;
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'info';
 }
 
 interface ToastContextType {
-  showToast: (text: string, type?: 'success' | 'error') => void;
+  showToast: (text: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 const ToastContext = createContext<ToastContextType>({
@@ -26,28 +26,26 @@ export function useToast() {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
   const [toast, setToast] = useState<ToastMessage | null>(null);
-  const slideAnim = useRef(new Animated.Value(-100)).current;
+  const slideAnim = useRef(new Animated.Value(-120)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const counterRef = useRef(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback(
-    (text: string, type: 'success' | 'error' = 'success') => {
-      // Annuler le timer précédent
+    (text: string, type: 'success' | 'error' | 'info' = 'success') => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
       counterRef.current += 1;
-      const id = counterRef.current;
-      setToast({ id, text, type });
+      setToast({ id: counterRef.current, text, type });
 
-      // Slide down
-      slideAnim.setValue(-100);
+      // Slide down from top
+      slideAnim.setValue(-120);
       opacityAnim.setValue(0);
       Animated.parallel([
         Animated.spring(slideAnim, {
           toValue: 0,
-          tension: 60,
-          friction: 9,
+          damping: 18,
+          stiffness: 180,
           useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(opacityAnim, {
@@ -57,48 +55,64 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         }),
       ]).start();
 
-      // Disparaître après 2s
+      // Disparaître après 2.5s
       timeoutRef.current = setTimeout(() => {
         Animated.parallel([
           Animated.timing(slideAnim, {
-            toValue: -100,
+            toValue: -120,
             duration: 300,
             useNativeDriver: Platform.OS !== 'web',
           }),
           Animated.timing(opacityAnim, {
             toValue: 0,
-            duration: 300,
+            duration: 250,
             useNativeDriver: Platform.OS !== 'web',
           }),
         ]).start(() => setToast(null));
-      }, 2000);
+      }, 2500);
     },
     [slideAnim, opacityAnim],
   );
 
-  const Icon = toast?.type === 'error' ? AlertCircle : Check;
+  const getIcon = (type: string) => {
+    if (type === 'error') return AlertCircle;
+    if (type === 'info') return Info;
+    return Check;
+  };
+
+  const getColors = (type: string) => {
+    if (type === 'error') return { bg: '#FEF0F0', icon: '#C44040', border: '#F5D5D5' };
+    if (type === 'info') return { bg: '#F0F4F8', icon: '#5A6F96', border: '#D8E2EE' };
+    return { bg: '#FFFFFF', icon: colors.green, border: '#E8EDE9' };
+  };
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {toast && (
-        <Animated.View
-          style={[
-            styles.toast,
-            {
-              top: insets.top + 8,
-              transform: [{ translateY: slideAnim }],
-              opacity: opacityAnim,
-            },
-          ]}
-          pointerEvents="none"
-        >
-          <View style={styles.iconWrap}>
-            <Icon size={14} color={colors.green} strokeWidth={2.5} />
-          </View>
-          <Text style={styles.text}>{toast.text}</Text>
-        </Animated.View>
-      )}
+      {toast && (() => {
+        const Icon = getIcon(toast.type);
+        const c = getColors(toast.type);
+        return (
+          <Animated.View
+            style={[
+              styles.toast,
+              {
+                top: insets.top + 10,
+                backgroundColor: c.bg,
+                borderColor: c.border,
+                transform: [{ translateY: slideAnim }],
+                opacity: opacityAnim,
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <View style={[styles.iconWrap, { backgroundColor: c.bg }]}>
+              <Icon size={15} color={c.icon} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.text} numberOfLines={2}>{toast.text}</Text>
+          </Animated.View>
+        );
+      })()}
     </ToastContext.Provider>
   );
 }
@@ -108,32 +122,32 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.xl,
     right: spacing.xl,
-    backgroundColor: '#2A2A2A',
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 13,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     zIndex: 9999,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 6,
   },
   iconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(107,143,113,0.15)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   text: {
-    fontFamily: fonts.regular,
+    fontFamily: fonts.bold,
     fontSize: 13,
-    color: '#FFFFFF',
+    color: colors.text,
     flex: 1,
+    lineHeight: 18,
   },
 });

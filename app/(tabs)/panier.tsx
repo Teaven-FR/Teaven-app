@@ -239,9 +239,9 @@ export default function PanierScreen() {
   const loyaltyAutoDiscount = sereniteOrAbove ? Math.round(subtotal * 0.05) : 0;
   const total = Math.max(0, subtotal - promoDiscount - loyaltyAutoDiscount) + deliveryFee;
 
-  // Estimation points gagnés
+  // Estimation points gagnés — basé sur le TOTAL payé (après remises)
   const multiplier = LEVEL_MULTIPLIERS[loyalty.level] ?? 1;
-  const estimatedPoints = Math.floor((subtotal / 100) * 10 * multiplier);
+  const estimatedPoints = Math.floor((total / 100) * 10 * multiplier);
 
   const paymentOptions: { id: PaymentMethod; label: string }[] = [
     { id: 'card', label: 'Carte bancaire' },
