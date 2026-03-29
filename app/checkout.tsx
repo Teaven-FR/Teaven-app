@@ -194,21 +194,21 @@ export default function CheckoutScreen() {
 
       {/* ──── Toggle Wallet ──── */}
       <View style={styles.walletToggle}>
-        <LinearGradient colors={useWallet ? ['#D4937A', '#C27B5A'] : ['#FFFFFF', '#F8F8F4']} style={styles.walletToggleCard}>
-          <Wallet size={16} color={useWallet ? '#FFFFFF' : colors.textMuted} strokeWidth={1.5} />
+        <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.walletToggleCard}>
+          <Wallet size={16} color="#FFFFFF" strokeWidth={1.5} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.walletToggleLabel, useWallet && { color: '#FFFFFF' }]}>
+            <Text style={[styles.walletToggleLabel, { color: '#FFFFFF' }]}>
               Portefeuille Teaven
             </Text>
-            <Text style={[styles.walletToggleBalance, useWallet && { color: 'rgba(255,255,255,0.8)' }]}>
+            <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 1 }}>
               Solde : {fmt(wallet.balance)}
             </Text>
           </View>
           <Switch
             value={useWallet}
             onValueChange={setUseWallet}
-            trackColor={{ false: '#D0D0CC', true: 'rgba(255,255,255,0.4)' }}
-            thumbColor={useWallet ? '#FFFFFF' : '#FAFAFA'}
+            trackColor={{ false: 'rgba(255,255,255,0.3)', true: 'rgba(255,255,255,0.5)' }}
+            thumbColor="#FFFFFF"
           />
         </LinearGradient>
 

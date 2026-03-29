@@ -90,6 +90,26 @@ serve(async (req) => {
     const openMinutes = Math.min(...allOpen);
     const closeMinutes = Math.max(...allClose);
 
+    // Construire le planning de la semaine (quels jours sont ouverts)
+    const DAYS_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    const weekSchedule: Record<string, { open: number; close: number } | null> = {};
+    for (const day of DAYS_ORDER) {
+      const dayPeriods = periods.filter((p: { day_of_week: string }) => p.day_of_week === day);
+      if (dayPeriods.length === 0) {
+        weekSchedule[day] = null; // Fermé ce jour
+      } else {
+        const opens = dayPeriods.map((p: { start_local_time: string }) => {
+          const [hh, mm] = (p.start_local_time ?? '09:00').split(':').map(Number);
+          return hh * 60 + (mm ?? 0);
+        });
+        const closes = dayPeriods.map((p: { end_local_time: string }) => {
+          const [hh, mm] = (p.end_local_time ?? '20:00').split(':').map(Number);
+          return hh * 60 + (mm ?? 0);
+        });
+        weekSchedule[day] = { open: Math.floor(Math.min(...opens) / 60), close: Math.floor(Math.max(...closes) / 60) };
+      }
+    }
+
     return new Response(JSON.stringify({
       closed: false,
       open: Math.floor(openMinutes / 60),
@@ -97,6 +117,7 @@ serve(async (req) => {
       close: Math.floor(closeMinutes / 60),
       closeMinute: closeMinutes % 60,
       periods: todayPeriods,
+      weekSchedule,
       location_name: location.name,
       address,
       addressFormatted,

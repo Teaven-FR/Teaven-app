@@ -47,7 +47,7 @@ const MOMENTS = [
     description: 'Un goûter, une pâtisserie, un moment doux',
     amount: 1200,
     icon: Coffee,
-    gradient: ['#E8DCC8', '#D4BC8B'] as const,
+    gradient: ['#E8D5D3', '#D4A5A3'] as const,
   },
   {
     id: 'repas-midi',
@@ -55,7 +55,7 @@ const MOMENTS = [
     description: 'De quoi se faire plaisir sur la pause déjeuner',
     amount: 2000,
     icon: UtensilsCrossed,
-    gradient: ['#D4C4A0', '#C8A96E'] as const,
+    gradient: ['#D4A5A3', '#C9918F'] as const,
   },
   {
     id: 'brunch',
@@ -63,7 +63,7 @@ const MOMENTS = [
     description: "L'expérience Teaven en solo",
     amount: 3000,
     icon: Heart,
-    gradient: ['#C8A96E', '#B59A5E'] as const,
+    gradient: ['#C9918F', '#B07A78'] as const,
   },
   {
     id: 'brunch-deux',
@@ -194,7 +194,7 @@ export default function GiftScreen() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Header doré miel — univers Offrir */}
-        <LinearGradient colors={['#D4BC8B', '#C8A96E']} style={styles.heroHeader}>
+        <LinearGradient colors={['#D4A5A3', '#C9918F']} style={styles.heroHeader}>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.heroBack}>
             <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
           </Pressable>
@@ -338,7 +338,7 @@ export default function GiftScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAF6EE' },
+  container: { flex: 1, backgroundColor: '#FDF2F1' },
   centered: { alignItems: 'center', justifyContent: 'center' },
   scrollContent: { paddingBottom: 40 },
 
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
   ctaSection: { paddingHorizontal: spacing.xl, marginTop: spacing.xl },
   ctaButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-    backgroundColor: '#C8A96E', borderRadius: radii.card, paddingVertical: 16, ...shadows.card,
+    backgroundColor: '#C9918F', borderRadius: radii.card, paddingVertical: 16, ...shadows.card,
   },
   ctaText: { fontFamily: fonts.bold, fontSize: 16, color: '#FFFFFF' },
 

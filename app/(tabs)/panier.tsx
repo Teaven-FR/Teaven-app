@@ -128,6 +128,7 @@ export default function PanierScreen() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
   const [businessHours, setBusinessHours] = useState<{ open: number; close: number } | null>(null);
   const [isClosed, setIsClosed] = useState(false);
+  const [closedDays, setClosedDays] = useState<number[]>([]); // 0=dim, 1=lun, ...
   useEffect(() => {
     fetch(`${SUPABASE_URL}/functions/v1/get-business-hours`, {
       headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'apikey': SUPABASE_ANON_KEY },
@@ -138,10 +139,17 @@ export default function PanierScreen() {
           setIsClosed(true);
           setBusinessHours({ open: 9, close: 20 });
         } else if (data.open != null && data.close != null) {
-          // Convertir en heures décimales pour inclure les minutes
-          // ex: 9h30 → 9, 15h30 → 15 (les slots sont par tranche de 15min à partir de l'heure d'ouverture)
           setBusinessHours({ open: data.open, close: data.close });
           setIsClosed(false);
+        }
+        // Jours fermés depuis le planning semaine
+        if (data.weekSchedule) {
+          const dayMap: Record<string, number> = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
+          const closed: number[] = [];
+          for (const [day, hours] of Object.entries(data.weekSchedule)) {
+            if (hours === null) closed.push(dayMap[day] ?? -1);
+          }
+          setClosedDays(closed);
         }
       })
       .catch(() => {});
@@ -283,7 +291,7 @@ export default function PanierScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 20 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* ──── ARTICLES ──── */}
@@ -467,18 +475,22 @@ export default function PanierScreen() {
                 const dateLabel = `${d.getDate()} ${monthNames[d.getMonth()]}`;
                 const active = effectiveDayOffset === i;
                 const todayDisabled = i === 0 && !hasTodaySlots;
+                const dayIsClosed = closedDays.includes(d.getDay());
+                const isDisabled = todayDisabled || dayIsClosed;
                 return (
                   <Pressable
                     key={i}
-                    style={[styles.dayChip, active && styles.dayChipActive, todayDisabled && { opacity: 0.4 }]}
+                    style={[styles.dayChip, active && styles.dayChipActive, isDisabled && { opacity: 0.35 }]}
                     onPress={() => {
-                      if (todayDisabled) return;
+                      if (isDisabled) return;
                       setPickupDayOffset(i);
                       setSelectedTimeSlot(i === 0 ? 'asap' : '');
                     }}
                   >
                     <Text style={[styles.dayChipLabel, active && styles.dayChipLabelActive]}>{label}</Text>
-                    <Text style={[styles.dayChipDate, active && styles.dayChipDateActive]}>{dateLabel}</Text>
+                    <Text style={[styles.dayChipDate, active && styles.dayChipDateActive]}>
+                      {dayIsClosed ? 'Fermé' : dateLabel}
+                    </Text>
                   </Pressable>
                 );
               })}
