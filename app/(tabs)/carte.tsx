@@ -1,4 +1,4 @@
-// Écran Carte / Menu — grille 2 colonnes avec pills sticky + pull-to-refresh + bannière récompense
+// Écran Carte / Menu — grille 2 colonnes avec pills sticky + pull-to-refresh
 import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
