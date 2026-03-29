@@ -87,7 +87,7 @@ function buildPickerSlots(openHour?: number, closeHour?: number, tomorrow = fals
   }));
 }
 
-type PaymentMethod = 'card' | 'wallet';
+// PaymentMethod supprimé — choix sur l'écran checkout
 
 export default function PanierScreen() {
   const insets = useSafeAreaInsets();
@@ -109,7 +109,7 @@ export default function PanierScreen() {
   const [rechargeVisible, setRechargeVisible] = useState(false);
   const { allProducts } = useCatalog();
   const { showToast } = useToast();
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
+  // paymentMethod supprimé — le choix se fait sur l'écran checkout
   // Récompenses-panier supprimées — paliers fidélité uniquement
   const storePromoCode = useCartStore((s) => s.activePromoCode);
   const setStorePromoCode = useCartStore((s) => s.setPromoCode);
@@ -243,10 +243,7 @@ export default function PanierScreen() {
   const multiplier = LEVEL_MULTIPLIERS[loyalty.level] ?? 1;
   const estimatedPoints = Math.floor((total / 100) * 10 * multiplier);
 
-  const paymentOptions: { id: PaymentMethod; label: string }[] = [
-    { id: 'card', label: 'Carte bancaire' },
-    { id: 'wallet', label: 'Wallet Teaven' },
-  ];
+  // paymentOptions supprimé
 
   // État vide
   if (items.length === 0) {
@@ -783,36 +780,7 @@ export default function PanierScreen() {
           </LinearGradient>
         </Pressable>
 
-        {/* ──── PAIEMENT ──── */}
-        <Text style={styles.sectionLabel}>PAIEMENT</Text>
-        <View style={styles.section}>
-          {paymentOptions.map((option) => {
-            const selected = paymentMethod === option.id;
-            return (
-              <Pressable
-                key={option.id}
-                onPress={() => setPaymentMethod(option.id)}
-                style={[styles.paymentCard, selected && styles.paymentCardSelected]}
-                accessibilityLabel={option.label}
-                accessibilityState={{ selected }}
-              >
-                <View style={[styles.radio, selected && styles.radioSelected]}>
-                  {selected && <View style={styles.radioDot} />}
-                </View>
-                <Text style={[styles.paymentLabel, selected && styles.paymentLabelSelected]}>
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <Text style={styles.paymentMicroText}>
-          {paymentMethod === 'wallet'
-            ? 'Votre porte-monnaie Teaven est le moyen le plus rapide.'
-            : paymentMethod === 'card'
-            ? 'Paiement sécurisé par carte bancaire.'
-            : ''}
-        </Text>
+        {/* Section paiement supprimée — le choix se fait sur l'écran checkout (toggle wallet) */}
 
       </ScrollView>
 

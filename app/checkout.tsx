@@ -168,20 +168,28 @@ export default function CheckoutScreen() {
         </View>
       )}
 
-      {/* Récap compact */}
-      <View style={styles.recapBar}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.recapItems}>
-            {cartItems.map((i) => `${i.quantity}× ${i.product.name}`).join(', ')}
-          </Text>
-          <View style={styles.recapMeta}>
-            <MapPin size={11} color={colors.textMuted} strokeWidth={1.5} />
-            <Text style={styles.recapMetaText}>{storeLocation.name}</Text>
-            <Star size={11} color={colors.green} strokeWidth={1.5} />
-            <Text style={styles.recapMetaText}>+{pointsEstimated} pts</Text>
+      {/* ──── Récap commande ──── */}
+      <View style={styles.recapCard}>
+        {cartItems.map((item, i) => (
+          <View key={i} style={styles.recapItemRow}>
+            <Text style={styles.recapItemQty}>{item.quantity}×</Text>
+            <Text style={styles.recapItemName} numberOfLines={1}>{item.product.name}</Text>
+            <Text style={styles.recapItemPrice}>{fmt(item.product.price * item.quantity)}</Text>
           </View>
+        ))}
+        <View style={styles.recapDivider} />
+        <View style={styles.recapTotalRow}>
+          <Text style={styles.recapTotalLabel}>Total</Text>
+          <Text style={styles.recapTotalValue}>{fmt(total)}</Text>
         </View>
-        <Text style={styles.recapTotal}>{fmt(total)}</Text>
+        <View style={styles.recapInfoRow}>
+          <MapPin size={12} color={colors.green} strokeWidth={1.5} />
+          <Text style={styles.recapInfoText}>{storeLocation.name}</Text>
+        </View>
+        <View style={styles.recapInfoRow}>
+          <Star size={12} color={colors.green} strokeWidth={1.5} />
+          <Text style={styles.recapInfoText}>+{pointsEstimated} points fidélité</Text>
+        </View>
       </View>
 
       {/* ──── Toggle Wallet ──── */}
@@ -293,16 +301,22 @@ const styles = StyleSheet.create({
   },
   errorText: { fontFamily: fonts.regular, fontSize: 12, color: '#C44040', flex: 1 },
 
-  // Récap compact
-  recapBar: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.xl, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+  // Récap commande
+  recapCard: {
+    marginHorizontal: spacing.xl, marginTop: 12,
+    backgroundColor: colors.surface, borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: colors.border,
   },
-  recapItems: { fontFamily: fonts.regular, fontSize: 13, color: colors.text, marginBottom: 4 },
-  recapMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  recapMetaText: { fontFamily: fonts.regular, fontSize: 11, color: colors.textMuted, marginRight: 8 },
-  recapTotal: { fontFamily: fonts.bold, fontSize: 20, color: colors.green },
+  recapItemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5 },
+  recapItemQty: { fontFamily: fonts.bold, fontSize: 13, color: colors.textSecondary, width: 28 },
+  recapItemName: { fontFamily: fonts.regular, fontSize: 13, color: colors.text, flex: 1, marginRight: 8 },
+  recapItemPrice: { fontFamily: fonts.monoSemiBold, fontSize: 13, color: colors.text },
+  recapDivider: { height: 1, backgroundColor: colors.border, marginVertical: 10 },
+  recapTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  recapTotalLabel: { fontFamily: fonts.bold, fontSize: 16, color: colors.text },
+  recapTotalValue: { fontFamily: fonts.bold, fontSize: 20, color: colors.green, letterSpacing: -0.5 },
+  recapInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
+  recapInfoText: { fontFamily: fonts.regular, fontSize: 12, color: colors.textSecondary },
 
   // WebView — prend tout l'espace restant
   webViewContainer: { flex: 1 },
