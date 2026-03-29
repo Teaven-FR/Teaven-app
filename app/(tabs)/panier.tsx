@@ -87,7 +87,7 @@ function buildPickerSlots(openHour?: number, closeHour?: number, tomorrow = fals
   }));
 }
 
-type PaymentMethod = 'card' | 'wallet' | 'mixed';
+type PaymentMethod = 'card' | 'wallet';
 
 export default function PanierScreen() {
   const insets = useSafeAreaInsets();
@@ -246,7 +246,6 @@ export default function PanierScreen() {
   const paymentOptions: { id: PaymentMethod; label: string }[] = [
     { id: 'card', label: 'Carte bancaire' },
     { id: 'wallet', label: 'Wallet Teaven' },
-    { id: 'mixed', label: 'Mixte (Points + Carte)' },
   ];
 
   // État vide
@@ -812,7 +811,7 @@ export default function PanierScreen() {
             ? 'Votre porte-monnaie Teaven est le moyen le plus rapide.'
             : paymentMethod === 'card'
             ? 'Paiement sécurisé par carte bancaire.'
-            : 'Combinez vos points et votre carte pour payer.'}
+            : ''}
         </Text>
 
       </ScrollView>
