@@ -76,7 +76,7 @@ export function GiftModal({ visible, onClose }: GiftModalProps) {
           <ScrollView showsVerticalScrollIndicator={false}>
             {/* Titre */}
             <View style={styles.titleSection}>
-              <Gift size={22} color="#C8A96E" strokeWidth={1.3} />
+              <Gift size={22} color="#C9918F" strokeWidth={1.3} />
               <Text style={styles.title}>Offrir un moment Teaven</Text>
               <Text style={styles.subtitle}>Faites plaisir à ceux que vous aimez</Text>
             </View>
@@ -88,7 +88,7 @@ export function GiftModal({ visible, onClose }: GiftModalProps) {
                 const Icon = m.icon;
                 return (
                   <Pressable key={m.id} onPress={() => selectMoment(m.id)} style={[styles.momentCard, active && styles.momentCardActive]}>
-                    <Icon size={18} color={active ? '#C8A96E' : colors.textMuted} strokeWidth={1.5} />
+                    <Icon size={18} color={active ? '#C9918F' : colors.textMuted} strokeWidth={1.5} />
                     <Text style={[styles.momentName, active && styles.momentNameActive]}>{m.name}</Text>
                     <Text style={[styles.momentPrice, active && styles.momentPriceActive]}>{fmt(m.amount)}</Text>
                   </Pressable>
@@ -160,11 +160,11 @@ const styles = StyleSheet.create({
     width: 130, backgroundColor: colors.surface, borderRadius: 14, padding: 14, gap: 6,
     borderWidth: 1.5, borderColor: colors.border, alignItems: 'center',
   },
-  momentCardActive: { borderColor: '#C8A96E', backgroundColor: '#FBF7F0' },
+  momentCardActive: { borderColor: '#C9918F', backgroundColor: '#FDF2F1' },
   momentName: { fontFamily: fonts.bold, fontSize: 12, color: colors.text, textAlign: 'center' },
-  momentNameActive: { color: '#B59A5E' },
+  momentNameActive: { color: '#B07A78' },
   momentPrice: { fontFamily: fonts.monoSemiBold, fontSize: 15, color: colors.textSecondary },
-  momentPriceActive: { color: '#C8A96E' },
+  momentPriceActive: { color: '#C9918F' },
 
   sectionLabel: { fontFamily: fonts.bold, fontSize: 9, letterSpacing: 2, color: colors.textMuted, marginBottom: 10 },
   freeRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
@@ -172,9 +172,9 @@ const styles = StyleSheet.create({
     flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.surface,
     borderWidth: 1.5, borderColor: colors.border, alignItems: 'center',
   },
-  freeChipActive: { borderColor: '#C8A96E', backgroundColor: '#FBF7F0' },
+  freeChipActive: { borderColor: '#C9918F', backgroundColor: '#FDF2F1' },
   freeText: { fontFamily: fonts.monoSemiBold, fontSize: 14, color: colors.text },
-  freeTextActive: { color: '#C8A96E' },
+  freeTextActive: { color: '#C9918F' },
 
   inputWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface,
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
 
   cta: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#C8A96E', borderRadius: 16, paddingVertical: 16, marginTop: 8,
+    backgroundColor: '#C9918F', borderRadius: 16, paddingVertical: 16, marginTop: 8,
   },
   ctaText: { fontFamily: fonts.bold, fontSize: 16, color: '#FFFFFF' },
 });

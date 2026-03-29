@@ -308,7 +308,7 @@ export default function HomeScreen() {
               </LinearGradient>
             ) : null}
 
-            <LinearGradient colors={['#E8DCC8', '#C8A96E']} style={styles.promoCard}>
+            <LinearGradient colors={['#E8D5D3', '#C9918F']} style={styles.promoCard}>
               <View style={styles.promoContent}>
                 <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Offrez un moment Teaven</Text>
                 <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.85)' }]}>

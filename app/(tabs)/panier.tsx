@@ -127,16 +127,21 @@ export default function PanierScreen() {
   // Récompenses-panier supprimées — points ne font que monter
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
   const [businessHours, setBusinessHours] = useState<{ open: number; close: number } | null>(null);
+  const [isClosed, setIsClosed] = useState(false);
   useEffect(() => {
-    const SUPA = SUPABASE_URL;
-    const KEY = SUPABASE_ANON_KEY;
-    fetch(`${SUPA}/functions/v1/get-business-hours`, {
-      headers: { 'Authorization': `Bearer ${KEY}`, 'apikey': KEY },
+    fetch(`${SUPABASE_URL}/functions/v1/get-business-hours`, {
+      headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'apikey': SUPABASE_ANON_KEY },
     })
       .then((r) => r.json())
       .then((data) => {
-        if (data.open != null && data.close != null && !data.closed) {
+        if (data.closed) {
+          setIsClosed(true);
+          setBusinessHours({ open: 9, close: 20 });
+        } else if (data.open != null && data.close != null) {
+          // Convertir en heures décimales pour inclure les minutes
+          // ex: 9h30 → 9, 15h30 → 15 (les slots sont par tranche de 15min à partir de l'heure d'ouverture)
           setBusinessHours({ open: data.open, close: data.close });
+          setIsClosed(false);
         }
       })
       .catch(() => {});
@@ -278,7 +283,7 @@ export default function PanierScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* ──── ARTICLES ──── */}

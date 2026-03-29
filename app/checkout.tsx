@@ -194,7 +194,7 @@ export default function CheckoutScreen() {
 
       {/* ──── Toggle Wallet ──── */}
       <View style={styles.walletToggle}>
-        <LinearGradient colors={useWallet ? ['#D4937A', '#C27B5A'] : ['#E8E8E4', '#E0E0DC']} style={styles.walletToggleCard}>
+        <LinearGradient colors={useWallet ? ['#D4937A', '#C27B5A'] : ['#FFFFFF', '#F8F8F4']} style={styles.walletToggleCard}>
           <Wallet size={16} color={useWallet ? '#FFFFFF' : colors.textMuted} strokeWidth={1.5} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.walletToggleLabel, useWallet && { color: '#FFFFFF' }]}>
@@ -337,6 +337,7 @@ const styles = StyleSheet.create({
   walletToggleCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: colors.border,
   },
   walletToggleLabel: { fontFamily: fonts.bold, fontSize: 13, color: colors.text },
   walletToggleBalance: { fontFamily: fonts.regular, fontSize: 11, color: colors.textSecondary, marginTop: 1 },
