@@ -17,7 +17,7 @@ export interface User {
   updatedAt: string;
 }
 
-export type LoyaltyLevel = 'Bronze' | 'Argent' | 'Or' | 'Platine';
+export type LoyaltyLevel = 'Première Parenthèse' | 'Habitude' | 'Rituel' | 'Sérénité' | 'Essentia';
 
 // === PRODUIT ===
 export type ProductCategory = 'nourrir' | 'savourer' | 'emporter' | 'patisseries';

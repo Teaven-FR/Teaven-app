@@ -1,4 +1,4 @@
-// Écran Onboarding — 3 slides + splash finale avec CTA
+// Écran Onboarding — 5 slides + cercle segmenté + slide finale connexion
 import { useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -7,63 +7,146 @@ import {
   StyleSheet,
   FlatList,
   Dimensions,
+  Animated,
 } from 'react-native';
-import type { NativeSyntheticEvent, NativeScrollEvent, ViewToken } from 'react-native';
+import type { ViewToken } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Leaf, Coffee, Heart } from 'lucide-react-native';
+import Svg, { Path } from 'react-native-svg';
+import * as Haptics from 'expo-haptics';
+import {
+  ChevronRight,
+  LogIn,
+  UserPlus,
+} from 'lucide-react-native';
 import { useAuthStore } from '@/stores/authStore';
 import { colors, fonts, spacing } from '@/constants/theme';
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-interface Slide {
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SLIDE_COUNT = 5;
+const CIRCLE_SIZE = 48;
+const CIRCLE_R = 20;
+const ARC_GAP = 6;
+const FINAL_CIRCLE_SIZE = 120;
+const FINAL_R = 48;
+
+// Images require() doivent être statiques
+const SLIDE_IMAGES = [
+  require('../assets/onboarding/menu.png'),
+  require('../assets/onboarding/fidelite.png'),
+  require('../assets/onboarding/defis.png'),
+  require('../assets/onboarding/blog.png'),
+  require('../assets/onboarding/wallet.png'),
+];
+
+interface SlideData {
   id: string;
-  icon: typeof Leaf;
   title: string;
   subtitle: string;
-  image: string;
-  gradient: [string, string];
+  gradient: readonly [string, string];
+  imageIndex: number;
 }
 
-const slides: Slide[] = [
+const slides: SlideData[] = [
   {
     id: '1',
-    icon: Leaf,
-    title: 'Nourrir votre corps',
-    subtitle: 'Des bowls, salades et plats healthy préparés chaque jour avec des ingrédients frais et locaux.',
-    image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&h=1200&fit=crop',
-    gradient: ['#2C4A32', '#4A6B50'],
+    title: 'Commandez en direct,\nsans intermédiaire',
+    subtitle: 'Composez votre commande, personnalisez vos formules, et recevez une notification quand c\u2019est prêt.',
+    gradient: ['#E8F0EA', '#D4E5D7'],
+    imageIndex: 0,
   },
   {
     id: '2',
-    icon: Coffee,
-    title: 'Savourer l\'instant',
-    subtitle: 'Thés d\'exception, matcha, smoothies et pâtisseries maison pour sublimer votre pause.',
-    image: 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=800&h=1200&fit=crop',
-    gradient: ['#3A5A40', '#5A7B60'],
+    title: 'Gagnez des points\nà chaque commande',
+    subtitle: 'Votre fidélité est récompensée. Accumulez des points, montez en niveau, débloquez des récompenses exclusives.',
+    gradient: ['#EDE8D8', '#E4DFC8'],
+    imageIndex: 1,
   },
   {
     id: '3',
-    icon: Heart,
-    title: 'Partager le bien-être',
-    subtitle: 'Un programme fidélité généreux, Click & Collect simple, et une communauté bienveillante.',
-    image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=800&h=1200&fit=crop',
-    gradient: ['#4A6B50', '#75967F'],
+    title: 'Relevez des défis,\ngagnez encore plus',
+    subtitle: 'Chaque semaine, de nouveaux défis pour booster vos points et débloquer des surprises.',
+    gradient: ['#D8E5D2', '#C8DCCA'],
+    imageIndex: 2,
+  },
+  {
+    id: '4',
+    title: 'Nourrissez aussi\nvotre esprit',
+    subtitle: 'Atmosphère, notre espace de lectures positives. Bien-être, nutrition, inspirations.',
+    gradient: ['#E8EDDF', '#DDE5D4'],
+    imageIndex: 3,
+  },
+  {
+    id: '5',
+    title: 'Rechargez, économisez,\nsimplifiez',
+    subtitle: 'Créditez votre porte-monnaie Teaven, payez en un geste, profitez de bonus à la recharge.',
+    gradient: ['#F5EFDF', '#EDE5D0'],
+    imageIndex: 4,
   },
 ];
+
+// ─── Cercle segmenté SVG ──────────────────────────────────────────────────────
+
+function segmentedArc(cx: number, cy: number, r: number, segments: number, filled: number) {
+  const totalGap = segments * ARC_GAP;
+  const arcAngle = (360 - totalGap) / segments;
+  const paths: Array<{ d: string; active: boolean }> = [];
+
+  for (let i = 0; i < segments; i++) {
+    const startAngle = -90 + i * (arcAngle + ARC_GAP);
+    const endAngle = startAngle + arcAngle;
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+    const x1 = cx + r * Math.cos(startRad);
+    const y1 = cy + r * Math.sin(startRad);
+    const x2 = cx + r * Math.cos(endRad);
+    const y2 = cy + r * Math.sin(endRad);
+    const largeArc = arcAngle > 180 ? 1 : 0;
+    paths.push({
+      d: `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`,
+      active: i < filled,
+    });
+  }
+  return paths;
+}
+
+function OnboardingCircle({ filled, size, r, color = '#75967F' }: { filled: number; size: number; r: number; color?: string }) {
+  const cx = size / 2;
+  const cy = size / 2;
+  const arcs = segmentedArc(cx, cy, r, SLIDE_COUNT, filled);
+
+  return (
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {arcs.map((arc, i) => (
+        <Path
+          key={i}
+          d={arc.d}
+          stroke={arc.active ? color : 'rgba(117,150,127,0.18)'}
+          strokeWidth={3}
+          strokeLinecap="round"
+          fill="none"
+        />
+      ))}
+    </Svg>
+  );
+}
+
+// ─── Composant principal ──────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [showFinal, setShowFinal] = useState(false);
   const completeOnboarding = useAuthStore((s) => s.completeOnboarding);
+  const finalAnim = useRef(new Animated.Value(0)).current;
 
-  const handleStart = async () => {
+  const handleCreateAccount = async () => {
     await completeOnboarding();
-    // La redirection vers /auth/login se fait automatiquement via _layout.tsx
+    router.replace('/auth/register');
   };
 
   const handleLogin = async () => {
@@ -71,11 +154,23 @@ export default function OnboardingScreen() {
     router.replace('/auth/login');
   };
 
+  const handleSkip = async () => {
+    await completeOnboarding();
+    router.replace('/auth/login');
+  };
+
   const handleNext = () => {
-    if (activeIndex < slides.length - 1) {
+    if (activeIndex < SLIDE_COUNT - 1) {
       flatListRef.current?.scrollToIndex({ index: activeIndex + 1 });
     } else {
-      handleStart();
+      setShowFinal(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Animated.spring(finalAnim, {
+        toValue: 1,
+        damping: 15,
+        stiffness: 120,
+        useNativeDriver: true,
+      }).start();
     }
   };
 
@@ -91,43 +186,94 @@ export default function OnboardingScreen() {
     viewAreaCoveragePercentThreshold: 50,
   }).current;
 
-  const isLast = activeIndex === slides.length - 1;
-
-  const renderSlide = useCallback(({ item }: { item: Slide }) => {
-    const Icon = item.icon;
+  const renderSlide = useCallback(({ item }: { item: SlideData }) => {
     return (
       <View style={styles.slide}>
-        {/* Image de fond */}
-        <Image
-          source={{ uri: item.image }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          transition={600}
-        />
         <LinearGradient
-          colors={['rgba(42,42,42,0.15)', 'rgba(42,42,42,0.75)']}
-          locations={[0.2, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-
-        {/* Contenu du slide */}
-        <View style={[styles.slideContent, { paddingBottom: Math.max(insets.bottom, 32) + 80 }]}>
-          <View style={[styles.iconCircle, { backgroundColor: item.gradient[0] }]}>
-            <Icon size={28} color="#FFFFFF" strokeWidth={1.5} />
+          colors={item.gradient as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.slideGradient}
+        >
+          {/* Cadre device avec capture d'écran */}
+          <View style={styles.deviceFrame}>
+            <View style={styles.deviceNotch} />
+            <Image
+              source={SLIDE_IMAGES[item.imageIndex]}
+              style={styles.deviceScreen}
+              contentFit="cover"
+              transition={300}
+            />
           </View>
+        </LinearGradient>
+
+        {/* Texte en dessous */}
+        <View style={styles.slideText}>
           <Text style={styles.slideTitle}>{item.title}</Text>
           <Text style={styles.slideSubtitle}>{item.subtitle}</Text>
         </View>
       </View>
     );
-  }, [insets.bottom]);
+  }, []);
+
+  // ─── Slide finale : connexion ─────────────────────────────────────────────
+
+  if (showFinal) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <Animated.View style={[styles.finalContent, {
+          opacity: finalAnim,
+          transform: [{
+            translateY: finalAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }),
+          }],
+        }]}>
+          {/* Cercle complet */}
+          <View style={styles.finalCircleWrap}>
+            <OnboardingCircle filled={SLIDE_COUNT} size={FINAL_CIRCLE_SIZE} r={FINAL_R} />
+          </View>
+
+          <Text style={styles.finalTitle}>Votre première parenthèse{'\n'}vous attend.</Text>
+          <Text style={styles.finalSubtitle}>
+            Connectez-vous pour profiter de l'expérience Teaven{'\n'}au maximum : fidélité, défis, récompenses.
+          </Text>
+
+          {/* Bouton principal : créer un compte */}
+          <Pressable onPress={handleCreateAccount} style={styles.finalPrimaryBtn}>
+            <LinearGradient
+              colors={['#75967F', '#5B7A65']}
+              style={styles.finalPrimaryGradient}
+            >
+              <UserPlus size={18} color="#FFFFFF" strokeWidth={1.8} />
+              <Text style={styles.finalPrimaryText}>Créer mon compte</Text>
+            </LinearGradient>
+          </Pressable>
+
+          {/* Bouton secondaire : se connecter */}
+          <Pressable onPress={handleLogin} style={styles.finalSecondaryBtn}>
+            <LogIn size={16} color={colors.green} strokeWidth={1.8} />
+            <Text style={styles.finalSecondaryText}>J'ai déjà un compte fidélité</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* Branding */}
+        <View style={[styles.finalFooter, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
+          <Image source={require('../assets/Petit logo Teaven.png')} style={styles.brandLogoSmall} contentFit="contain" />
+          <Text style={styles.brandTagline}>Votre parenthèse de bien-être au quotidien</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ─── Slides ───────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.container}>
-      {/* Logo en haut */}
-      <View style={[styles.brandContainer, { paddingTop: insets.top + 20 }]}>
-        <Text style={styles.brand}>TEAVEN</Text>
-        <Text style={styles.tagline}>Nourrir · Savourer · Partager</Text>
+      {/* Header : brand + passer */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <Image source={require('../assets/Petit logo Teaven.png')} style={styles.brandLogo} contentFit="contain" />
+        <Pressable onPress={handleSkip} hitSlop={12}>
+          <Text style={styles.skipText}>Passer</Text>
+        </Pressable>
       </View>
 
       {/* Slides */}
@@ -147,65 +293,23 @@ export default function OnboardingScreen() {
           offset: SCREEN_WIDTH * index,
           index,
         })}
-        style={StyleSheet.absoluteFill}
+        style={styles.flatList}
       />
 
-      {/* Logo overlay (au-dessus des slides) */}
-      <View style={[styles.brandOverlay, { paddingTop: insets.top + 20 }]} pointerEvents="none">
-        <Text style={styles.brand}>TEAVEN</Text>
-        <Text style={styles.tagline}>Nourrir · Savourer · Partager</Text>
-      </View>
+      {/* Contrôles bas */}
+      <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, 20) + 12 }]}>
+        {/* Cercle de progression centré */}
+        <OnboardingCircle filled={activeIndex + 1} size={CIRCLE_SIZE} r={CIRCLE_R} />
 
-      {/* Contrôles en bas */}
-      <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, 32) }]}>
-        {/* Ligne principale : Skip | Dots | Suivant */}
-        <View style={styles.controlsRow}>
-          {/* Bouton skip (ou vide si dernier slide) */}
-          {!isLast ? (
-            <Pressable onPress={handleStart} style={styles.skipButton} accessibilityRole="button">
-              <Text style={styles.skipLink}>Passer</Text>
-            </Pressable>
-          ) : (
-            <View style={styles.skipButton} />
-          )}
-
-          {/* Dots centrés */}
-          <View style={styles.dots}>
-            {slides.map((_, index) => (
-              <View
-                key={index}
-                style={[styles.dot, index === activeIndex && styles.dotActive]}
-              />
-            ))}
-          </View>
-
-          {/* Bouton Suivant / Commencer */}
-          <Pressable
-            onPress={handleNext}
-            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-            accessibilityRole="button"
-            accessibilityLabel={isLast ? 'Commencer' : 'Slide suivant'}
-          >
-            <LinearGradient
-              colors={['#FFFFFF', '#F5F5F0']}
-              style={styles.buttonGradient}
-            >
-              <Text style={styles.buttonText}>
-                {isLast ? 'Go !' : '→'}
-              </Text>
-            </LinearGradient>
-          </Pressable>
-        </View>
-
-        {/* Lien connexion sur le dernier slide */}
-        {isLast && (
-          <Pressable onPress={handleLogin} style={styles.loginRow} accessibilityRole="button">
-            <Text style={styles.skipLink}>
-              Déjà un compte ?{' '}
-              <Text style={styles.skipLinkBold}>Se connecter</Text>
+        {/* Bouton suivant */}
+        <Pressable onPress={handleNext} style={styles.nextBtn}>
+          <LinearGradient colors={['#75967F', '#5B7A65']} style={styles.nextBtnGradient}>
+            <Text style={styles.nextBtnText}>
+              {activeIndex === SLIDE_COUNT - 1 ? 'C\u2019est parti' : 'Suivant'}
             </Text>
-          </Pressable>
-        )}
+            <ChevronRight size={16} color="#FFFFFF" strokeWidth={2.5} />
+          </LinearGradient>
+        </Pressable>
       </View>
     </View>
   );
@@ -214,152 +318,198 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.greenDark,
+    backgroundColor: colors.bg,
   },
 
-  // Brand
-  brandContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+  // Header
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: spacing.xl,
     zIndex: 10,
   },
-  brandOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 10,
+  brandLogo: {
+    width: 120,
+    height: 36,
   },
   brand: {
     fontFamily: fonts.thin,
-    fontSize: 42,
-    letterSpacing: 8,
-    color: '#FFFFFF',
+    fontSize: 22,
+    letterSpacing: 5,
+    color: colors.text,
     textTransform: 'uppercase',
-    marginBottom: spacing.sm,
   },
-  tagline: {
+  skipText: {
     fontFamily: fonts.regular,
-    fontSize: 12,
-    letterSpacing: 4,
-    color: 'rgba(255,255,255,0.65)',
+    fontSize: 14,
+    color: colors.textMuted,
   },
 
-  // Slide
+  // Slides
+  flatList: {
+    flex: 1,
+  },
   slide: {
     width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    justifyContent: 'flex-end',
+    flex: 1,
   },
-  slideContent: {
-    paddingHorizontal: spacing.xxl,
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  slideGradient: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.lg,
+    borderRadius: 24,
+  },
+  deviceFrame: {
+    width: SCREEN_WIDTH * 0.55,
+    height: SCREEN_WIDTH * 0.55 * 1.95,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 28,
+    padding: 6,
+    overflow: 'hidden',
+    // Ombre portée
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  deviceNotch: {
+    width: 80,
+    height: 22,
+    backgroundColor: '#1A1A1A',
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    alignSelf: 'center',
+    position: 'absolute',
+    top: 0,
+    zIndex: 10,
+  },
+  deviceScreen: {
+    flex: 1,
+    borderRadius: 22,
+  },
+  slideText: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.md,
+    gap: 12,
   },
   slideTitle: {
     fontFamily: fonts.bold,
-    fontSize: 24,
-    color: '#FFFFFF',
-    textAlign: 'center',
+    fontSize: 26,
     lineHeight: 32,
+    letterSpacing: -0.5,
+    color: colors.text,
   },
   slideSubtitle: {
     fontFamily: fonts.regular,
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.75)',
-    textAlign: 'center',
+    fontSize: 15,
     lineHeight: 22,
-    paddingHorizontal: spacing.lg,
+    color: colors.textSecondary,
   },
 
   // Controls
   controls: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    paddingHorizontal: spacing.xl,
+    gap: 20,
     alignItems: 'center',
-    paddingHorizontal: spacing.xxl,
-    paddingTop: spacing.lg,
-    gap: spacing.md,
   },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  nextBtn: {
     width: '100%',
-  },
-  dots: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  dotActive: {
-    width: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-  },
-  button: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
   },
-  buttonPressed: {
-    transform: [{ scale: 0.95 }],
-    shadowOpacity: 0.08,
+  nextBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 6,
   },
-  buttonGradient: {
+  nextBtnText: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+
+  // Final slide
+  finalContent: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 28,
+    paddingHorizontal: spacing.xxl,
   },
-  buttonText: {
+  finalCircleWrap: {
+    marginBottom: 32,
+  },
+  finalTitle: {
     fontFamily: fonts.bold,
-    fontSize: 18,
-    color: '#3A5A40',
+    fontSize: 24,
+    lineHeight: 32,
+    textAlign: 'center',
+    color: colors.text,
+    marginBottom: 12,
   },
-  skipButton: {
-    width: 60,
-    paddingVertical: spacing.sm,
-    alignItems: 'flex-start',
-  },
-  skipLink: {
+  finalSubtitle: {
     fontFamily: fonts.regular,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 21,
+    textAlign: 'center',
+    color: colors.textSecondary,
+    marginBottom: 40,
   },
-  skipLinkBold: {
-    fontFamily: fonts.bold,
-    color: 'rgba(255,255,255,0.85)',
-    textDecorationLine: 'underline',
+  finalPrimaryBtn: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
   },
-  loginRow: {
-    paddingVertical: spacing.sm,
+  finalPrimaryGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 10,
+  },
+  finalPrimaryText: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  finalSecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  finalSecondaryText: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.green,
+  },
+  finalFooter: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  brandLogoSmall: {
+    width: 80,
+    height: 24,
+    opacity: 0.4,
+  },
+  brandSmall: {
+    fontFamily: fonts.thin,
+    fontSize: 16,
+    letterSpacing: 5,
+    color: colors.textMuted,
+  },
+  brandTagline: {
+    fontFamily: fonts.regular,
+    fontSize: 10,
+    letterSpacing: 3,
+    color: 'rgba(0,0,0,0.2)',
   },
 });

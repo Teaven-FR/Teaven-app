@@ -1,5 +1,6 @@
-// Bouton principal réutilisable
-import { Pressable, Text, StyleSheet, type ViewStyle, type TextStyle } from 'react-native';
+// Bouton principal réutilisable — scale 0.97 press feedback
+import { useRef, useCallback } from 'react';
+import { Pressable, Text, Animated, StyleSheet, Platform, type ViewStyle, type TextStyle } from 'react-native';
 import { colors, fonts, radii, spacing } from '@/constants/theme';
 
 interface ButtonProps {
@@ -19,28 +20,44 @@ export function Button({
   disabled = false,
   style,
 }: ButtonProps) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const useNative = Platform.OS !== 'web';
+
+  const handlePressIn = useCallback(() => {
+    Animated.spring(scale, { toValue: 0.97, damping: 15, stiffness: 300, useNativeDriver: useNative }).start();
+  }, [scale, useNative]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.spring(scale, { toValue: 1, damping: 15, stiffness: 300, useNativeDriver: useNative }).start();
+  }, [scale, useNative]);
+
   return (
     <Pressable
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       disabled={disabled}
-      style={({ pressed }) => [
-        styles.base,
-        styles[variant],
-        styles[`size_${size}`],
-        pressed && styles.pressed,
-        disabled && styles.disabled,
-        style,
-      ]}
     >
-      <Text
+      <Animated.View
         style={[
-          styles.text,
-          styles[`text_${variant}`],
-          styles[`textSize_${size}`],
+          styles.base,
+          styles[variant],
+          styles[`size_${size}`],
+          disabled && styles.disabled,
+          style,
+          { transform: [{ scale }] },
         ]}
       >
-        {title}
-      </Text>
+        <Text
+          style={[
+            styles.text,
+            styles[`text_${variant}`],
+            styles[`textSize_${size}`],
+          ]}
+        >
+          {title}
+        </Text>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -73,9 +90,6 @@ const styles = StyleSheet.create({
   size_lg: {
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xxl,
-  },
-  pressed: {
-    opacity: 0.85,
   },
   disabled: {
     opacity: 0.5,

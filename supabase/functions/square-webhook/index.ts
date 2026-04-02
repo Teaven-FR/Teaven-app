@@ -119,6 +119,106 @@ serve(async (req) => {
           })
           .eq('square_order_id', payment.order_id);
 
+        // Mettre à jour loyalty_progress (streak, compteur commandes)
+        // NOTE : les points sont déjà crédités par process-payment, pas de double comptage ici
+        const { data: orderRow } = await supabase
+          .from('orders')
+          .select('user_id')
+          .eq('square_order_id', payment.order_id)
+          .maybeSingle();
+
+        if (orderRow?.user_id) {
+          const weekStart = new Date();
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+          const weekStartStr = weekStart.toISOString().split('T')[0];
+
+          // Upsert loyalty_progress
+          const { data: lp } = await supabase
+            .from('loyalty_progress')
+            .upsert(
+              { user_id: orderRow.user_id, total_parentheses: 0 },
+              { onConflict: 'user_id', ignoreDuplicates: true },
+            )
+            .select('total_parentheses, streak_weeks, last_order_week')
+            .maybeSingle();
+
+          const newTotal = (lp?.total_parentheses ?? 0) + 1;
+          const lastWeek = lp?.last_order_week;
+          const isNewWeek = !lastWeek || lastWeek < weekStartStr;
+          const newStreak = isNewWeek ? (lp?.streak_weeks ?? 0) + 1 : (lp?.streak_weeks ?? 0);
+
+          await supabase
+            .from('loyalty_progress')
+            .update({
+              total_parentheses: newTotal,
+              streak_weeks: newStreak,
+              last_order_week: isNewWeek ? weekStartStr : lastWeek,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', orderRow.user_id);
+
+          console.log(`Progress updated for user ${orderRow.user_id}: parenthèse #${newTotal}, streak: ${newStreak}`);
+
+          // Déclencher la vérification des défis
+          try {
+            await supabase.functions.invoke('challenge-check', {
+              body: {
+                user_id: orderRow.user_id,
+                order_total: payment.amount_money?.amount ?? 0,
+                order_time: new Date().toISOString(),
+              },
+            });
+          } catch (challengeErr) {
+            console.error('Challenge check error (non-fatal):', challengeErr);
+          }
+
+          // ── Notifications push post-paiement ──
+          const userId = orderRow.user_id;
+
+          // T+0s : Commande confirmée
+          try {
+            await supabase.functions.invoke('push-send', {
+              body: {
+                user_id: userId,
+                type: 'order_confirmed',
+                title: 'Commande confirmée !',
+                body: 'Votre parenthèse est en préparation.',
+                data: { orderId: payment.order_id },
+              },
+            });
+          } catch (e) { console.error('Push order_confirmed error:', e); }
+
+          // T+30s : Points gagnés
+          setTimeout(async () => {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('loyalty_points, loyalty_level')
+                .eq('id', userId)
+                .single();
+              if (profile) {
+                const pts = profile.loyalty_points ?? 0;
+                const THRESHOLDS: Record<string, number> = {
+                  'Première Parenthèse': 2000, 'Habitude': 5000, 'Rituel': 10000, 'Sérénité': 20000,
+                };
+                const nextThreshold = THRESHOLDS[profile.loyalty_level ?? 'Première Parenthèse'] ?? 2000;
+                const remaining = Math.max(0, nextThreshold - pts);
+                await supabase.functions.invoke('push-send', {
+                  body: {
+                    user_id: userId,
+                    type: 'points_earned',
+                    title: `Points gagnés !`,
+                    body: remaining > 0
+                      ? `Vous êtes à ${remaining} points du prochain niveau.`
+                      : `Félicitations, vous avez atteint le sommet !`,
+                    data: { screen: '/fidelite' },
+                  },
+                });
+              }
+            } catch (e) { console.error('Push points_earned error:', e); }
+          }, 30000);
+        }
+
         console.log(`Payment ${payment.id} completed for order ${payment.order_id}`);
         break;
       }

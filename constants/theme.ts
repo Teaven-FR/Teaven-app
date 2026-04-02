@@ -14,7 +14,15 @@ export const colors = {
   error: '#D4544A',
   gold: '#C4A962',
   orange: '#E8A849',
-  violet: '#8B7EC8',
+} as const;
+
+// Couleurs des niveaux du programme Les Parenthèses
+export const levelColors = {
+  'Première Parenthèse': { color: '#C8A882', bg: '#F5EDE0' },
+  'Habitude':             { color: '#8A8478', bg: '#F0EFEB' },
+  'Rituel':               { color: '#C4A962', bg: '#F5F0E1' },
+  'Sérénité':             { color: '#4A6B50', bg: '#E3EDE4' },
+  'Essentia':             { color: '#2C3A2E', bg: '#EAEDE8' },
 } as const;
 
 export const fonts = {

@@ -17,30 +17,46 @@ const SQUARE_BASE_URL = Deno.env.get('SQUARE_ENVIRONMENT') === 'production'
 const SQUARE_ACCESS_TOKEN = Deno.env.get('SQUARE_ACCESS_TOKEN') ?? '';
 const SQUARE_VERSION = '2025-01-23';
 
-// Seuils de fidélité Teaven
-const LOYALTY_THRESHOLDS = {
-  Bronze: 0,
-  Argent: 200,
-  Or: 500,
-  Platine: 1000,
+// Seuils du programme Les Parenthèses
+const LOYALTY_THRESHOLDS: Record<string, number> = {
+  'Première Parenthèse': 0,
+  'Habitude': 2000,
+  'Rituel': 5000,
+  'Sérénité': 10000,
+  'Essentia': 20000,
+};
+
+const LOYALTY_ORDER = ['Première Parenthèse', 'Habitude', 'Rituel', 'Sérénité', 'Essentia'];
+
+// Multiplicateurs de points par niveau (base = 10 pts/€)
+const LEVEL_MULTIPLIERS: Record<string, number> = {
+  'Première Parenthèse': 1,
+  'Habitude': 1,
+  'Rituel': 1.5,
+  'Sérénité': 1.7,
+  'Essentia': 2,
 };
 
 function getLoyaltyLevel(points: number): string {
-  if (points >= LOYALTY_THRESHOLDS.Platine) return 'Platine';
-  if (points >= LOYALTY_THRESHOLDS.Or) return 'Or';
-  if (points >= LOYALTY_THRESHOLDS.Argent) return 'Argent';
-  return 'Bronze';
+  if (points >= 20000) return 'Essentia';
+  if (points >= 10000) return 'Sérénité';
+  if (points >= 5000) return 'Rituel';
+  if (points >= 2000) return 'Habitude';
+  return 'Première Parenthèse';
 }
 
 function getLoyaltyProgress(points: number): number {
   const level = getLoyaltyLevel(points);
-  const entries = Object.entries(LOYALTY_THRESHOLDS);
-  const currentIdx = entries.findIndex(([k]) => k === level);
+  const currentIdx = LOYALTY_ORDER.indexOf(level);
   const nextIdx = currentIdx + 1;
-  if (nextIdx >= entries.length) return 100;
-  const currentThreshold = entries[currentIdx][1];
-  const nextThreshold = entries[nextIdx][1];
+  if (nextIdx >= LOYALTY_ORDER.length) return 100;
+  const currentThreshold = LOYALTY_THRESHOLDS[level];
+  const nextThreshold = LOYALTY_THRESHOLDS[LOYALTY_ORDER[nextIdx]];
   return Math.min(Math.round(((points - currentThreshold) / (nextThreshold - currentThreshold)) * 100), 100);
+}
+
+function getMultiplier(points: number): number {
+  return LEVEL_MULTIPLIERS[getLoyaltyLevel(points)] ?? 1;
 }
 
 /** Appel Square API */
@@ -260,7 +276,7 @@ serve(async (req) => {
     const rewards = [
       { id: '1', name: 'Boisson offerte', description: 'Un thé ou café au choix', pointsCost: 200, icon: 'coffee' },
       { id: '2', name: 'Dessert offert', description: 'Une pâtisserie au choix', pointsCost: 500, icon: 'gift' },
-      { id: '3', name: '-20% sur la carte', description: 'Réduction sur votre commande', pointsCost: 750, icon: 'percent' },
+      { id: '3', name: 'Formule offerte', description: 'Plat + boisson au choix', pointsCost: 750, icon: 'gift' },
       { id: '4', name: 'Menu complet offert', description: 'Bowl + boisson + dessert', pointsCost: 1000, icon: 'star' },
     ];
 

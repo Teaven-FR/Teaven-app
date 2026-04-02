@@ -83,7 +83,7 @@ export default function CguScreen() {
           contact@teaven.fr
           {'\n\n'}
           Teaven SAS{'\n'}
-          12 rue de la Gare{'\n'}
+          12 Place de la Gare{'\n'}
           95130 Franconville{'\n'}
           France
         </Text>

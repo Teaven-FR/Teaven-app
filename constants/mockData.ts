@@ -286,7 +286,7 @@ export const mockUser: User = {
   email: 'johan@teaven.fr',
   dietaryPreferences: ['Bio'],
   loyaltyPoints: 1250,
-  loyaltyLevel: 'Or',
+  loyaltyLevel: 'Essentia',
   walletBalance: 4250,
   createdAt: '2025-01-15T10:00:00Z',
   updatedAt: '2026-03-19T12:00:00Z',

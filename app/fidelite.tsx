@@ -1,4 +1,4 @@
-// Page Programme Fidélité — données dynamiques depuis Square
+// Page Les Parenthèses — programme de fidélité Teaven
 import { useRef, useEffect, useState } from 'react';
 import {
   View,
@@ -11,10 +11,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Coffee, Gift, Percent, Star, Check, ChevronRight, Zap, Flame, Trophy, Lock } from 'lucide-react-native';
+import { ArrowLeft, Coffee, Gift, Percent, Star, Check, ChevronRight, Zap, Flame, Trophy, Lock, Sparkles } from 'lucide-react-native';
 import { useUser } from '@/hooks/useUser';
 import { useToast } from '@/contexts/ToastContext';
-import { colors, fonts, spacing, shadows } from '@/constants/theme';
+import { colors, levelColors, fonts, spacing, shadows } from '@/constants/theme';
+import { ProgressCircle } from '@/components/ui/ProgressCircle';
+import { LEVEL_DATA } from '@/app/niveau/[level]';
 
 interface Challenge {
   id: string;
@@ -33,14 +35,23 @@ const INITIAL_CHALLENGES: Challenge[] = [
   { id: 'c3', icon: 'star', title: 'Explorateur', description: 'Essayer 3 catégories différentes', progress: 3, target: 3, reward: 300, claimed: false },
 ];
 
+const LEVEL_THEMES: Record<string, { gradient: readonly [string, string, string]; text: string; subtext: string; progressColor: string; trackBg: string }> = {
+  'Première Parenthèse': { gradient: ['#F7F4ED', '#EDE8D8', '#E4DFC8'], text: '#2C3A2E', subtext: '#738478', progressColor: '#75967F', trackBg: 'rgba(117,150,127,0.15)' },
+  'Habitude':            { gradient: ['#E8EDDF', '#D8E5D2', '#C8DCCA'], text: '#1E3022', subtext: '#4A6B50', progressColor: '#5B7A65', trackBg: 'rgba(117,150,127,0.18)' },
+  'Rituel':              { gradient: ['#C2D8C6', '#A8C8AE', '#8EB898'], text: '#1A2E1E', subtext: '#2C4A32', progressColor: '#2C4A32', trackBg: 'rgba(255,255,255,0.3)' },
+  'Sérénité':            { gradient: ['#75967F', '#5B7A65', '#4A6B50'], text: '#FFFFFF', subtext: 'rgba(255,255,255,0.75)', progressColor: '#FFFFFF', trackBg: 'rgba(255,255,255,0.2)' },
+  'Essentia':            { gradient: ['#3A5A3E', '#2C4A32', '#1A2E1E'], text: '#FFFFFF', subtext: 'rgba(255,255,255,0.7)', progressColor: 'rgba(255,255,255,0.9)', trackBg: 'rgba(255,255,255,0.12)' },
+};
+
 const LEVELS = [
-  { name: 'Bronze', min: 0, color: '#C4845C', bg: '#F5ECE5' },
-  { name: 'Argent', min: 200, color: '#8A8A82', bg: '#F0F0EE' },
-  { name: 'Or', min: 500, color: '#C4A962', bg: '#F5F0E1' },
-  { name: 'Platine', min: 1000, color: '#5B7FBF', bg: '#E8EDF7' },
+  { name: 'Première Parenthèse', min: 0, ...levelColors['Première Parenthèse'] },
+  { name: 'Habitude', min: 2000, ...levelColors['Habitude'] },
+  { name: 'Rituel', min: 5000, ...levelColors['Rituel'] },
+  { name: 'Sérénité', min: 10000, ...levelColors['Sérénité'] },
+  { name: 'Essentia', min: 20000, ...levelColors['Essentia'] },
 ];
 
-const REWARD_COLORS = ['#C8D9CC', '#E8D5D0', '#F5EDD0', '#DDD5F0', '#D0E8F0'];
+const REWARD_COLORS = ['#C8D9CC', '#EDE5D8', '#F5EDD0', '#D8E8DC', '#E8E0D5'];
 
 const ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string; strokeWidth: number }>> = {
   coffee: Coffee,
@@ -52,14 +63,14 @@ const ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string
 const FALLBACK_REWARDS = [
   { id: '1', name: 'Boisson offerte', description: 'Thé, café ou infusion au choix', pointsCost: 200, icon: 'coffee' },
   { id: '2', name: 'Dessert offert', description: 'Pâtisserie maison au choix', pointsCost: 500, icon: 'gift' },
-  { id: '3', name: '-20% sur la carte', description: 'Sur toute votre commande', pointsCost: 750, icon: 'percent' },
+  { id: '3', name: 'Formule offerte', description: 'Plat + boisson au choix', pointsCost: 750, icon: 'gift' },
   { id: '4', name: 'Menu complet offert', description: 'Bowl + boisson + dessert', pointsCost: 1000, icon: 'star' },
 ];
 
 export default function FideliteScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, isGuest, loyalty, rewards: squareRewards, accrualRules, updateProfile } = useUser();
+  const { user, isGuest, loyalty, rewards: squareRewards, updateProfile } = useUser();
   const { showToast } = useToast();
   const [challenges, setChallenges] = useState<Challenge[]>(INITIAL_CHALLENGES);
 
@@ -105,31 +116,11 @@ export default function FideliteScreen() {
   };
 
   const currentLevel = LEVELS.find((l) => l.name === loyalty.level) ?? LEVELS[0];
-  const nextLevel = LEVELS.slice().reverse().find((l) => l.min > loyalty.points);
+  const nextLevel = LEVELS.find((l) => l.min > loyalty.points);
   const ptsToNext = nextLevel ? nextLevel.min - loyalty.points : 0;
+  const theme = LEVEL_THEMES[loyalty.level] ?? LEVEL_THEMES['Première Parenthèse'];
 
   const displayName = isGuest ? 'Invité' : (user.fullName || 'Membre');
-
-  // Générer les règles d'accumulation depuis Square ou fallback
-  const earnItems: Array<{ pts: string; action: string }> = accrualRules.length > 0
-    ? accrualRules.map((rule) => {
-        if (rule.type === 'SPEND') {
-          if (rule.spendAmount) {
-            const euros = rule.spendAmount / 100;
-            return { pts: `${rule.points} pt${rule.points > 1 ? 's' : ''}`, action: `par tranche de ${euros}€ dépensée` };
-          }
-          return { pts: `${rule.points} pts`, action: 'par euro dépensé' };
-        }
-        if (rule.type === 'VISIT') {
-          return { pts: `${rule.points} pts`, action: 'par visite' };
-        }
-        return { pts: `${rule.points} pts`, action: 'par achat' };
-      })
-    : [
-        { pts: '1 pt', action: 'par euro dépensé' },
-        { pts: '50 pts', action: 'pour votre 1ère commande' },
-        { pts: '100 pts', action: 'en parrainant un ami' },
-      ];
 
   return (
     <ScrollView
@@ -142,14 +133,14 @@ export default function FideliteScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn} accessibilityRole="button">
           <ArrowLeft size={20} color={colors.text} strokeWidth={1.5} />
         </Pressable>
-        <Text style={styles.headerTitle}>Programme Fidélité</Text>
+        <Text style={styles.headerTitle}>Les Parenthèses</Text>
         <View style={{ width: 36 }} />
       </View>
 
       {/* Carte membre */}
       <View style={styles.cardWrapper}>
         <LinearGradient
-          colors={['#2C4A32', '#4A6B50']}
+          colors={theme.gradient as [string, string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.memberCard}
@@ -158,60 +149,121 @@ export default function FideliteScreen() {
           <View style={styles.cardDecor2} />
 
           <View style={styles.cardTopRow}>
-            <Text style={styles.clubLabel}>TEAVEN CLUB</Text>
+            <Text style={[styles.clubLabel, { color: theme.subtext }]}>LES PARENTHÈSES</Text>
             <View style={[styles.levelBadge, { backgroundColor: currentLevel.color }]}>
-              <Text style={styles.levelBadgeText}>{loyalty.level.toUpperCase()}</Text>
+              <Text style={styles.levelBadgeText}>{loyalty.level}</Text>
             </View>
           </View>
 
-          <Text style={styles.cardName}>{displayName}</Text>
+          <Text style={[styles.cardName, { color: theme.text }]}>{displayName}</Text>
 
-          <View style={styles.pointsRow}>
-            <Text style={styles.pointsValue}>{displayedPoints.toLocaleString('fr-FR')}</Text>
-            <Text style={styles.pointsUnit}>pts</Text>
-          </View>
-
-          <View style={styles.progressTrack}>
-            <Animated.View style={[styles.progressFill, { width: progressWidth as unknown as number }]} />
-          </View>
-
-          <View style={styles.progressLabels}>
-            <Text style={styles.progressText}>{loyalty.nextReward}</Text>
-            {ptsToNext > 0 && (
-              <Text style={styles.progressPts}>encore {ptsToNext} pts</Text>
-            )}
+          <View style={styles.cardBodyRow}>
+            <View>
+              <View style={styles.pointsRow}>
+                <Text style={[styles.pointsValue, { color: theme.text }]}>{displayedPoints.toLocaleString('fr-FR')}</Text>
+                <Text style={[styles.pointsUnit, { color: theme.subtext }]}>pts</Text>
+              </View>
+              <Text style={[styles.progressText, { color: theme.subtext }]}>{loyalty.nextReward}</Text>
+              {ptsToNext > 0 && (
+                <Text style={[styles.progressPts, { color: theme.text }]}>encore {ptsToNext} pts</Text>
+              )}
+            </View>
+            <ProgressCircle
+              size={64}
+              strokeWidth={4}
+              progress={loyalty.progressPercent}
+              color={theme.progressColor}
+              trackColor={theme.trackBg}
+            />
           </View>
         </LinearGradient>
       </View>
 
-      {/* Niveaux */}
-      <Text style={styles.sectionTitle}>Les niveaux</Text>
-      <View style={styles.levelsGrid}>
-        {LEVELS.map((lvl) => {
+      {/* Niveaux — parcours vertical immersif */}
+      <Text style={styles.sectionTitle}>Votre parcours</Text>
+      <View style={styles.levelsVertical}>
+        {LEVELS.map((lvl, index) => {
           const isActive = lvl.name === loyalty.level;
           const isUnlocked = loyalty.points >= lvl.min;
+          const isLocked = !isUnlocked;
+          const levelContent = LEVEL_DATA[lvl.name];
+          const isLast = index === LEVELS.length - 1;
+
           return (
-            <View
-              key={lvl.name}
-              style={[
-                styles.levelCard,
-                isActive && { borderColor: lvl.color, borderWidth: 1.5 },
-              ]}
-            >
-              <View style={[styles.levelDot, { backgroundColor: lvl.bg }]}>
-                <Text style={[styles.levelDotText, { color: lvl.color }]}>
-                  {lvl.name.charAt(0)}
-                </Text>
-              </View>
-              <Text style={[styles.levelName, isActive && { color: lvl.color }]}>
-                {lvl.name}
-              </Text>
-              <Text style={styles.levelPts}>
-                {lvl.min === 0 ? 'Dès 0 pt' : `dès ${lvl.min} pts`}
-              </Text>
-              {isUnlocked && (
-                <Check size={12} color={lvl.color} strokeWidth={2.5} style={{ marginTop: 4 }} />
+            <View key={lvl.name} style={styles.levelItemWrap}>
+              {/* Ligne de connexion verticale */}
+              {!isLast && (
+                <View style={[styles.levelConnector, { backgroundColor: isUnlocked ? lvl.color : colors.border }]} />
               )}
+
+              <Pressable
+                onPress={() => router.push(`/niveau/${encodeURIComponent(lvl.name)}`)}
+                style={[
+                  styles.levelItemCard,
+                  isActive && { borderColor: lvl.color, borderWidth: 1.5 },
+                  isLocked && styles.levelItemLocked,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Niveau ${lvl.name}`}
+              >
+                {/* Dot + statut */}
+                <View style={styles.levelItemLeft}>
+                  <View style={[styles.levelDot, { backgroundColor: isLocked ? '#EDECEA' : lvl.bg }]}>
+                    {isLocked
+                      ? <Lock size={14} color={colors.textMuted} strokeWidth={1.8} />
+                      : isActive
+                        ? <Sparkles size={14} color={lvl.color} strokeWidth={1.8} />
+                        : <Check size={14} color={lvl.color} strokeWidth={2.5} />
+                    }
+                  </View>
+                  {isActive && (
+                    <View style={[styles.activePill, { backgroundColor: lvl.bg }]}>
+                      <Text style={[styles.activePillText, { color: lvl.color }]}>Actuel</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Contenu */}
+                <View style={styles.levelItemContent}>
+                  <View style={styles.levelItemHeader}>
+                    <Text style={[styles.levelItemName, isLocked && { color: colors.textMuted }]}>
+                      {lvl.name}
+                    </Text>
+                    <Text style={[styles.levelItemPts, { color: isLocked ? colors.textMuted : lvl.color }]}>
+                      {lvl.min === 0 ? '0 pt' : `${lvl.min} pts`}
+                    </Text>
+                  </View>
+
+                  {levelContent && (
+                    <Text
+                      style={[styles.levelItemTagline, isLocked && { color: colors.textMuted }]}
+                      numberOfLines={2}
+                    >
+                      {levelContent.tagline}
+                    </Text>
+                  )}
+
+                  {/* 2 premiers avantages */}
+                  {levelContent && !isLocked && (
+                    <View style={styles.levelBenefitsPreview}>
+                      {levelContent.benefits.slice(0, 2).map((b, i) => (
+                        <View key={i} style={styles.levelBenefitChip}>
+                          <Text style={[styles.levelBenefitChipText, { color: lvl.color }]}>
+                            {b.label}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  <View style={styles.levelItemFooter}>
+                    <Text style={[styles.levelItemCta, { color: isLocked ? colors.textMuted : lvl.color }]}>
+                      {isLocked ? `encore ${lvl.min - loyalty.points} pts` : 'Découvrir ce niveau'}
+                    </Text>
+                    <ChevronRight size={13} color={isLocked ? colors.textMuted : lvl.color} strokeWidth={2} />
+                  </View>
+                </View>
+              </Pressable>
             </View>
           );
         })}
@@ -298,20 +350,6 @@ export default function FideliteScreen() {
         })}
       </View>
 
-      {/* Comment gagner des points */}
-      <Text style={styles.sectionTitle}>Comment gagner des points ?</Text>
-      <View style={styles.earnList}>
-        {earnItems.map((item, i) => (
-          <View key={i} style={styles.earnRow}>
-            <View style={styles.earnIconWrap}>
-              <Zap size={14} color={colors.green} strokeWidth={2} />
-            </View>
-            <Text style={styles.earnPts}>{item.pts}</Text>
-            <Text style={styles.earnAction}>{item.action}</Text>
-          </View>
-        ))}
-      </View>
-
       {/* CTA invité */}
       {isGuest && (
         <Pressable
@@ -320,15 +358,15 @@ export default function FideliteScreen() {
           accessibilityRole="button"
         >
           <LinearGradient
-            colors={['#2C4A32', '#4A6B50']}
-            start={{ x: 0, y: 1 }}
-            end={{ x: 1, y: 0 }}
+            colors={['#243D29', '#2E5235', '#3A6642']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.ctaGradient}
           >
-            <Text style={styles.ctaTitle}>Rejoindre le Club Teaven</Text>
-            <Text style={styles.ctaSub}>Créez votre compte et commencez à cumuler des points dès votre première commande</Text>
+            <Text style={styles.ctaTitle}>Rejoindre Les Parenthèses</Text>
+            <Text style={styles.ctaSub}>Créez votre compte et commencez à cumuler des points dès votre première parenthèse.</Text>
             <View style={styles.ctaBtn}>
-              <Text style={styles.ctaBtnText}>S'inscrire gratuitement</Text>
+              <Text style={styles.ctaBtnText}>Commencer</Text>
               <ChevronRight size={16} color={colors.green} strokeWidth={2} />
             </View>
           </LinearGradient>
@@ -357,24 +395,59 @@ const styles = StyleSheet.create({
   cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
   clubLabel: { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 3, color: 'rgba(255,255,255,0.5)' },
   levelBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12 },
-  levelBadgeText: { fontFamily: fonts.bold, fontSize: 9, letterSpacing: 1.5, color: '#FFFFFF' },
+  levelBadgeText: { fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.5, color: '#FFFFFF' },
   cardName: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF', marginBottom: spacing.lg },
-  pointsRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs, marginBottom: spacing.md },
-  pointsValue: { fontFamily: fonts.monoSemiBold, fontSize: 40, color: '#FFFFFF' },
-  pointsUnit: { fontFamily: fonts.regular, fontSize: 16, color: 'rgba(255,255,255,0.7)' },
-  progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 2, marginBottom: spacing.sm },
-  progressFill: { height: 4, backgroundColor: '#FFFFFF', borderRadius: 2 },
-  progressLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  progressText: { fontFamily: fonts.regular, fontSize: 11, color: 'rgba(255,255,255,0.6)' },
-  progressPts: { fontFamily: fonts.bold, fontSize: 11, color: 'rgba(255,255,255,0.8)' },
-  sectionTitle: { fontFamily: fonts.bold, fontSize: 16, color: colors.text, paddingHorizontal: spacing.xl, marginBottom: spacing.md, marginTop: spacing.sm },
+  cardBodyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  pointsRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs, marginBottom: spacing.sm },
+  pointsValue: { fontFamily: fonts.monoSemiBold, fontSize: 38, color: '#FFFFFF' },
+  pointsUnit: { fontFamily: fonts.regular, fontSize: 15, color: 'rgba(255,255,255,0.7)' },
+  progressText: { fontFamily: fonts.regular, fontSize: 11, color: 'rgba(255,255,255,0.65)', marginBottom: 2 },
+  progressPts: { fontFamily: fonts.bold, fontSize: 11, color: 'rgba(255,255,255,0.85)' },
+  sectionTitle: { fontFamily: fonts.bold, fontSize: 16, color: colors.green, paddingHorizontal: spacing.xl, marginBottom: spacing.md, marginTop: spacing.sm },
   sectionHeader: { marginTop: spacing.md },
-  levelsGrid: { flexDirection: 'row', paddingHorizontal: spacing.xl, gap: spacing.sm, marginBottom: spacing.xxxl },
-  levelCard: { flex: 1, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: spacing.md, alignItems: 'center', ...shadows.subtle },
-  levelDot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
-  levelDotText: { fontFamily: fonts.bold, fontSize: 16 },
-  levelName: { fontFamily: fonts.bold, fontSize: 11, color: colors.text, marginBottom: 2 },
-  levelPts: { fontFamily: fonts.regular, fontSize: 9, color: colors.textMuted, textAlign: 'center' },
+  // Parcours vertical
+  levelsVertical: { paddingHorizontal: spacing.xl, marginBottom: spacing.xxxl, gap: 0 },
+  levelItemWrap: { position: 'relative', paddingLeft: 52 },
+  levelConnector: { position: 'absolute', left: 18, top: 50, bottom: -10, width: 2, borderRadius: 1 },
+  levelItemCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 10,
+    ...shadows.subtle,
+  },
+  levelItemLocked: { opacity: 0.65 },
+  levelItemLeft: {
+    position: 'absolute',
+    left: -38,
+    top: 14,
+    alignItems: 'center',
+    gap: 4,
+  },
+  levelDot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  activePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  activePillText: { fontFamily: fonts.bold, fontSize: 8, letterSpacing: 0.5 },
+  levelItemContent: { flex: 1 },
+  levelItemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 },
+  levelItemName: { fontFamily: fonts.bold, fontSize: 14, color: colors.text },
+  levelItemPts: { fontFamily: fonts.monoSemiBold, fontSize: 11 },
+  levelItemTagline: { fontFamily: fonts.regular, fontSize: 12, color: colors.textSecondary, lineHeight: 17, marginBottom: 8 },
+  levelBenefitsPreview: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 8 },
+  levelBenefitChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: colors.greenLight,
+  },
+  levelBenefitChipText: { fontFamily: fonts.bold, fontSize: 10 },
+  levelItemFooter: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  levelItemCta: { fontFamily: fonts.bold, fontSize: 11 },
   rewardsList: { paddingHorizontal: spacing.xl, gap: spacing.sm, marginBottom: spacing.xxxl },
   rewardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 14, ...shadows.subtle },
   rewardLocked: { opacity: 0.6 },
@@ -385,11 +458,6 @@ const styles = StyleSheet.create({
   rewardPts: { alignItems: 'flex-end' },
   rewardPtsValue: { fontFamily: fonts.monoSemiBold, fontSize: 16, color: colors.textMuted },
   rewardPtsLabel: { fontFamily: fonts.regular, fontSize: 10, color: colors.textMuted },
-  earnList: { paddingHorizontal: spacing.xl, gap: spacing.sm, marginBottom: spacing.xxxl },
-  earnRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 12 },
-  earnIconWrap: { width: 28, height: 28, borderRadius: 8, backgroundColor: colors.greenLight, alignItems: 'center', justifyContent: 'center' },
-  earnPts: { fontFamily: fonts.monoSemiBold, fontSize: 14, color: colors.green, minWidth: 55 },
-  earnAction: { fontFamily: fonts.regular, fontSize: 13, color: colors.textSecondary, flex: 1 },
   challengesList: { paddingHorizontal: spacing.xl, gap: spacing.sm, marginBottom: spacing.xxxl },
   challengeCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, ...shadows.subtle },
   challengeClaimed: { opacity: 0.6 },

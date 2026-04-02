@@ -162,34 +162,28 @@ export default function BlogScreen() {
         ))}
       </ScrollView>
 
-      {/* ──── Encart Newsletter ──── */}
+      {/* ──── Encart Newsletter compact ──── */}
       {newsletterSubscribed ? (
-        <View style={styles.newsletterCardSubscribed}>
-          <Mail size={14} color={colors.green} strokeWidth={1.8} />
-          <Text style={styles.newsletterSubscribedText}>✓ Abonné·e à Atmosphère</Text>
+        <View style={styles.newsletterStrip}>
+          <Mail size={13} color={colors.green} strokeWidth={1.8} />
+          <Text style={styles.newsletterStripText}>Abonné·e à Atmosphère</Text>
         </View>
       ) : (
-        <View style={styles.newsletterCardTop}>
-          <View style={styles.newsletterCardTopLeft}>
-            <View style={styles.newsletterCardTopIcon}>
-              <Mail size={20} color={colors.green} strokeWidth={1.8} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.newsletterCardTopTitle}>Rejoignez Atmosphère</Text>
-              <Text style={styles.newsletterCardTopSub}>
-                Articles, recettes et offres exclusives. Gagnez 25 points !
-              </Text>
-            </View>
+        <Pressable
+          style={styles.newsletterStrip}
+          onPress={() => setNewsletterModalVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel="S'inscrire à la newsletter Atmosphère"
+        >
+          <View style={styles.newsletterStripIcon}>
+            <Mail size={13} color={colors.green} strokeWidth={1.8} />
           </View>
-          <Pressable
-            style={styles.newsletterCardTopBtn}
-            onPress={() => setNewsletterModalVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="S'inscrire à la newsletter Atmosphère"
-          >
-            <Text style={styles.newsletterCardTopBtnText}>S'inscrire</Text>
-          </Pressable>
-        </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.newsletterStripTitle}>La lettre Atmosphère</Text>
+            <Text style={styles.newsletterStripSub}>Recettes, bien-être & 25 pts offerts</Text>
+          </View>
+          <Text style={styles.newsletterStripCta}>S'inscrire</Text>
+        </Pressable>
       )}
 
       {/* ──── Article à la une ──── */}
@@ -452,69 +446,49 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  // Newsletter card (top)
-  newsletterCardTop: {
+  // Newsletter strip compact
+  newsletterStrip: {
     marginHorizontal: spacing.xl,
     marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
-    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     ...shadows.subtle,
   },
-  newsletterCardTopLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  newsletterCardTopIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+  newsletterStripIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     backgroundColor: colors.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  newsletterCardTopTitle: {
+  newsletterStripTitle: {
     fontFamily: fonts.bold,
-    fontSize: 15,
+    fontSize: 13,
     color: colors.text,
-    marginBottom: 3,
+    marginBottom: 1,
   },
-  newsletterCardTopSub: {
+  newsletterStripSub: {
     fontFamily: fonts.regular,
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
-    lineHeight: 17,
   },
-  newsletterCardTopBtn: {
-    alignSelf: 'flex-end',
-    backgroundColor: colors.green,
-    borderRadius: 24,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  newsletterCardTopBtnText: {
+  newsletterStripText: {
     fontFamily: fonts.bold,
     fontSize: 13,
-    color: '#FFFFFF',
+    color: colors.green,
+    flex: 1,
   },
-  newsletterCardSubscribed: {
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.greenLight,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  newsletterSubscribedText: {
+  newsletterStripCta: {
     fontFamily: fonts.bold,
-    fontSize: 13,
+    fontSize: 12,
     color: colors.green,
   },
 

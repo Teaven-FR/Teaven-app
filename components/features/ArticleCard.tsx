@@ -1,5 +1,6 @@
-// Carte article blog — pour la section Atmosphère
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+// Carte article blog — scale 0.97 press feedback
+import { useRef, useCallback } from 'react';
+import { View, Text, Pressable, Animated, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
 import type { BlogArticle } from '@/lib/types';
@@ -10,19 +11,32 @@ interface ArticleCardProps {
 }
 
 export function ArticleCard({ article, onPress }: ArticleCardProps) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const useNative = Platform.OS !== 'web';
+
+  const handlePressIn = useCallback(() => {
+    Animated.spring(scale, { toValue: 0.97, damping: 15, stiffness: 300, useNativeDriver: useNative }).start();
+  }, [scale, useNative]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.spring(scale, { toValue: 1, damping: 15, stiffness: 300, useNativeDriver: useNative }).start();
+  }, [scale, useNative]);
+
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <Image
-        source={{ uri: article.imageUrl }}
-        style={styles.image}
-        contentFit="cover"
-        transition={300}
-      />
-      <View style={styles.content}>
-        <Text style={styles.category}>{article.category.toUpperCase()}</Text>
-        <Text style={styles.title} numberOfLines={2}>{article.title}</Text>
-        <Text style={styles.meta}>{article.readTime} min de lecture</Text>
-      </View>
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
+        <Image
+          source={{ uri: article.imageUrl }}
+          style={styles.image}
+          contentFit="cover"
+          transition={300}
+        />
+        <View style={styles.content}>
+          <Text style={styles.category}>{article.category.toUpperCase()}</Text>
+          <Text style={styles.title} numberOfLines={2}>{article.title}</Text>
+          <Text style={styles.meta}>{article.readTime} min de lecture</Text>
+        </View>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -33,9 +47,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     overflow: 'hidden',
     ...shadows.card,
-  },
-  pressed: {
-    opacity: 0.85,
   },
   image: {
     width: '100%',
