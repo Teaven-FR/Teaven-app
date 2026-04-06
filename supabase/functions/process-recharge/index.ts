@@ -15,7 +15,9 @@ const corsHeaders = {
 const SQUARE_VERSION = '2025-01-23';
 
 // Bonus de recharge (en centimes)
-function calculateBonus(amount: number): number {
+// Première recharge 20€ = 5€ offerts, sinon barème standard
+function calculateBonus(amount: number, isFirstRecharge: boolean): number {
+  if (isFirstRecharge && amount === 2000) return 500; // 20€ → +5€ offerts (première recharge)
   if (amount >= 10000) return Math.round(amount * 0.12); // 100€+ → 12%
   if (amount >= 5000) return Math.round(amount * 0.08);  // 50€+ → 8%
   if (amount >= 2000) return Math.round(amount * 0.05);  // 20€+ → 5%
@@ -88,27 +90,36 @@ serve(async (req) => {
       );
     }
 
-    // ── 2. Calculer le bonus ──
-    const bonus = calculateBonus(amount);
-    const totalCredit = amount + bonus;
-
-    // ── 3. Trouver ou créer la gift card du client ──
+    // ── 2. Trouver ou créer la gift card ──
     let giftCardId: string | null = null;
+    let isFirstRecharge = true;
 
+    // Essayer de lire le profil si authentifié
+    let profileData: { square_gift_card_id?: string; square_customer_id?: string } | null = null;
     if (authUser) {
-      // Chercher le gift_card_id existant
       const { data: profile } = await supabase
         .from('profiles')
         .select('square_gift_card_id, square_customer_id')
         .eq('id', authUser.id)
         .single();
-
+      profileData = profile;
       giftCardId = profile?.square_gift_card_id ?? null;
+      if (giftCardId) isFirstRecharge = false;
+    }
+
+    // Aussi accepter un giftCardId passé par le client
+    if (!giftCardId && body.giftCardId) {
+      giftCardId = body.giftCardId as string;
+      isFirstRecharge = false;
+    }
+
+    const bonus = calculateBonus(amount, isFirstRecharge);
+    const totalCredit = amount + bonus;
 
       // Si pas de gift card, chercher par customer_id dans Square
-      if (!giftCardId && profile?.square_customer_id) {
+      if (!giftCardId && profileData?.square_customer_id) {
         const searchRes = await fetch(
-          `${squareBaseUrl}/v2/gift-cards?customer_id=${profile.square_customer_id}`,
+          `${squareBaseUrl}/v2/gift-cards?customer_id=${profileData.square_customer_id}`,
           { headers: { 'Square-Version': SQUARE_VERSION, 'Authorization': `Bearer ${squareAccessToken}` } },
         );
         const searchData = await searchRes.json();
@@ -158,7 +169,7 @@ serve(async (req) => {
           });
 
           // Lier au customer si possible
-          if (profile?.square_customer_id) {
+          if (profileData?.square_customer_id) {
             await fetch(`${squareBaseUrl}/v2/gift-cards/${giftCardId}/link-customer`, {
               method: 'POST',
               headers: {
@@ -166,7 +177,7 @@ serve(async (req) => {
                 'Authorization': `Bearer ${squareAccessToken}`,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ customer_id: profile.square_customer_id }),
+              body: JSON.stringify({ customer_id: profileData.square_customer_id }),
             });
           }
         } else {
@@ -201,19 +212,20 @@ serve(async (req) => {
         }
       }
 
-      // ── 5. Mettre à jour Supabase ──
-      // Lire le vrai solde depuis Square
-      let newBalance = totalCredit;
-      if (giftCardId) {
-        const balRes = await fetch(`${squareBaseUrl}/v2/gift-cards/${giftCardId}`, {
-          headers: { 'Square-Version': SQUARE_VERSION, 'Authorization': `Bearer ${squareAccessToken}` },
-        });
-        const balData = await balRes.json();
-        if (balData.gift_card?.balance_money?.amount != null) {
-          newBalance = balData.gift_card.balance_money.amount;
-        }
+    // ── 5. Lire le vrai solde depuis Square ──
+    let newBalance = totalCredit;
+    if (giftCardId) {
+      const balRes = await fetch(`${squareBaseUrl}/v2/gift-cards/${giftCardId}`, {
+        headers: { 'Square-Version': SQUARE_VERSION, 'Authorization': `Bearer ${squareAccessToken}` },
+      });
+      const balData = await balRes.json();
+      if (balData.gift_card?.balance_money?.amount != null) {
+        newBalance = balData.gift_card.balance_money.amount;
       }
+    }
 
+    // ── 6. Mettre à jour Supabase si authentifié ──
+    if (authUser) {
       await supabase
         .from('profiles')
         .upsert({
@@ -222,23 +234,17 @@ serve(async (req) => {
           square_gift_card_id: giftCardId,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'id' });
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          paymentId: payData.payment?.id,
-          giftCardId,
-          bonus,
-          totalCredit,
-          newBalance,
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
     }
 
-    // Pas authentifié — juste le paiement
     return new Response(
-      JSON.stringify({ success: true, paymentId: payData.payment?.id, bonus: 0 }),
+      JSON.stringify({
+        success: true,
+        paymentId: payData.payment?.id,
+        giftCardId,
+        bonus,
+        totalCredit,
+        newBalance,
+      }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {

@@ -88,7 +88,7 @@ export default function RechargeScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ amount: string }>();
   const amount = parseInt(params.amount ?? '0', 10);
-  const { rechargeWallet } = useUser();
+  const { rechargeWallet, wallet } = useUser();
   const { showToast } = useToast();
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -111,7 +111,12 @@ export default function RechargeScreen() {
         bonus?: number;
         totalCredit?: number;
         newBalance?: number;
-      }>('process-recharge', { sourceId: data.nonce, amount });
+        giftCardId?: string;
+      }>('process-recharge', {
+        sourceId: data.nonce,
+        amount,
+        giftCardId: wallet.giftCardId ?? undefined,
+      });
 
       if (payResult.error || !payResult.data?.success) {
         setError(payResult.error ?? payResult.data?.error ?? 'Paiement refusé');
@@ -119,14 +124,17 @@ export default function RechargeScreen() {
         return;
       }
 
-      // Utiliser le solde réel retourné par Square (inclut le bonus)
       const credited = payResult.data.totalCredit ?? amount;
       const bonus = payResult.data.bonus ?? 0;
-      if (payResult.data.newBalance != null) {
-        // Mettre à jour le store avec le vrai solde Square
-        const { setUser } = useAuthStore.getState();
-        const current = useAuthStore.getState().user;
-        if (current) setUser({ ...current, walletBalance: payResult.data.newBalance });
+      // Mettre à jour le store avec le vrai solde Square + giftCardId
+      const { setUser } = useAuthStore.getState();
+      const current = useAuthStore.getState().user;
+      if (current) {
+        setUser({
+          ...current,
+          walletBalance: payResult.data.newBalance ?? (current.walletBalance + credited),
+          ...(payResult.data.giftCardId ? { squareGiftCardId: payResult.data.giftCardId } : {}),
+        });
       } else {
         rechargeWallet(credited);
       }
