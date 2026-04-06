@@ -14,6 +14,7 @@ import type { WebViewMessageEvent } from 'react-native-webview';
 import { ArrowLeft, Shield, Wallet, AlertCircle } from 'lucide-react-native';
 import { callEdgeFunction } from '@/lib/square';
 import { useUser } from '@/hooks/useUser';
+import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/contexts/ToastContext';
 import { colors, fonts, spacing } from '@/constants/theme';
 
@@ -104,10 +105,13 @@ export default function RechargeScreen() {
       setIsProcessing(true);
       setError(null);
 
-      const payResult = await callEdgeFunction<{ success: boolean; error?: string }>(
-        'process-recharge',
-        { sourceId: data.nonce, amount },
-      );
+      const payResult = await callEdgeFunction<{
+        success: boolean;
+        error?: string;
+        bonus?: number;
+        totalCredit?: number;
+        newBalance?: number;
+      }>('process-recharge', { sourceId: data.nonce, amount });
 
       if (payResult.error || !payResult.data?.success) {
         setError(payResult.error ?? payResult.data?.error ?? 'Paiement refusé');
@@ -115,8 +119,20 @@ export default function RechargeScreen() {
         return;
       }
 
-      rechargeWallet(amount);
-      showToast(`+${fmt(amount)} crédités sur votre wallet !`);
+      // Utiliser le solde réel retourné par Square (inclut le bonus)
+      const credited = payResult.data.totalCredit ?? amount;
+      const bonus = payResult.data.bonus ?? 0;
+      if (payResult.data.newBalance != null) {
+        // Mettre à jour le store avec le vrai solde Square
+        const { setUser } = useAuthStore.getState();
+        const current = useAuthStore.getState().user;
+        if (current) setUser({ ...current, walletBalance: payResult.data.newBalance });
+      } else {
+        rechargeWallet(credited);
+      }
+      showToast(bonus > 0
+        ? `${fmt(credited)} crédités (dont ${fmt(bonus)} offerts) !`
+        : `${fmt(credited)} crédités sur votre wallet !`);
       router.back();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur');
