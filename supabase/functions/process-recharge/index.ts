@@ -1,8 +1,8 @@
 // Edge Function — Recharge wallet Teaven
-// 1. Paiement carte via Square Payments API
-// 2. Trouver ou créer la gift card du client
-// 3. Créditer la gift card (montant + bonus)
-// 4. Mettre à jour le solde dans Supabase
+// 1. Paiement carte via Square
+// 2. Calculer le bonus
+// 3. Créditer Supabase wallet_balance (source de vérité)
+// 4. Si gift card active existe → créditer aussi côté Square
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -12,15 +12,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SQUARE_VERSION = '2025-01-23';
-
-// Bonus de recharge (en centimes)
-// Première recharge 20€ = 5€ offerts, sinon barème standard
-function calculateBonus(amount: number, isFirstRecharge: boolean): number {
-  if (isFirstRecharge && amount === 2000) return 500; // 20€ → +5€ offerts (première recharge)
-  if (amount >= 10000) return Math.round(amount * 0.12); // 100€+ → 12%
-  if (amount >= 5000) return Math.round(amount * 0.08);  // 50€+ → 8%
-  if (amount >= 2000) return Math.round(amount * 0.05);  // 20€+ → 5%
+// Bonus de recharge
+function calculateBonus(amount: number, isFirst: boolean): number {
+  if (isFirst && amount === 2000) return 500; // Première recharge 20€ → +5€
+  if (amount >= 10000) return Math.round(amount * 0.12);
+  if (amount >= 5000) return Math.round(amount * 0.08);
+  if (amount >= 2000) return Math.round(amount * 0.05);
   return 0;
 }
 
@@ -46,7 +43,7 @@ serve(async (req) => {
 
     if (!sourceId || !amount || amount <= 0 || amount > 50000) {
       return new Response(
-        JSON.stringify({ error: 'sourceId et amount (100-50000 centimes) requis' }),
+        JSON.stringify({ error: 'sourceId et amount requis' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -58,17 +55,11 @@ serve(async (req) => {
       : 'https://connect.squareupsandbox.com';
     const locationId = Deno.env.get('SQUARE_LOCATION_ID')!;
 
-    const authUser = await authenticateUser(req);
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
-
-    // ── 1. Paiement carte Square ──
+    // ── 1. Paiement carte ──
     const payRes = await fetch(`${squareBaseUrl}/v2/payments`, {
       method: 'POST',
       headers: {
-        'Square-Version': SQUARE_VERSION,
+        'Square-Version': '2025-01-23',
         'Authorization': `Bearer ${squareAccessToken}`,
         'Content-Type': 'application/json',
       },
@@ -81,7 +72,6 @@ serve(async (req) => {
         note: 'Recharge portefeuille Teaven',
       }),
     });
-
     const payData = await payRes.json();
     if (!payRes.ok) {
       return new Response(
@@ -90,157 +80,84 @@ serve(async (req) => {
       );
     }
 
-    // ── 2. Trouver ou créer la gift card ──
-    let giftCardId: string | null = null;
-    let isFirstRecharge = true;
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
 
-    // Essayer de lire le profil si authentifié
-    let profileData: { square_gift_card_id?: string; square_customer_id?: string } | null = null;
+    // ── 2. Calculer le bonus ──
+    const authUser = await authenticateUser(req);
+    let currentBalance = 0;
+    let isFirst = true;
+
     if (authUser) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('square_gift_card_id, square_customer_id')
+        .select('wallet_balance, square_gift_card_id')
         .eq('id', authUser.id)
         .single();
-      profileData = profile;
-      giftCardId = profile?.square_gift_card_id ?? null;
-      if (giftCardId) isFirstRecharge = false;
+      currentBalance = profile?.wallet_balance ?? 0;
+      if (currentBalance > 0 || profile?.square_gift_card_id) isFirst = false;
     }
 
-    // Aussi accepter un giftCardId passé par le client
-    if (!giftCardId && body.giftCardId) {
-      giftCardId = body.giftCardId as string;
-      isFirstRecharge = false;
-    }
-
-    const bonus = calculateBonus(amount, isFirstRecharge);
+    const bonus = calculateBonus(amount, isFirst);
     const totalCredit = amount + bonus;
+    const newBalance = currentBalance + totalCredit;
 
-      // Si pas de gift card, chercher par customer_id dans Square
-      if (!giftCardId && profileData?.square_customer_id) {
-        const searchRes = await fetch(
-          `${squareBaseUrl}/v2/gift-cards?customer_id=${profileData.square_customer_id}`,
-          { headers: { 'Square-Version': SQUARE_VERSION, 'Authorization': `Bearer ${squareAccessToken}` } },
-        );
-        const searchData = await searchRes.json();
-        if (searchData.gift_cards?.length > 0) {
-          giftCardId = searchData.gift_cards[0].id;
-        }
-      }
-
-      // Si toujours pas de gift card, en créer une
-      if (!giftCardId) {
-        const createRes = await fetch(`${squareBaseUrl}/v2/gift-cards`, {
-          method: 'POST',
-          headers: {
-            'Square-Version': SQUARE_VERSION,
-            'Authorization': `Bearer ${squareAccessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            idempotency_key: crypto.randomUUID(),
-            location_id: locationId,
-            type: 'DIGITAL',
-          }),
-        });
-        const createData = await createRes.json();
-        if (createRes.ok && createData.gift_card) {
-          giftCardId = createData.gift_card.id;
-
-          // Activer la gift card
-          await fetch(`${squareBaseUrl}/v2/gift-cards/${giftCardId}/activities`, {
-            method: 'POST',
-            headers: {
-              'Square-Version': SQUARE_VERSION,
-              'Authorization': `Bearer ${squareAccessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              idempotency_key: crypto.randomUUID(),
-              gift_card_activity: {
-                gift_card_id: giftCardId,
-                type: 'ACTIVATE',
-                location_id: locationId,
-                activate_activity_details: {
-                  amount_money: { amount: 0, currency: 'EUR' },
-                },
-              },
-            }),
-          });
-
-          // Lier au customer si possible
-          if (profileData?.square_customer_id) {
-            await fetch(`${squareBaseUrl}/v2/gift-cards/${giftCardId}/link-customer`, {
-              method: 'POST',
-              headers: {
-                'Square-Version': SQUARE_VERSION,
-                'Authorization': `Bearer ${squareAccessToken}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ customer_id: profileData.square_customer_id }),
-            });
-          }
-        } else {
-          console.error('Gift card creation failed:', createData);
-        }
-      }
-
-      // ── 4. Créditer la gift card (montant + bonus) ──
-      if (giftCardId) {
-        const loadRes = await fetch(`${squareBaseUrl}/v2/gift-cards/${giftCardId}/activities`, {
-          method: 'POST',
-          headers: {
-            'Square-Version': SQUARE_VERSION,
-            'Authorization': `Bearer ${squareAccessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            idempotency_key: crypto.randomUUID(),
-            gift_card_activity: {
-              gift_card_id: giftCardId,
-              type: 'LOAD',
-              location_id: locationId,
-              load_activity_details: {
-                amount_money: { amount: totalCredit, currency: 'EUR' },
-              },
-            },
-          }),
-        });
-        const loadData = await loadRes.json();
-        if (!loadRes.ok) {
-          console.error('Gift card LOAD failed:', loadData);
-        }
-      }
-
-    // ── 5. Lire le vrai solde depuis Square ──
-    let newBalance = totalCredit;
-    if (giftCardId) {
-      const balRes = await fetch(`${squareBaseUrl}/v2/gift-cards/${giftCardId}`, {
-        headers: { 'Square-Version': SQUARE_VERSION, 'Authorization': `Bearer ${squareAccessToken}` },
-      });
-      const balData = await balRes.json();
-      if (balData.gift_card?.balance_money?.amount != null) {
-        newBalance = balData.gift_card.balance_money.amount;
-      }
-    }
-
-    // ── 6. Mettre à jour Supabase si authentifié ──
+    // ── 3. Créditer Supabase (source de vérité) ──
     if (authUser) {
       await supabase
         .from('profiles')
         .upsert({
           id: authUser.id,
           wallet_balance: newBalance,
-          square_gift_card_id: giftCardId,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'id' });
+    }
+
+    // ── 4. Sync gift card Square si active ──
+    // En production Square, on ne peut pas créer de gift card sans transaction liée.
+    // Si le client a déjà une gift card active, on la crédite via ADJUST_INCREMENT.
+    // Sinon, le solde reste dans Supabase uniquement.
+    if (authUser) {
+      const { data: profileGc } = await supabase
+        .from('profiles')
+        .select('square_gift_card_id')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profileGc?.square_gift_card_id) {
+        try {
+          await fetch(`${squareBaseUrl}/v2/gift-cards/activities`, {
+            method: 'POST',
+            headers: {
+              'Square-Version': '2025-01-23',
+              'Authorization': `Bearer ${squareAccessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              idempotency_key: crypto.randomUUID(),
+              gift_card_activity: {
+                gift_card_id: profileGc.square_gift_card_id,
+                type: 'ADJUST_INCREMENT',
+                location_id: locationId,
+                adjust_increment_activity_details: {
+                  amount_money: { amount: totalCredit, currency: 'EUR' },
+                  reason: 'COMPLIMENTARY',
+                },
+              },
+            }),
+          });
+        } catch {
+          // Non bloquant — Supabase est la source de vérité
+        }
+      }
     }
 
     return new Response(
       JSON.stringify({
         success: true,
         paymentId: payData.payment?.id,
-        giftCardId,
         bonus,
         totalCredit,
         newBalance,

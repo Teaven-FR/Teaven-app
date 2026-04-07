@@ -88,81 +88,15 @@ serve(async (req) => {
 
     switch (action) {
       case 'balance': {
+        // Supabase est la source de vérité pour le solde wallet
         const { data: profile } = await supabase
           .from('profiles')
-          .select('wallet_balance, square_customer_id, square_gift_card_id')
+          .select('wallet_balance, square_gift_card_id')
           .eq('id', userId)
           .single();
 
-        let balance = profile?.wallet_balance ?? 0;
-        let giftCardIdFound = profile?.square_gift_card_id ?? null;
-
-        if (SQUARE_ACCESS_TOKEN) {
-          try {
-            let giftCards: Record<string, unknown>[] = [];
-
-            // 1. Chercher par customer_id si disponible
-            if (profile?.square_customer_id) {
-              const res = await fetch(
-                `${SQUARE_BASE_URL}/v2/gift-cards?customer_id=${profile.square_customer_id}`,
-                {
-                  headers: {
-                    'Square-Version': SQUARE_VERSION,
-                    'Authorization': `Bearer ${SQUARE_ACCESS_TOKEN}`,
-                  },
-                },
-              );
-              const data = await res.json();
-              if (data.gift_cards) giftCards = data.gift_cards;
-            }
-
-            // 2. Si pas trouvé par customer_id, chercher par téléphone
-            if (giftCards.length === 0 && authUser.phone) {
-              let phone = authUser.phone;
-              if (!phone.startsWith('+')) phone = '+' + phone;
-
-              const searchRes = await fetch(`${SQUARE_BASE_URL}/v2/gift-cards/from-nonce`, {
-                method: 'POST',
-                headers: {
-                  'Square-Version': SQUARE_VERSION,
-                  'Authorization': `Bearer ${SQUARE_ACCESS_TOKEN}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ nonce: phone }),
-              });
-              // from-nonce ne marche pas pour téléphone — utiliser list avec filtre
-              // Square ne supporte pas le search par téléphone directement
-              // On garde le fallback Supabase
-              void searchRes;
-            }
-
-            // 3. Calculer le solde total de toutes les gift cards
-            if (giftCards.length > 0) {
-              const totalBalance = giftCards.reduce(
-                (sum: number, gc) => {
-                  const balanceMoney = gc.balance_money as Record<string, unknown> | undefined;
-                  return sum + ((balanceMoney?.amount as number) ?? 0);
-                },
-                0,
-              );
-              balance = totalBalance;
-              // Stocker le premier gift card ID pour les paiements wallet
-              giftCardIdFound = (giftCards[0].id as string) ?? giftCardIdFound;
-
-              // Sync dans Supabase
-              await supabase
-                .from('profiles')
-                .update({
-                  wallet_balance: balance,
-                  square_gift_card_id: giftCardIdFound,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', userId);
-            }
-          } catch (err) {
-            console.error('[manage-wallet] Erreur Square Gift Cards:', err);
-          }
-        }
+        const balance = profile?.wallet_balance ?? 0;
+        const giftCardIdFound = profile?.square_gift_card_id ?? null;
 
         return new Response(
           JSON.stringify({ success: true, balance, giftCardId: giftCardIdFound }),
