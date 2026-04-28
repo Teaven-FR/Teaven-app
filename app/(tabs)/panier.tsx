@@ -34,6 +34,7 @@ import {
   Calendar,
 } from 'lucide-react-native';
 import { TextInput } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { RechargeModal } from '@/components/ui/RechargeModal';
 import TimeSlotPicker from '@/components/ui/TimeSlotPicker';
@@ -48,7 +49,7 @@ import { useCartStore } from '@/stores/cartStore';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/constants/config';
 import type { TimeSlot as PickerTimeSlot } from '@/components/ui/TimeSlotPicker';
-import type { Reward } from '@/lib/types';
+import type { Reward, Address } from '@/lib/types';
 
 // Codes promo valides — à déplacer dans Supabase plus tard
 const PROMO_CODES: Record<string, { type: 'percent' | 'fixed'; value: number; label: string; description: string }> = {
@@ -70,13 +71,19 @@ function calcPromoDiscount(
 
 // Récompenses-panier supprimées — seuls les paliers fidélité comptent (les points ne font que monter)
 
-function buildPickerSlots(openHour?: number, closeHour?: number, tomorrow = false): PickerTimeSlot[] {
+function buildPickerSlots(
+  openHour?: number,
+  closeHour?: number,
+  tomorrow = false,
+  openMinute = 0,
+  closeMinute = 0,
+): PickerTimeSlot[] {
   const oh = openHour ?? 9;
   const ch = closeHour ?? 20;
   const slots = tomorrow
-    ? getTomorrowTimeSlots(oh, ch)
+    ? getTomorrowTimeSlots(oh, ch, openMinute, closeMinute)
     : (openHour != null && closeHour != null)
-      ? getTimeSlotsWithHours(openHour, closeHour)
+      ? getTimeSlotsWithHours(openHour, closeHour, openMinute, closeMinute)
       : getFreshTimeSlots();
   return slots.map((slot) => ({
     id: slot.id,
@@ -126,7 +133,7 @@ export default function PanierScreen() {
 
   // Récompenses-panier supprimées — points ne font que monter
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('asap');
-  const [businessHours, setBusinessHours] = useState<{ open: number; close: number } | null>(null);
+  const [businessHours, setBusinessHours] = useState<{ open: number; close: number; openMinute: number; closeMinute: number } | null>(null);
   const [isClosed, setIsClosed] = useState(false);
   const [closedDays, setClosedDays] = useState<number[]>([]); // 0=dim, 1=lun, ...
   useEffect(() => {
@@ -137,9 +144,14 @@ export default function PanierScreen() {
       .then((data) => {
         if (data.closed) {
           setIsClosed(true);
-          setBusinessHours({ open: 9, close: 20 });
+          setBusinessHours({ open: 9, close: 20, openMinute: 0, closeMinute: 0 });
         } else if (data.open != null && data.close != null) {
-          setBusinessHours({ open: data.open, close: data.close });
+          setBusinessHours({
+            open: data.open,
+            close: data.close,
+            openMinute: data.openMinute ?? 0,
+            closeMinute: data.closeMinute ?? 0,
+          });
           setIsClosed(false);
         }
         // Jours fermés depuis le planning semaine
@@ -168,16 +180,44 @@ export default function PanierScreen() {
   const [addressSuggestions, setAddressSuggestions] = useState<Array<{ place_id: string; description: string; main_text: string; secondary_text: string }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const addressSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Adresses sauvegardées
+  const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
+  useEffect(() => {
+    AsyncStorage.getItem('@teaven/addresses').then((raw) => {
+      if (raw) try { setSavedAddresses(JSON.parse(raw)); } catch {}
+    });
+  }, []);
+  const selectSavedAddress = (addr: Address) => {
+    setDeliveryAddress(addr.street);
+    setDeliveryCity(addr.city);
+    setDeliveryPostal(addr.postalCode);
+    if (addr.lat) setDeliveryLat(addr.lat);
+    if (addr.lng) setDeliveryLng(addr.lng);
+    setAddressQuery('');
+    setShowSuggestions(false);
+  };
   // rewardsExpanded supprimé — plus de récompenses dans le panier
   // Auto-switch to tomorrow if no slots available today
-  const todaySlots = buildPickerSlots(businessHours?.open, businessHours?.close, false);
+  const todaySlots = buildPickerSlots(
+    businessHours?.open,
+    businessHours?.close,
+    false,
+    businessHours?.openMinute ?? 0,
+    businessHours?.closeMinute ?? 0,
+  );
   const hasTodaySlots = todaySlots.some((s) => s.available);
   const [pickupDayOffset, setPickupDayOffset] = useState(0);
   const autoTomorrow = !hasTodaySlots && pickupDayOffset === 0;
   const effectiveDayOffset = autoTomorrow ? 1 : pickupDayOffset;
   const pickerSlots = effectiveDayOffset === 0
     ? todaySlots
-    : buildPickerSlots(businessHours?.open, businessHours?.close, true).filter((s) => !s.isAsap);
+    : buildPickerSlots(
+        businessHours?.open,
+        businessHours?.close,
+        true,
+        businessHours?.openMinute ?? 0,
+        businessHours?.closeMinute ?? 0,
+      ).filter((s) => !s.isAsap);
   const DELIVERY_FEE = 490; // 4,90€ en centimes (placeholder Uber Direct)
   const createOrder = useOrderStore((s) => s.createOrder);
   const orderHistory = useOrderStore((s) => s.orderHistory ?? []);
@@ -294,6 +334,56 @@ export default function PanierScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 20 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* ──── FIDÉLITÉ (mini-carte en haut) ──── */}
+        {(() => {
+          const THEMES: Record<string, { gradient: readonly [string, string, string]; text: string; sub: string; prog: string; track: string }> = {
+            'Première Parenthèse': { gradient: ['#F7F4ED', '#EDE8D8', '#E4DFC8'], text: '#2C3A2E', sub: '#738478', prog: '#75967F', track: 'rgba(117,150,127,0.15)' },
+            'Habitude':            { gradient: ['#E8EDDF', '#D8E5D2', '#C8DCCA'], text: '#1E3022', sub: '#4A6B50', prog: '#5B7A65', track: 'rgba(117,150,127,0.18)' },
+            'Rituel':              { gradient: ['#C2D8C6', '#A8C8AE', '#8EB898'], text: '#1A2E1E', sub: '#2C4A32', prog: '#2C4A32', track: 'rgba(255,255,255,0.3)' },
+            'Sérénité':            { gradient: ['#75967F', '#5B7A65', '#4A6B50'], text: '#FFFFFF', sub: 'rgba(255,255,255,0.75)', prog: '#FFFFFF', track: 'rgba(255,255,255,0.2)' },
+            'Essentia':            { gradient: ['#3A5A3E', '#2C4A32', '#1A2E1E'], text: '#FFFFFF', sub: 'rgba(255,255,255,0.7)', prog: 'rgba(255,255,255,0.9)', track: 'rgba(255,255,255,0.12)' },
+          };
+          const t = THEMES[loyalty.level] ?? THEMES['Première Parenthèse'];
+          const circR = 18;
+          const circC = 2 * Math.PI * circR;
+          return (
+            <Pressable onPress={() => router.push('/fidelite')} style={styles.loyaltyWrap}>
+              <LinearGradient
+                colors={t.gradient as [string, string, string]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.loyaltyCard}
+              >
+                <View style={styles.loyaltyLeft}>
+                  <View style={styles.loyaltyCircleWrap}>
+                    <Svg width={42} height={42} viewBox="0 0 42 42">
+                      <SvgCircle cx={21} cy={21} r={circR} stroke={t.track} strokeWidth={2.5} fill="none" />
+                      <SvgCircle
+                        cx={21} cy={21} r={circR}
+                        stroke={t.prog}
+                        strokeWidth={2.5}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeDasharray={`${circC}`}
+                        strokeDashoffset={`${circC * (1 - loyalty.progressPercent / 100)}`}
+                        transform="rotate(-90 21 21)"
+                      />
+                    </Svg>
+                    <Star size={14} color={t.prog} fill={t.prog} strokeWidth={0} style={{ position: 'absolute' }} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.loyaltyTitle, { color: t.text }]}>{loyalty.level}</Text>
+                    <Text style={[styles.loyaltyBalance, { color: t.sub }]}>
+                      {loyalty.points.toLocaleString('fr-FR')} pts · {loyalty.nextReward}
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={16} color={t.sub} strokeWidth={1.5} />
+              </LinearGradient>
+            </Pressable>
+          );
+        })()}
+
         {/* ──── ARTICLES ──── */}
         <Text style={styles.sectionLabel}>ARTICLES</Text>
         <View style={styles.section}>
@@ -308,7 +398,7 @@ export default function PanierScreen() {
                   placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
                 />
                 <View style={styles.articleInfo}>
-                  <Text style={styles.articleName}>{item.product.name}</Text>
+                  <Text style={styles.articleName} numberOfLines={2}>{item.product.name}</Text>
                   <Text style={styles.articlePrice}>
                     {formatPrice(item.product.price)}
                   </Text>
@@ -527,7 +617,37 @@ export default function PanierScreen() {
             {/* Adresse : état vide ou rempli */}
             {deliveryAddress.length === 0 ? (
               <View style={styles.addressSection}>
-                {/* Champ recherche proéminent */}
+                {/* Adresses sauvegardées */}
+                {savedAddresses.length > 0 && (
+                  <View style={styles.savedAddressesWrap}>
+                    <Text style={styles.savedAddressesLabel}>MES ADRESSES</Text>
+                    {savedAddresses.map((addr) => {
+                      const Icon = addr.label === 'Bureau' ? Truck : Home;
+                      return (
+                        <Pressable
+                          key={addr.id}
+                          style={styles.savedAddressRow}
+                          onPress={() => selectSavedAddress(addr)}
+                        >
+                          <View style={styles.savedAddressIcon}>
+                            <Icon size={14} color={colors.green} strokeWidth={1.5} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.savedAddressName}>{addr.label}</Text>
+                            <Text style={styles.savedAddressStreet} numberOfLines={1}>{addr.street}, {addr.postalCode} {addr.city}</Text>
+                          </View>
+                          {addr.isDefault && (
+                            <View style={styles.savedAddressDefault}>
+                              <Text style={styles.savedAddressDefaultText}>Par défaut</Text>
+                            </View>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Champ recherche */}
                 <Pressable style={styles.addressSearchCard}>
                   <View style={styles.addressSearchIcon}>
                     <MapPin size={18} color={colors.green} strokeWidth={1.5} />
@@ -614,57 +734,6 @@ export default function PanierScreen() {
             />
           </View>
         )}
-
-        {/* ──── FIDÉLITÉ ──── */}
-        {(() => {
-          const THEMES: Record<string, { gradient: readonly [string, string, string]; text: string; sub: string; prog: string; track: string }> = {
-            'Première Parenthèse': { gradient: ['#F7F4ED', '#EDE8D8', '#E4DFC8'], text: '#2C3A2E', sub: '#738478', prog: '#75967F', track: 'rgba(117,150,127,0.15)' },
-            'Habitude':            { gradient: ['#E8EDDF', '#D8E5D2', '#C8DCCA'], text: '#1E3022', sub: '#4A6B50', prog: '#5B7A65', track: 'rgba(117,150,127,0.18)' },
-            'Rituel':              { gradient: ['#C2D8C6', '#A8C8AE', '#8EB898'], text: '#1A2E1E', sub: '#2C4A32', prog: '#2C4A32', track: 'rgba(255,255,255,0.3)' },
-            'Sérénité':            { gradient: ['#75967F', '#5B7A65', '#4A6B50'], text: '#FFFFFF', sub: 'rgba(255,255,255,0.75)', prog: '#FFFFFF', track: 'rgba(255,255,255,0.2)' },
-            'Essentia':            { gradient: ['#3A5A3E', '#2C4A32', '#1A2E1E'], text: '#FFFFFF', sub: 'rgba(255,255,255,0.7)', prog: 'rgba(255,255,255,0.9)', track: 'rgba(255,255,255,0.12)' },
-          };
-          const t = THEMES[loyalty.level] ?? THEMES['Première Parenthèse'];
-          const circR = 18;
-          const circC = 2 * Math.PI * circR;
-          return (
-            <Pressable onPress={() => router.push('/fidelite')} style={styles.loyaltyWrap}>
-              <LinearGradient
-                colors={t.gradient as [string, string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.loyaltyCard}
-              >
-                <View style={styles.loyaltyLeft}>
-                  {/* Mini-cercle progression */}
-                  <View style={styles.loyaltyCircleWrap}>
-                    <Svg width={42} height={42} viewBox="0 0 42 42">
-                      <SvgCircle cx={21} cy={21} r={circR} stroke={t.track} strokeWidth={2.5} fill="none" />
-                      <SvgCircle
-                        cx={21} cy={21} r={circR}
-                        stroke={t.prog}
-                        strokeWidth={2.5}
-                        fill="none"
-                        strokeLinecap="round"
-                        strokeDasharray={`${circC}`}
-                        strokeDashoffset={`${circC * (1 - loyalty.progressPercent / 100)}`}
-                        transform="rotate(-90 21 21)"
-                      />
-                    </Svg>
-                    <Star size={14} color={t.prog} fill={t.prog} strokeWidth={0} style={{ position: 'absolute' }} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.loyaltyTitle, { color: t.text }]}>{loyalty.level}</Text>
-                    <Text style={[styles.loyaltyBalance, { color: t.sub }]}>
-                      {loyalty.points.toLocaleString('fr-FR')} pts · {loyalty.nextReward}
-                    </Text>
-                  </View>
-                </View>
-                <ChevronRight size={16} color={t.sub} strokeWidth={1.5} />
-              </LinearGradient>
-            </Pressable>
-          );
-        })()}
 
         {/* ──── CODE PROMO ──── */}
         <Text style={styles.sectionLabel}>CODE PROMO</Text>
@@ -765,7 +834,14 @@ export default function PanierScreen() {
           style={styles.walletMiniWrap}
           onPress={() => {
             if (wallet.balance >= total) {
-              router.push({ pathname: '/checkout', params: { total: String(total) } });
+              router.push({ pathname: '/checkout', params: {
+                total: String(total),
+                ...(deliveryMode === 'delivery' ? {
+                  deliveryMode: 'delivery',
+                  deliveryAddress: JSON.stringify({ street: deliveryAddress, city: deliveryCity, postalCode: deliveryPostal, complement: deliveryComplement, lat: deliveryLat, lng: deliveryLng }),
+                  deliveryFee: String(DELIVERY_FEE),
+                } : {}),
+              } });
             } else {
               setRechargeVisible(true);
             }
@@ -837,8 +913,12 @@ export default function PanierScreen() {
               params: {
                 total: String(total),
                 pickupTime: pickupISO,
-                // Rewards supprimés du panier
                 ...(checkoutDiscounts.length > 0 ? { discounts: JSON.stringify(checkoutDiscounts) } : {}),
+                ...(deliveryMode === 'delivery' ? {
+                  deliveryMode: 'delivery',
+                  deliveryAddress: JSON.stringify({ street: deliveryAddress, city: deliveryCity, postalCode: deliveryPostal, complement: deliveryComplement, lat: deliveryLat, lng: deliveryLng }),
+                  deliveryFee: String(DELIVERY_FEE),
+                } : {}),
               },
             });
           }}
@@ -930,25 +1010,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: 10,
+    borderRadius: 16,
+    padding: 12,
     paddingRight: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.03)',
+    minHeight: 80,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   articleImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F0',
   },
   articleInfo: {
     flex: 1,
     marginLeft: spacing.md,
+    justifyContent: 'center',
   },
   articleName: {
     fontFamily: fonts.bold,
     fontSize: 13.5,
     color: colors.text,
+    lineHeight: 18,
   },
   articlePrice: {
     fontFamily: fonts.mono,
@@ -1562,6 +1649,59 @@ const styles = StyleSheet.create({
   addressSection: {
     gap: 10,
     marginBottom: 12,
+  },
+  savedAddressesWrap: {
+    gap: 6,
+    marginBottom: 4,
+  },
+  savedAddressesLabel: {
+    fontFamily: fonts.bold,
+    fontSize: 9,
+    letterSpacing: 2,
+    color: colors.textMuted,
+    marginBottom: 4,
+  },
+  savedAddressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  savedAddressIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(117,150,127,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savedAddressName: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.text,
+  },
+  savedAddressStreet: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  savedAddressDefault: {
+    backgroundColor: colors.greenLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  savedAddressDefaultText: {
+    fontFamily: fonts.bold,
+    fontSize: 8,
+    color: colors.green,
+    letterSpacing: 0.5,
   },
   addressSearchCard: {
     flexDirection: 'row',

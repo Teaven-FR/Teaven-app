@@ -1,5 +1,6 @@
-// Écran Mes adresses — gestion locale avec add/delete/default
-import { useState, useRef } from 'react';
+// Écran Mes adresses — gestion locale persistée dans AsyncStorage
+import { useState, useRef, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -34,6 +35,18 @@ export default function AdressesScreen() {
 
   const [addresses, setAddresses] = useState<Address[]>(INITIAL_ADDRESSES);
   const [modalVisible, setModalVisible] = useState(false);
+
+  // Charger les adresses au montage
+  useEffect(() => {
+    AsyncStorage.getItem('@teaven/addresses').then((raw) => {
+      if (raw) try { setAddresses(JSON.parse(raw)); } catch {}
+    });
+  }, []);
+
+  // Sauvegarder à chaque modification
+  useEffect(() => {
+    AsyncStorage.setItem('@teaven/addresses', JSON.stringify(addresses));
+  }, [addresses]);
 
   // Champs du formulaire
   const [formLabel, setFormLabel] = useState('');
