@@ -68,13 +68,21 @@ serve(async (req) => {
     }
 
     // Déterminer la source de paiement
-    const isCardPayment = sourceId && sourceId.startsWith('cnon');
-    const isWalletPayment = paymentMethod === 'wallet' && giftCardId;
+    const isCardPayment = !!(sourceId && sourceId.startsWith('cnon'));
+    const isWalletPayment = paymentMethod === 'wallet';
 
     if (!isCardPayment && !isWalletPayment) {
       return new Response(
         JSON.stringify({ error: 'Un moyen de paiement valide est requis (carte ou wallet)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // Wallet : requiert auth (pas de guest) — source de vérité = Square Gift Cards
+    if (isWalletPayment && !authUser) {
+      return new Response(
+        JSON.stringify({ error: 'Connexion requise pour payer avec le portefeuille' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
@@ -146,21 +154,109 @@ serve(async (req) => {
       paymentData = await paymentResponse.json();
 
       if (!paymentResponse.ok) {
-        console.error('Square payment error:', paymentData);
-        const errDetail = (paymentData as { errors?: Array<{ detail?: string }> }).errors?.[0]?.detail;
-        const friendlyMsg = errDetail?.includes('declined') || errDetail?.includes('refus')
-          ? 'Paiement refusé. Vérifiez vos informations ou essayez un autre moyen.'
-          : errDetail?.includes('network') || errDetail?.includes('timeout')
-          ? 'Erreur de connexion. Votre carte n\'a pas été débitée. Réessayez.'
-          : 'Échec du paiement';
+        console.error('[process-payment] Square card payment error', {
+          status: paymentResponse.status,
+          sourceIdPrefix: sourceId?.slice(0, 8),
+          orderId,
+          amount: netAmount,
+          errors: paymentData?.errors,
+        });
+        const errs = (paymentData as { errors?: Array<{ code?: string; detail?: string; category?: string; field?: string }> }).errors ?? [];
+        const firstErr = errs[0];
+        const errDetail = firstErr?.detail ?? '';
+        const errCode = firstErr?.code ?? '';
+        let friendlyMsg: string;
+        if (errCode === 'CARD_DECLINED' || /declined|refus/i.test(errDetail)) {
+          friendlyMsg = 'Paiement refusé. Vérifiez vos informations ou essayez un autre moyen.';
+        } else if (errCode === 'CVV_FAILURE' || /cvv/i.test(errDetail)) {
+          friendlyMsg = 'Code de sécurité (CVV) incorrect.';
+        } else if (errCode === 'INVALID_EXPIRATION' || /expir/i.test(errDetail)) {
+          friendlyMsg = 'Date d\'expiration invalide.';
+        } else if (errCode === 'INSUFFICIENT_FUNDS') {
+          friendlyMsg = 'Fonds insuffisants sur cette carte.';
+        } else if (/network|timeout/i.test(errDetail)) {
+          friendlyMsg = 'Erreur de connexion. Votre carte n\'a pas été débitée. Réessayez.';
+        } else {
+          friendlyMsg = errDetail || `Échec du paiement (${errCode || paymentResponse.status})`;
+        }
         return new Response(
-          JSON.stringify({ error: friendlyMsg, details: paymentData }),
+          JSON.stringify({ error: friendlyMsg, code: errCode, details: paymentData }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
     } else if (isWalletPayment) {
-      // ── Paiement wallet via Square Gift Card ──
-      const paymentResponse = await fetch(`${squareBaseUrl}/v2/payments`, {
+      // ── Paiement wallet via Square Gift Cards (source de vérité) ──
+      // Flux Square-first strict : on REDEEM directement via Square Payments API
+      // en passant source_id = giftCardId. Square décrémente la carte automatiquement.
+      // Supabase ne touche JAMAIS le solde — seul un audit log est écrit après succès.
+
+      const { data: walletProfile, error: walletProfileErr } = await supabase
+        .from('profiles')
+        .select('square_customer_id, square_gift_card_id')
+        .eq('id', authUser!.id)
+        .single();
+
+      if (walletProfileErr || !walletProfile?.square_customer_id) {
+        return new Response(
+          JSON.stringify({ error: 'Compte Square manquant — impossible de payer avec le portefeuille.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      // 1. Garantir une gift card active (idempotent)
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      let effectiveGiftCardId = giftCardId ?? walletProfile.square_gift_card_id ?? null;
+      if (!effectiveGiftCardId) {
+        const ensureRes = await fetch(`${supabaseUrl}/functions/v1/ensure-gift-card`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            squareCustomerId: walletProfile.square_customer_id,
+            userId: authUser!.id,
+          }),
+        });
+        if (!ensureRes.ok) {
+          return new Response(
+            JSON.stringify({ error: 'Impossible de préparer la carte cadeau Square' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+        effectiveGiftCardId = (await ensureRes.json()).giftCardId;
+      }
+
+      // 2. Lire le solde Square (source de vérité)
+      const balanceRes = await fetch(`${squareBaseUrl}/v2/gift-cards/${effectiveGiftCardId}`, {
+        method: 'GET',
+        headers: {
+          'Square-Version': '2025-01-23',
+          'Authorization': `Bearer ${squareAccessToken}`,
+        },
+      });
+      if (!balanceRes.ok) {
+        return new Response(
+          JSON.stringify({ error: 'Impossible de lire le solde Square' }),
+          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const balanceData = await balanceRes.json();
+      const currentBalance = balanceData.gift_card?.balance_money?.amount ?? 0;
+      if (currentBalance < netAmount) {
+        return new Response(
+          JSON.stringify({
+            error: 'Solde portefeuille insuffisant',
+            details: { balance: currentBalance, required: netAmount },
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      // 3. REDEEM via Square Payments API (source_id = giftCardId).
+      //    Square décrémente le solde automatiquement ET clôture l'order.
+      const redeemRes = await fetch(`${squareBaseUrl}/v2/payments`, {
         method: 'POST',
         headers: {
           'Square-Version': '2025-01-23',
@@ -168,28 +264,37 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          source_id: giftCardId,
+          source_id: effectiveGiftCardId,
           idempotency_key: idempotencyKey ?? crypto.randomUUID(),
-          amount_money: {
-            amount: netAmount,
-            currency: 'EUR',
-          },
+          amount_money: { amount: netAmount, currency: 'EUR' },
           order_id: orderId,
           autocomplete: true,
           location_id: Deno.env.get('SQUARE_LOCATION_ID'),
+          customer_id: walletProfile.square_customer_id,
         }),
       });
 
-      paymentData = await paymentResponse.json();
-
-      if (!paymentResponse.ok) {
-        console.error('Square gift card payment error:', paymentData);
-        const errDetail = (paymentData as { errors?: Array<{ detail?: string }> }).errors?.[0]?.detail;
+      if (!redeemRes.ok) {
+        const errBody = await redeemRes.json().catch(() => ({}));
+        console.error('[process-payment] Square REDEEM failed:', errBody);
         return new Response(
-          JSON.stringify({ error: errDetail ?? 'Échec du paiement wallet', details: paymentData }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          JSON.stringify({
+            error: 'Paiement portefeuille refusé par Square',
+            details: errBody,
+          }),
+          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
+
+      paymentData = await redeemRes.json();
+
+      // 4. Audit log Supabase (append-only — jamais une source de vérité).
+      await supabase.from('wallet_transactions').insert({
+        user_id: authUser!.id,
+        type: 'debit',
+        amount: netAmount,
+        description: `Paiement commande ${orderId}`,
+      });
     }
 
     // Mettre à jour la commande dans Supabase

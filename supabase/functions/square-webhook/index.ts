@@ -123,7 +123,7 @@ serve(async (req) => {
         // NOTE : les points sont déjà crédités par process-payment, pas de double comptage ici
         const { data: orderRow } = await supabase
           .from('orders')
-          .select('user_id')
+          .select('user_id, items')
           .eq('square_order_id', payment.order_id)
           .maybeSingle();
 
@@ -159,15 +159,45 @@ serve(async (req) => {
 
           console.log(`Progress updated for user ${orderRow.user_id}: parenthèse #${newTotal}, streak: ${newStreak}`);
 
-          // Déclencher la vérification des défis
+          // Déclencher la vérification des défis (progression automatique)
+          // CRITIQUE : passer line_items AVEC category sinon les défis 'category' / 'category_distinct' ne progressent jamais
           try {
-            await supabase.functions.invoke('challenge-check', {
+            const rawItems = Array.isArray(orderRow.items)
+              ? (orderRow.items as Array<{ name?: string; catalogObjectId?: string }>)
+              : [];
+
+            // Enrichir chaque item avec sa category : catalogObjectId (square_variation_id) → product.category
+            const variationIds = rawItems
+              .map((i) => i.catalogObjectId)
+              .filter((id): id is string => !!id);
+
+            const categoryByVariationId = new Map<string, string>();
+            if (variationIds.length > 0) {
+              const { data: variations } = await supabase
+                .from('product_variations')
+                .select('square_variation_id, products:product_id(category)')
+                .in('square_variation_id', variationIds);
+              for (const v of (variations ?? []) as Array<{ square_variation_id: string; products: { category: string } | null }>) {
+                if (v.products?.category) {
+                  categoryByVariationId.set(v.square_variation_id, v.products.category);
+                }
+              }
+            }
+
+            const enrichedItems = rawItems.map((i) => ({
+              name: i.name,
+              category: i.catalogObjectId ? categoryByVariationId.get(i.catalogObjectId) : undefined,
+            }));
+
+            const challengeRes = await supabase.functions.invoke('challenge-check', {
               body: {
                 user_id: orderRow.user_id,
                 order_total: payment.amount_money?.amount ?? 0,
                 order_time: new Date().toISOString(),
+                line_items: enrichedItems,
               },
             });
+            console.log(`[square-webhook] challenge-check for ${orderRow.user_id}:`, JSON.stringify(challengeRes.data).slice(0, 300));
           } catch (challengeErr) {
             console.error('Challenge check error (non-fatal):', challengeErr);
           }
