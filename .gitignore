@@ -44,3 +44,11 @@ supabase/.temp/
 /ios
 /android
 node_modules/
+
+# Claude Code agent workspaces
+.claude/worktrees/
+.claude/design-mockups/
+.claude/settings.local.json
+
+# Agent maintenance reports
+MAINTENANCE_REPORT.md
