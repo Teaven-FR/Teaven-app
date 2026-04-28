@@ -20,7 +20,12 @@ export interface User {
 export type LoyaltyLevel = 'Première Parenthèse' | 'Habitude' | 'Rituel' | 'Sérénité' | 'Essentia';
 
 // === PRODUIT ===
-export type ProductCategory = 'nourrir' | 'savourer' | 'emporter' | 'patisseries';
+export type ProductCategory =
+  | 'plats-sales' | 'veloutes' | 'salades' | 'formules-midi'
+  | 'patisserie' | 'bol-gaufres-sucres' | 'cafe' | 'eau-jus'
+  | 'infusion-froide' | 'matcha' | 'cafe-froid' | 'autres'
+  | 'the-infusion-chaude'
+  | string;
 
 export interface Category {
   id: string;
@@ -97,6 +102,10 @@ export type OrderStatus =
   | 'preparing'
   | 'ready'
   | 'picked_up'
+  | 'en_route'
+  | 'delivered'
+  | 'completed'
+  | 'cancelled'
   | 'incident';
 
 export interface Order {
@@ -104,13 +113,24 @@ export interface Order {
   userId: string;
   squareOrderId?: string;
   status: OrderStatus;
-  mode: 'pickup'; // 'delivery' en Phase 2
+  mode: 'pickup' | 'delivery';
   items: OrderItem[];
   subtotal: number;
   tax: number;
   loyaltyDiscount: number;
   total: number;
   pickupTime?: string;
+  deliveryAddress?: {
+    street: string;
+    city: string;
+    postalCode: string;
+    complement?: string;
+    lat?: number;
+    lng?: number;
+  };
+  deliveryFee?: number;
+  deliveryId?: string;
+  trackingUrl?: string;
   paymentMethod: 'card' | 'wallet' | 'mixed';
   squarePaymentId?: string;
   createdAt: string;

@@ -68,6 +68,43 @@ serve(async (req) => {
         .update(updateData)
         .eq('uber_delivery_id', data.delivery_id);
 
+      // Envoyer une notification in-app à l'utilisateur
+      const NOTIF_MESSAGES: Record<string, { title: string; body: string }> = {
+        'courier_assigned': { title: 'Coursier en chemin', body: 'Un livreur se dirige vers Teaven pour récupérer votre commande.' },
+        'picked_up': { title: 'Commande récupérée', body: 'Le livreur a récupéré votre commande et arrive bientôt !' },
+        'en_route': { title: 'Livreur en route', body: 'Votre commande est en chemin. Préparez-vous !' },
+        'delivered': { title: 'Commande livrée !', body: 'Votre commande a été livrée. Bon appétit !' },
+        'cancelled': { title: 'Livraison annulée', body: 'Votre livraison a été annulée. Contactez-nous si besoin.' },
+      };
+
+      const notif = NOTIF_MESSAGES[teavenStatus];
+      if (notif) {
+        // Trouver le user_id via la commande liée
+        const { data: delivery } = await supabase
+          .from('deliveries')
+          .select('order_id')
+          .eq('uber_delivery_id', data.delivery_id)
+          .single();
+
+        if (delivery?.order_id) {
+          const { data: order } = await supabase
+            .from('orders')
+            .select('user_id')
+            .eq('id', delivery.order_id)
+            .single();
+
+          if (order?.user_id) {
+            await supabase.from('notifications').insert({
+              user_id: order.user_id,
+              type: 'order',
+              title: notif.title,
+              body: notif.body,
+              data: { delivery_id: data.delivery_id, status: teavenStatus },
+            });
+          }
+        }
+      }
+
       console.log(`Livraison ${data.delivery_id} mise à jour : ${teavenStatus}`);
     }
 

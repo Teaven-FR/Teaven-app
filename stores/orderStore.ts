@@ -22,6 +22,9 @@ interface OrderState {
     rewardTierId?: string,
     loyaltyAccountId?: string,
     discounts?: Array<{ name: string; percentage?: string; amountCents?: number }>,
+    deliveryMode?: 'pickup' | 'delivery',
+    deliveryAddress?: { street: string; city: string; postalCode: string; complement?: string; lat?: number; lng?: number },
+    deliveryFee?: number,
   ) => Promise<Order>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   getOrderById: (orderId: string) => Order | undefined;
@@ -44,7 +47,7 @@ export const useOrderStore = create<OrderState>()(
       orderHistory: [],
       isProcessing: false,
 
-      createOrder: async (cartItems, paymentMethod, _usePoints, cardNonce?, giftCardId?, pickupTime?, rewardTierId?, loyaltyAccountId?, discounts?) => {
+      createOrder: async (cartItems, paymentMethod, _usePoints, cardNonce?, giftCardId?, pickupTime?, rewardTierId?, loyaltyAccountId?, discounts?, deliveryMode?, deliveryAddress?, deliveryFee?) => {
         set({ isProcessing: true });
 
         const authUser = useAuthStore.getState().user;
@@ -167,11 +170,12 @@ export const useOrderStore = create<OrderState>()(
           }
 
           // 3. Créer l'objet order local
+          const orderId = createResult.data.dbOrder?.id ?? generateOrderId();
           const order: Order = {
-            id: createResult.data.dbOrder?.id ?? generateOrderId(),
+            id: orderId,
             userId,
             status: 'payment_confirmed',
-            mode: 'pickup',
+            mode: deliveryMode ?? 'pickup',
             items: orderItems,
             subtotal,
             tax: 0,
@@ -179,9 +183,47 @@ export const useOrderStore = create<OrderState>()(
             total: squareTotal,
             pickupTime: createResult.data.estimatedPickup ?? new Date(Date.now() + 15 * 60 * 1000).toISOString(),
             paymentMethod,
+            deliveryAddress: deliveryAddress ?? undefined,
+            deliveryFee: deliveryFee ?? undefined,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
+
+          // 4. Si livraison → créer la livraison Uber Direct
+          if (deliveryMode === 'delivery' && deliveryAddress) {
+            try {
+              const itemsDesc = orderItems.map((i) => `${i.quantity}× ${i.name}`).join(', ');
+              const uberResult = await callEdgeFunction<{
+                success: boolean;
+                delivery_id?: string;
+                tracking_url?: string;
+                estimated_delivery_time?: string;
+                stub?: boolean;
+                error?: string;
+              }>('uber-direct-create-delivery', {
+                order_id: orderId,
+                dropoff_address: {
+                  street_address: [deliveryAddress.street, deliveryAddress.complement ?? ''],
+                  city: deliveryAddress.city,
+                  zip_code: deliveryAddress.postalCode,
+                  country: 'FR',
+                  name: authUser?.fullName ?? 'Client',
+                  phone: authUser?.phone ?? '',
+                },
+                items_description: itemsDesc,
+              });
+
+              if (uberResult.data?.success) {
+                order.deliveryId = uberResult.data.delivery_id;
+                order.trackingUrl = uberResult.data.tracking_url;
+                console.log(`[ORDER] Uber Direct delivery created: ${uberResult.data.delivery_id}${uberResult.data.stub ? ' (stub)' : ''}`);
+              } else {
+                console.warn('[ORDER] Uber Direct creation failed:', uberResult.data?.error ?? uberResult.error);
+              }
+            } catch (uberErr) {
+              console.warn('[ORDER] Uber Direct error (non-fatal):', uberErr);
+            }
+          }
 
           useCartStore.getState().clearCart();
           set({

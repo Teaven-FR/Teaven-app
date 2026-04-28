@@ -6,6 +6,8 @@ import { useFonts } from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from '@/components/layout/StatusBar';
 import { ToastProvider } from '@/contexts/ToastContext';
+import { ActiveOrderProvider } from '@/contexts/ActiveOrderContext';
+import { OrderTrackingBanner } from '@/components/ui/OrderTrackingBanner';
 import { useAuthStore } from '@/stores/authStore';
 
 // Error boundary pour afficher les erreurs runtime sur web
@@ -143,6 +145,10 @@ function RootNavigator() {
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
+        name="delivery/[id]"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
         name="fidelite"
         options={{ animation: 'slide_from_right' }}
       />
@@ -177,8 +183,11 @@ export default function RootLayout() {
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ToastProvider>
-          <StatusBar />
-          <RootNavigator />
+          <ActiveOrderProvider>
+            <StatusBar />
+            <RootNavigator />
+            <OrderTrackingBanner />
+          </ActiveOrderProvider>
         </ToastProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
