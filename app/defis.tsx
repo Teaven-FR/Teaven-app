@@ -1,11 +1,11 @@
 // Page Défis Teaven — philosophie, liste des défis actifs, progression
-import { useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -24,23 +24,9 @@ import {
   Check,
   Zap,
 } from 'lucide-react-native';
-import { useUser } from '@/hooks/useUser';
+import { useChallenges, type Challenge } from '@/hooks/useChallenges';
 import { useToast } from '@/contexts/ToastContext';
-import { colors, fonts, spacing, shadows, radii } from '@/constants/theme';
-
-interface Challenge {
-  id: string;
-  icon: 'flame' | 'trophy' | 'leaf' | 'coffee' | 'heart' | 'star' | 'users';
-  title: string;
-  description: string;
-  objective: string;
-  progress: number;
-  target: number;
-  reward: number;
-  duration: string;
-  claimed: boolean;
-  category: 'boissons' | 'food' | 'fidelite' | 'social';
-}
+import { colors, fonts, spacing, shadows } from '@/constants/theme';
 
 const ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string; strokeWidth: number }>> = {
   flame: Flame,
@@ -72,85 +58,11 @@ const ICON_COLOR: Record<string, string> = {
   users: colors.greenSecondary,
 };
 
-const INITIAL_CHALLENGES: Challenge[] = [
-  {
-    id: 'c1',
-    icon: 'coffee',
-    title: 'Découverte Matcha',
-    description: 'Commandez 3 boissons matcha différentes',
-    objective: '3 matchas distincts',
-    progress: 1,
-    target: 3,
-    reward: 150,
-    duration: '14 jours',
-    claimed: false,
-    category: 'boissons',
-  },
-  {
-    id: 'c2',
-    icon: 'trophy',
-    title: 'Brunch Addict',
-    description: 'Commandez 5 formules brunch',
-    objective: '5 formules',
-    progress: 2,
-    target: 5,
-    reward: 200,
-    duration: '30 jours',
-    claimed: false,
-    category: 'food',
-  },
-  {
-    id: 'c3',
-    icon: 'leaf',
-    title: 'Tea Explorer',
-    description: 'Goûtez 4 thés différents de notre carte',
-    objective: '4 thés distincts',
-    progress: 4,
-    target: 4,
-    reward: 120,
-    duration: '21 jours',
-    claimed: false,
-    category: 'boissons',
-  },
-  {
-    id: 'c4',
-    icon: 'heart',
-    title: 'Sweet Tooth',
-    description: 'Commandez 3 pâtisseries différentes',
-    objective: '3 pâtisseries',
-    progress: 1,
-    target: 3,
-    reward: 100,
-    duration: '14 jours',
-    claimed: false,
-    category: 'food',
-  },
-  {
-    id: 'c5',
-    icon: 'flame',
-    title: 'Fidèle du matin',
-    description: 'Passez commande 7 jours consécutifs',
-    objective: '7 jours streak',
-    progress: 3,
-    target: 7,
-    reward: 300,
-    duration: '7 jours',
-    claimed: false,
-    category: 'fidelite',
-  },
-  {
-    id: 'c6',
-    icon: 'users',
-    title: 'Ambassadeur',
-    description: 'Parrainez 3 amis qui créent leur compte',
-    objective: '3 parrainages',
-    progress: 0,
-    target: 3,
-    reward: 500,
-    duration: '60 jours',
-    claimed: false,
-    category: 'social',
-  },
+const CATEGORY_SECTIONS = [
+  { key: 'fidelite', label: 'Régularité', desc: 'Récompensez vos bonnes habitudes' },
+  { key: 'boissons', label: 'Explorateur', desc: 'Découvrez notre carte sous toutes ses formes' },
+  { key: 'food', label: 'Challenge du mois', desc: 'Défi mensuel unique' },
+  { key: 'social', label: 'Social', desc: "Partagez l'expérience Teaven" },
 ];
 
 const WHY_ITEMS = [
@@ -179,18 +91,115 @@ const WHY_ITEMS = [
 export default function DefisScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { loyalty, updateProfile } = useUser();
+  const { challenges, loading } = useChallenges();
   const { showToast } = useToast();
 
-  const [challenges, setChallenges] = useState<Challenge[]>(INITIAL_CHALLENGES);
+  // Nombre de défis en cours (progression > 0, pas encore réclamé)
+  const inProgressCount = challenges.filter((c) => c.progress > 0 && !c.claimed && !c.locked).length;
 
-  const claimChallenge = (ch: Challenge) => {
-    if (ch.claimed || ch.progress < ch.target) return;
-    setChallenges((prev) =>
-      prev.map((c) => (c.id === ch.id ? { ...c, claimed: true } : c)),
+  const renderChallenge = (ch: Challenge) => {
+    const Icon = ICON_MAP[ch.icon] ?? Trophy;
+    const isDone = ch.completed || (ch.type !== 'morning_bonus' && ch.progress >= ch.target);
+    const pct = ch.type === 'morning_bonus'
+      ? 100 // always "active"
+      : Math.min(100, Math.round((ch.progress / ch.target) * 100));
+
+    return (
+      <View
+        key={ch.id}
+        style={[styles.challengeCard, ch.claimed && styles.challengeClaimed, ch.locked && styles.challengeLocked]}
+      >
+        {/* Top row */}
+        <View style={styles.cardTop}>
+          <View style={[styles.iconWrap, { backgroundColor: ICON_BG[ch.icon] ?? '#F0F0EE' }]}>
+            {ch.locked
+              ? <Lock size={20} color={colors.textMuted} strokeWidth={1.5} />
+              : <Icon size={20} color={ICON_COLOR[ch.icon] ?? colors.green} strokeWidth={1.5} />
+            }
+          </View>
+          <View style={styles.cardInfo}>
+            <Text style={[styles.cardTitle, ch.locked && { color: colors.textMuted }]}>{ch.title}</Text>
+            <Text style={styles.cardDesc}>{ch.description}</Text>
+          </View>
+          <View style={styles.rewardBadge}>
+            <Text style={styles.rewardText}>+{ch.reward}</Text>
+            <Text style={styles.rewardLabel}>pts</Text>
+            {ch.isRecurring && ch.type === 'morning_bonus' && (
+              <Text style={styles.rewardRecurring}>par commande</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Progress — pas affiché pour morning_bonus ni les défis verrouillés */}
+        {ch.type !== 'morning_bonus' && !ch.locked && (
+          <View style={styles.progressRow}>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${pct}%` as any }]} />
+            </View>
+            <View style={styles.progressCircleWrap}>
+              <Svg width={38} height={38} viewBox="0 0 38 38">
+                <SvgCircle cx={19} cy={19} r={16} stroke="rgba(117,150,127,0.15)" strokeWidth={2.5} fill="none" />
+                <SvgCircle
+                  cx={19} cy={19} r={16}
+                  stroke="#75967F"
+                  strokeWidth={2.5}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 16}`}
+                  strokeDashoffset={`${2 * Math.PI * 16 * (1 - pct / 100)}`}
+                  transform="rotate(-90 19 19)"
+                />
+              </Svg>
+              <Text style={styles.progressCircleText}>{ch.progress}/{ch.target}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Footer */}
+        <View style={styles.cardFooter}>
+          {ch.type === 'morning_bonus' ? (
+            <Text style={styles.recurringText}>
+              {ch.progress > 0 ? `${ch.progress} commande${ch.progress > 1 ? 's' : ''} matinale${ch.progress > 1 ? 's' : ''}` : 'Commandez avant 11h'}
+            </Text>
+          ) : ch.isRecurring && ch.type === 'referral' ? (
+            <Text style={styles.recurringText}>Récurrent — chaque parrainage</Text>
+          ) : (
+            <Text style={styles.durationText}>
+              {ch.isRecurring ? 'Mensuel' : 'One-shot'}
+            </Text>
+          )}
+
+          {ch.locked ? (
+            <View style={styles.notStartedRow}>
+              <Lock size={12} color={colors.textMuted} strokeWidth={1.5} />
+              <Text style={styles.notStartedText}>Prérequis requis</Text>
+            </View>
+          ) : isDone && !ch.claimed && ch.type !== 'morning_bonus' ? (
+            <Pressable
+              onPress={() => showToast(`+${ch.reward} pts crédités !`)}
+              style={styles.claimBtn}
+              accessibilityRole="button"
+            >
+              <Text style={styles.claimBtnText}>Réclamer {ch.reward} pts</Text>
+            </Pressable>
+          ) : ch.claimed ? (
+            <View style={styles.claimedRow}>
+              <Check size={14} color={colors.green} strokeWidth={2.5} />
+              <Text style={styles.claimedText}>Réclamé</Text>
+            </View>
+          ) : ch.type === 'morning_bonus' ? (
+            <View style={styles.activeRow}>
+              <Flame size={12} color={colors.gold} strokeWidth={2} />
+              <Text style={styles.inProgressText}>Actif en permanence</Text>
+            </View>
+          ) : ch.progress === 0 ? (
+            <Text style={styles.notStartedText}>Non commencé</Text>
+          ) : (
+            <Text style={styles.inProgressText}>En cours ({pct}%)</Text>
+          )}
+        </View>
+      </View>
     );
-    updateProfile({ loyaltyPoints: loyalty.points + ch.reward });
-    showToast(`+${ch.reward} pts crédités !`);
   };
 
   return (
@@ -229,103 +238,35 @@ export default function DefisScreen() {
         </Text>
         <View style={styles.heroBadge}>
           <Text style={styles.heroBadgeText}>
-            {challenges.filter((c) => c.progress > 0 && !c.claimed).length} défis en cours
+            {loading ? '…' : `${inProgressCount} défi${inProgressCount !== 1 ? 's' : ''} en cours`}
           </Text>
         </View>
       </LinearGradient>
 
-      {/* Défis en cours — triés par progression (plus avancé d'abord) */}
-      {[
-        { key: 'fidelite', label: 'Séries en cours', desc: 'Défis séquentiels de régularité' },
-        { key: 'boissons', label: 'Explorateur', desc: 'Découvrez notre carte sous toutes ses formes' },
-        { key: 'food', label: 'Challenge du mois', desc: 'Défi mensuel unique' },
-        { key: 'social', label: 'Social', desc: 'Partagez l\'expérience Teaven' },
-      ].map((cat) => {
+      {/* Loading */}
+      {loading && (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="small" color={colors.green} />
+          <Text style={styles.loadingText}>Chargement des défis…</Text>
+        </View>
+      )}
+
+      {/* Défis par catégorie */}
+      {!loading && CATEGORY_SECTIONS.map((cat) => {
         const catChallenges = challenges
-          .filter((c) => c.category === cat.key)
-          .sort((a, b) => (b.progress / b.target) - (a.progress / a.target));
+          .filter((c) => c.uiCategory === cat.key)
+          .sort((a, b) => {
+            // Verrouillés en dernier, puis par progression décroissante
+            if (a.locked !== b.locked) return a.locked ? 1 : -1;
+            return (b.progress / Math.max(b.target, 1)) - (a.progress / Math.max(a.target, 1));
+          });
         if (catChallenges.length === 0) return null;
         return (
           <View key={cat.key}>
             <Text style={styles.sectionTitle}>{cat.label}</Text>
             <Text style={styles.sectionDesc}>{cat.desc}</Text>
             <View style={styles.challengesList}>
-              {catChallenges.map((ch) => {
-          const Icon = ICON_MAP[ch.icon] ?? Trophy;
-          const isDone = ch.progress >= ch.target;
-          const pct = Math.min(100, Math.round((ch.progress / ch.target) * 100));
-
-          return (
-            <View
-              key={ch.id}
-              style={[styles.challengeCard, ch.claimed && styles.challengeClaimed]}
-            >
-              {/* Top row */}
-              <View style={styles.cardTop}>
-                <View style={[styles.iconWrap, { backgroundColor: ICON_BG[ch.icon] }]}>
-                  <Icon size={20} color={ICON_COLOR[ch.icon]} strokeWidth={1.5} />
-                </View>
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardTitle}>{ch.title}</Text>
-                  <Text style={styles.cardDesc}>{ch.description}</Text>
-                </View>
-                <View style={styles.rewardBadge}>
-                  <Text style={styles.rewardText}>+{ch.reward}</Text>
-                  <Text style={styles.rewardLabel}>pts</Text>
-                </View>
-              </View>
-
-              {/* Progress */}
-              <View style={styles.progressRow}>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${pct}%` as any }]} />
-                </View>
-                <View style={styles.progressCircleWrap}>
-                  <Svg width={38} height={38} viewBox="0 0 38 38">
-                    <SvgCircle cx={19} cy={19} r={16} stroke="rgba(117,150,127,0.15)" strokeWidth={2.5} fill="none" />
-                    <SvgCircle
-                      cx={19} cy={19} r={16}
-                      stroke="#75967F"
-                      strokeWidth={2.5}
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 16}`}
-                      strokeDashoffset={`${2 * Math.PI * 16 * (1 - pct / 100)}`}
-                      transform="rotate(-90 19 19)"
-                    />
-                  </Svg>
-                  <Text style={styles.progressCircleText}>{ch.progress}/{ch.target}</Text>
-                </View>
-              </View>
-
-              {/* Footer */}
-              <View style={styles.cardFooter}>
-                <Text style={styles.durationText}>{ch.duration}</Text>
-                {isDone && !ch.claimed ? (
-                  <Pressable
-                    onPress={() => claimChallenge(ch)}
-                    style={styles.claimBtn}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.claimBtnText}>Réclamer {ch.reward} pts</Text>
-                  </Pressable>
-                ) : ch.claimed ? (
-                  <View style={styles.claimedRow}>
-                    <Check size={14} color={colors.green} strokeWidth={2.5} />
-                    <Text style={styles.claimedText}>Réclamé</Text>
-                  </View>
-                ) : ch.progress === 0 ? (
-                  <View style={styles.notStartedRow}>
-                    <Lock size={12} color={colors.textMuted} strokeWidth={1.5} />
-                    <Text style={styles.notStartedText}>Non commencé</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.inProgressText}>En cours ({pct}%)</Text>
-                )}
-              </View>
-            </View>
-          );
-              })}
+              {catChallenges.map(renderChallenge)}
             </View>
           </View>
         );
@@ -437,6 +378,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
+  // Loading
+  loadingWrap: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xxxl,
+  },
+  loadingText: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+
   // Section title
   sectionTitle: {
     fontFamily: fonts.bold,
@@ -471,6 +424,9 @@ const styles = StyleSheet.create({
   },
   challengeClaimed: {
     opacity: 0.65,
+  },
+  challengeLocked: {
+    opacity: 0.5,
   },
   cardTop: {
     flexDirection: 'row',
@@ -519,6 +475,12 @@ const styles = StyleSheet.create({
     color: colors.green,
     marginTop: -1,
   },
+  rewardRecurring: {
+    fontFamily: fonts.regular,
+    fontSize: 8,
+    color: colors.green,
+    marginTop: 2,
+  },
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -535,13 +497,6 @@ const styles = StyleSheet.create({
     height: 6,
     backgroundColor: colors.green,
     borderRadius: 3,
-  },
-  progressCount: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    color: colors.textMuted,
-    minWidth: 32,
-    textAlign: 'right',
   },
   progressCircleWrap: {
     width: 38,
@@ -565,6 +520,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
   },
+  recurringText: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
   claimBtn: {
     backgroundColor: colors.green,
     paddingHorizontal: spacing.lg,
@@ -585,6 +545,11 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 12,
     color: colors.green,
+  },
+  activeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   notStartedRow: {
     flexDirection: 'row',

@@ -1,6 +1,13 @@
 // Edge Function — Vérifier et avancer la progression des défis après une commande
 // Appelée par square-webhook quand une commande est payée
 // POST { user_id, order_total, line_items?, order_time? }
+//
+// Types de défis supportés :
+//   morning_bonus     — bonus récurrent à chaque commande avant 11h
+//   category          — commander un produit d'une catégorie (one-shot ou récurrent)
+//   category_distinct — commander N produits DIFFÉRENTS d'une catégorie
+//   referral          — parrainage (géré par un appel séparé, pas ici)
+//   streak / frequency / amount / wallet — hérités, conservés pour compatibilité
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -15,6 +22,68 @@ const squareBaseUrl = (Deno.env.get('SQUARE_ENVIRONMENT') ?? 'sandbox') === 'pro
   : 'https://connect.squareupsandbox.com';
 
 const SQUARE_ACCESS_TOKEN = Deno.env.get('SQUARE_ACCESS_TOKEN') ?? '';
+
+/** Sync bonus points to Square Loyalty via /adjust */
+async function syncPointsToSquare(squareCustomerId: string, points: number, reason: string) {
+  try {
+    const searchRes = await fetch(`${squareBaseUrl}/v2/loyalty/accounts/search`, {
+      method: 'POST',
+      headers: {
+        'Square-Version': '2025-01-23',
+        'Authorization': `Bearer ${SQUARE_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: { customer_ids: [squareCustomerId] } }),
+    });
+    const searchData = await searchRes.json();
+    const loyaltyAccountId = searchData.loyalty_accounts?.[0]?.id;
+    if (!loyaltyAccountId) return;
+
+    await fetch(`${squareBaseUrl}/v2/loyalty/accounts/${loyaltyAccountId}/adjust`, {
+      method: 'POST',
+      headers: {
+        'Square-Version': '2025-01-23',
+        'Authorization': `Bearer ${SQUARE_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        idempotency_key: crypto.randomUUID(),
+        adjust_points: { points, reason },
+      }),
+    });
+  } catch (e) {
+    console.error('Square loyalty adjust (non-fatal):', e);
+  }
+}
+
+/** Créditer les points dans Supabase profiles + loyalty_transactions + Square */
+async function awardPoints(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  points: number,
+  reason: string,
+) {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('loyalty_points, square_customer_id')
+    .eq('id', userId)
+    .single();
+
+  if (!profile) return;
+
+  const newPts = (profile.loyalty_points ?? 0) + points;
+  await supabase.from('profiles').update({ loyalty_points: newPts }).eq('id', userId);
+  await supabase.from('loyalty_transactions').insert({
+    user_id: userId,
+    points,
+    type: 'earn',
+    reason,
+  });
+
+  if (profile.square_customer_id) {
+    await syncPointsToSquare(profile.square_customer_id, points, reason);
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -34,6 +103,7 @@ serve(async (req) => {
     }
 
     const today = new Date().toISOString().split('T')[0];
+    const currentMonth = today.slice(0, 7); // YYYY-MM
     const orderHour = order_time ? new Date(order_time).getHours() : new Date().getHours();
 
     // Récupérer les défis actifs
@@ -57,12 +127,24 @@ serve(async (req) => {
       .in('challenge_id', challengeIds);
 
     const progressMap = new Map(
-      (existingProgress ?? []).map((p: { challenge_id: string }) => [p.challenge_id, p])
+      (existingProgress ?? []).map((p: { challenge_id: string }) => [p.challenge_id, p]),
+    );
+
+    // Map d'ID défi → progression complétée (pour vérifier les prérequis)
+    const completedChallengeIds = new Set(
+      (existingProgress ?? [])
+        .filter((p: { completed_at: string | null; points_awarded: boolean }) => p.completed_at && p.points_awarded)
+        .map((p: { challenge_id: string }) => p.challenge_id),
     );
 
     const results: Array<{ challenge: string; completed: boolean; pointsAwarded: number }> = [];
 
     for (const challenge of activeChallenges) {
+      // Vérifier le prérequis
+      if (challenge.prerequisite_challenge_id && !completedChallengeIds.has(challenge.prerequisite_challenge_id)) {
+        continue;
+      }
+
       let progress = progressMap.get(challenge.id) as {
         id: string;
         current_value: number;
@@ -70,62 +152,74 @@ serve(async (req) => {
         last_increment_date: string | null;
         completed_at: string | null;
         points_awarded: boolean;
+        distinct_items: string[];
       } | undefined;
-
-      // Ignorer les défis déjà complétés et récompensés
-      if (progress?.completed_at && progress?.points_awarded) continue;
 
       // Créer la progression si elle n'existe pas
       if (!progress) {
         const { data: newProgress } = await supabase
           .from('challenge_progress')
-          .insert({ user_id, challenge_id: challenge.id, current_value: 0, streak_current: 0 })
+          .insert({ user_id, challenge_id: challenge.id, current_value: 0, streak_current: 0, distinct_items: [] })
           .select()
           .single();
         if (!newProgress) continue;
         progress = newProgress;
       }
 
+      // Reset mensuel pour les défis category_distinct récurrents mensuels
+      if (
+        challenge.type === 'category_distinct' &&
+        challenge.recurrence === 'monthly' &&
+        progress.last_increment_date &&
+        progress.last_increment_date.slice(0, 7) !== currentMonth
+      ) {
+        // Nouveau mois → réinitialiser la progression
+        await supabase
+          .from('challenge_progress')
+          .update({
+            current_value: 0,
+            distinct_items: [],
+            completed_at: null,
+            points_awarded: false,
+            last_increment_date: null,
+          })
+          .eq('id', progress.id);
+        progress = { ...progress, current_value: 0, distinct_items: [], completed_at: null, points_awarded: false, last_increment_date: null };
+      }
+
+      // Ignorer les défis déjà complétés et récompensés (sauf récurrents type morning_bonus)
+      if (challenge.type !== 'morning_bonus' && progress.completed_at && progress.points_awarded) continue;
+
       let shouldIncrement = false;
       let newValue = progress.current_value;
       let newStreak = progress.streak_current;
+      let newDistinctItems = [...(progress.distinct_items ?? [])];
 
       switch (challenge.type) {
-        case 'streak': {
-          const lastDate = progress.last_increment_date;
-          if (lastDate === today) {
-            // Déjà compté aujourd'hui
-            break;
+        // ── Bonus récurrent commande du matin ──
+        case 'morning_bonus': {
+          if (orderHour < 11) {
+            // Bonus direct — pas de "completion", juste award à chaque commande qualifiante
+            await awardPoints(supabase, user_id, challenge.reward_points, `Défi : ${challenge.title}`);
+            // Incrémenter le compteur pour l'affichage
+            newValue = progress.current_value + 1;
+            await supabase
+              .from('challenge_progress')
+              .update({ current_value: newValue, last_increment_date: today })
+              .eq('id', progress.id);
+            results.push({ challenge: challenge.title, completed: true, pointsAwarded: challenge.reward_points });
           }
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-          if (lastDate === yesterdayStr) {
-            newStreak = progress.streak_current + 1;
-          } else {
-            newStreak = 1; // Reset
-          }
-          newValue = newStreak;
-          shouldIncrement = true;
-          break;
+          // Ne pas continuer dans la logique d'incrémentation classique
+          continue;
         }
 
-        case 'frequency': {
-          // Rituel du matin : seulement avant 11h
-          if (challenge.title.includes('matin') && orderHour >= 11) break;
-          newValue = progress.current_value + 1;
-          shouldIncrement = true;
-          break;
-        }
-
+        // ── Catégorie simple (1 produit de la catégorie) ──
         case 'category': {
-          // Vérifier si les line_items contiennent la catégorie cible
           if (line_items && challenge.target_category) {
             const hasCategory = line_items.some(
               (item: { name?: string; category?: string }) =>
                 (item.name ?? '').toLowerCase().includes(challenge.target_category!.toLowerCase()) ||
-                (item.category ?? '').toLowerCase().includes(challenge.target_category!.toLowerCase())
+                (item.category ?? '').toLowerCase().includes(challenge.target_category!.toLowerCase()),
             );
             if (hasCategory) {
               newValue = progress.current_value + 1;
@@ -135,21 +229,61 @@ serve(async (req) => {
           break;
         }
 
+        // ── Catégorie distinct (N produits DIFFÉRENTS de la catégorie) ──
+        case 'category_distinct': {
+          if (line_items && challenge.target_category) {
+            const matchingItems = line_items.filter(
+              (item: { name?: string; category?: string }) =>
+                (item.name ?? '').toLowerCase().includes(challenge.target_category!.toLowerCase()) ||
+                (item.category ?? '').toLowerCase().includes(challenge.target_category!.toLowerCase()),
+            );
+            for (const item of matchingItems) {
+              const itemKey = (item.name ?? '').toLowerCase().trim();
+              if (itemKey && !newDistinctItems.includes(itemKey)) {
+                newDistinctItems.push(itemKey);
+                newValue = newDistinctItems.length;
+                shouldIncrement = true;
+              }
+            }
+          }
+          break;
+        }
+
+        // ── Types hérités (compatibilité anciens défis) ──
+        case 'streak': {
+          const lastDate = progress.last_increment_date;
+          if (lastDate === today) break;
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
+          if (lastDate === yesterdayStr) {
+            newStreak = progress.streak_current + 1;
+          } else {
+            newStreak = 1;
+          }
+          newValue = newStreak;
+          shouldIncrement = true;
+          break;
+        }
+
+        case 'frequency': {
+          if (challenge.title.includes('matin') && orderHour >= 11) break;
+          newValue = progress.current_value + 1;
+          shouldIncrement = true;
+          break;
+        }
+
         case 'amount': {
           newValue = progress.current_value + (order_total ?? 0);
           shouldIncrement = true;
           break;
         }
 
-        case 'wallet': {
-          // Géré séparément (sur recharge wallet, pas commande)
+        case 'wallet':
+        case 'first_action':
+        case 'referral':
+          // Gérés séparément (pas dans le flux commande)
           break;
-        }
-
-        case 'first_action': {
-          // Parrainage — géré séparément
-          break;
-        }
       }
 
       if (!shouldIncrement) continue;
@@ -163,82 +297,19 @@ serve(async (req) => {
           current_value: newValue,
           streak_current: newStreak,
           last_increment_date: today,
+          distinct_items: newDistinctItems,
           ...(isCompleted && !progress.completed_at ? { completed_at: new Date().toISOString() } : {}),
         })
         .eq('id', progress.id);
 
       // Si complété → créditer les points
       if (isCompleted && !progress.points_awarded) {
-        // Marquer comme récompensé
         await supabase
           .from('challenge_progress')
           .update({ points_awarded: true })
           .eq('id', progress.id);
 
-        // Créditer les points dans profiles
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('loyalty_points, square_customer_id')
-          .eq('id', user_id)
-          .single();
-
-        if (profile) {
-          const newPts = (profile.loyalty_points ?? 0) + challenge.reward_points;
-          await supabase
-            .from('profiles')
-            .update({ loyalty_points: newPts })
-            .eq('id', user_id);
-
-          // Transaction fidélité
-          await supabase
-            .from('loyalty_transactions')
-            .insert({
-              user_id,
-              points: challenge.reward_points,
-              type: 'earn',
-              reason: `Défi complété : ${challenge.title}`,
-            });
-
-          // Square Loyalty adjust
-          if (profile.square_customer_id) {
-            try {
-              const searchRes = await fetch(`${squareBaseUrl}/v2/loyalty/accounts/search`, {
-                method: 'POST',
-                headers: {
-                  'Square-Version': '2025-01-23',
-                  'Authorization': `Bearer ${SQUARE_ACCESS_TOKEN}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  query: { customer_ids: [profile.square_customer_id] },
-                }),
-              });
-              const searchData = await searchRes.json();
-              const loyaltyAccountId = searchData.loyalty_accounts?.[0]?.id;
-
-              if (loyaltyAccountId) {
-                await fetch(`${squareBaseUrl}/v2/loyalty/accounts/${loyaltyAccountId}/adjust`, {
-                  method: 'POST',
-                  headers: {
-                    'Square-Version': '2025-01-23',
-                    'Authorization': `Bearer ${SQUARE_ACCESS_TOKEN}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    idempotency_key: crypto.randomUUID(),
-                    adjust_points: {
-                      points: challenge.reward_points,
-                      reason: `Défi complété : ${challenge.title}`,
-                    },
-                  }),
-                });
-              }
-            } catch (e) {
-              console.error('Square loyalty adjust for challenge (non-fatal):', e);
-            }
-          }
-        }
-
+        await awardPoints(supabase, user_id, challenge.reward_points, `Défi complété : ${challenge.title}`);
         results.push({ challenge: challenge.title, completed: true, pointsAwarded: challenge.reward_points });
       } else {
         results.push({ challenge: challenge.title, completed: false, pointsAwarded: 0 });
