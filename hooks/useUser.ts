@@ -55,6 +55,7 @@ export function useUser() {
   const [remoteRewards, setRemoteRewards] = useState<Reward[]>([]);
   const [loyaltyAccountId, setLoyaltyAccountId] = useState<string | null>(null);
   const [accrualRules, setAccrualRules] = useState<Array<{ type: string; points: number; spendAmount?: number }>>([]);
+  const [walletLoading, setWalletLoading] = useState(true);
 
   // En mode invité ou non connecté, utiliser le mockUser
   const user = storeUser ?? mockUser;
@@ -82,15 +83,26 @@ export function useUser() {
 
   // Charger le solde wallet depuis Square Gift Cards au montage
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) { setWalletLoading(false); return; }
+    setWalletLoading(true);
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session?.access_token) return;
+      if (!session?.access_token) { setWalletLoading(false); return; }
+      const storeUser = useAuthStore.getState().user;
       callEdgeFunction<{ success: boolean; balance: number; giftCardId?: string }>(
         'manage-wallet',
-        { action: 'balance' },
+        { action: 'balance', userId: session.user?.id, phone: storeUser?.phone },
         session.access_token,
       ).then((result) => {
-        if (result.error) return; // Silencieux — pas de popup d'erreur pour le wallet
+        // eslint-disable-next-line no-console
+        console.log('[useUser][wallet] manage-wallet response:', JSON.stringify(result, null, 2));
+        // eslint-disable-next-line no-console
+        console.log('[useUser][wallet] storeUser before update:', {
+          walletBalance: useAuthStore.getState().user?.walletBalance,
+          squareCustomerId: useAuthStore.getState().user?.squareCustomerId,
+          squareGiftCardId: useAuthStore.getState().user?.squareGiftCardId,
+          phone: useAuthStore.getState().user?.phone,
+        });
+        if (result.error) { setWalletLoading(false); return; }
         if (result.data?.success) {
           const { setUser } = useAuthStore.getState();
           const current = useAuthStore.getState().user;
@@ -98,9 +110,14 @@ export function useUser() {
             const updates: Partial<User> = {};
             if (result.data.balance !== current.walletBalance) updates.walletBalance = result.data.balance;
             if (result.data.giftCardId && result.data.giftCardId !== current.squareGiftCardId) updates.squareGiftCardId = result.data.giftCardId;
-            if (Object.keys(updates).length > 0) setUser({ ...current, ...updates });
+            if (Object.keys(updates).length > 0) {
+              // eslint-disable-next-line no-console
+              console.log('[useUser][wallet] applying updates:', updates);
+              setUser({ ...current, ...updates });
+            }
           }
         }
+        setWalletLoading(false);
       });
     });
   }, [isAuthenticated]);
@@ -138,26 +155,10 @@ export function useUser() {
           }
         }
       });
-    } else {
-      // Fallback : charger les points depuis le profil Supabase
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (!session?.user) return;
-        supabase
-          .from('profiles')
-          .select('loyalty_points, loyalty_level')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data }) => {
-            if (data && data.loyalty_points != null) {
-              const { updateProfile } = useAuthStore.getState();
-              updateProfile({
-                loyaltyPoints: data.loyalty_points,
-                loyaltyLevel: (data.loyalty_level as LoyaltyLevel) ?? undefined,
-              });
-            }
-          });
-      });
     }
+    // Pas de fallback Supabase : si pas de squareCustomerId, les points restent
+    // indéterminés. Doctrine Square = source de vérité : mieux ne rien afficher
+    // qu'un chiffre stocké dans Supabase qui pourrait diverger de Square.
   }, [isAuthenticated, user.squareCustomerId]);
 
   // Infos fidélité calculées
@@ -189,14 +190,16 @@ export function useUser() {
     transactions: [],
   }), [user.walletBalance, user.squareGiftCardId]);
 
-  // Mise à jour du profil — store local + Supabase
+  // Mise à jour du profil — store local + Supabase (champs non-financiers uniquement).
+  // Doctrine : wallet_balance et loyalty_points NE SONT PLUS écrits depuis le client.
+  // Source de vérité = Square ; cache Supabase mis à jour uniquement par les edge functions.
   const updateProfile = useCallback(async (updates: Partial<User>) => {
     const { setUser } = useAuthStore.getState();
     if (storeUser) {
       setUser({ ...storeUser, ...updates } as User);
     }
 
-    // Persister dans Supabase profiles
+    // Persister dans Supabase profiles (champs profil uniquement)
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -204,8 +207,7 @@ export function useUser() {
         if (updates.fullName !== undefined) dbFields.full_name = updates.fullName;
         if (updates.email !== undefined) dbFields.email = updates.email;
         if (updates.dietaryPreferences !== undefined) dbFields.dietary_preferences = updates.dietaryPreferences;
-        if (updates.loyaltyPoints !== undefined) dbFields.loyalty_points = updates.loyaltyPoints;
-        if (updates.walletBalance !== undefined) dbFields.wallet_balance = updates.walletBalance;
+        // NE PAS écrire loyalty_points, wallet_balance, loyalty_level : Square = source de vérité
         await supabase
           .from('profiles')
           .upsert({ id: session.user.id, ...dbFields }, { onConflict: 'id' });
@@ -213,23 +215,36 @@ export function useUser() {
     } catch { /* non bloquant */ }
   }, [storeUser]);
 
-  // Recharger le wallet — met à jour le store ET Supabase
-  const rechargeWallet = useCallback(async (amount: number) => {
-    const { setUser } = useAuthStore.getState();
-    if (storeUser) {
-      const newBalance = storeUser.walletBalance + amount;
-      setUser({ ...storeUser, walletBalance: newBalance } as User);
-      // Persister dans Supabase
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await supabase
-            .from('profiles')
-            .upsert({ id: session.user.id, wallet_balance: newBalance, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+  // Rafraîchir le solde wallet depuis Square (source de vérité).
+  // Appelé après une recharge réussie ou un paiement pour sync le cache local.
+  // Le paramètre `amount` est ignoré (rétrocompat API) — on relit toujours Square.
+  const refreshWallet = useCallback(async (_ignored?: number) => {
+    if (!isAuthenticated) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const result = await callEdgeFunction<{ success: boolean; balance: number; giftCardId?: string }>(
+        'manage-wallet',
+        { action: 'balance' },
+        session.access_token,
+      );
+      if (result.data?.success) {
+        const { setUser } = useAuthStore.getState();
+        const current = useAuthStore.getState().user;
+        if (current) {
+          const updates: Partial<User> = {};
+          if (result.data.balance !== current.walletBalance) updates.walletBalance = result.data.balance;
+          if (result.data.giftCardId && result.data.giftCardId !== current.squareGiftCardId) {
+            updates.squareGiftCardId = result.data.giftCardId;
+          }
+          if (Object.keys(updates).length > 0) setUser({ ...current, ...updates });
         }
-      } catch { /* non bloquant */ }
-    }
-  }, [storeUser]);
+      }
+    } catch { /* non bloquant */ }
+  }, [isAuthenticated]);
+
+  // Alias de compat — même signature qu'avant, mais re-fetch Square au lieu d'ajouter.
+  const rechargeWallet = refreshWallet;
 
   return {
     user,
@@ -237,9 +252,11 @@ export function useUser() {
     loyalty,
     loyaltyAccountId,
     wallet,
+    walletLoading,
     rewards: remoteRewards,
     accrualRules,
     updateProfile,
     rechargeWallet,
+    refreshWallet,
   };
 }

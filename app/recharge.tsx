@@ -1,4 +1,4 @@
-// Écran Recharge Wallet — paiement par carte puis crédit wallet
+// Écran Recharge Wallet — paiement par carte via Square Web Payments SDK
 import { useState } from 'react';
 import {
   View,
@@ -29,7 +29,7 @@ function getRechargeHTML(amountCents: number) {
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,sans-serif;background:#F0F0E5;padding:16px}
 #card-container{min-height:100px;margin-bottom:16px}
-.btn{width:100%;padding:16px;border:none;border-radius:16px;font-size:16px;font-weight:700;cursor:pointer}
+.btn{width:100%;padding:16px;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer}
 #pay{background:#C27B5A;color:#fff}
 #pay:disabled{opacity:.4}
 .msg{text-align:center;font-size:13px;margin-top:10px;padding:8px;border-radius:8px}
@@ -126,7 +126,6 @@ export default function RechargeScreen() {
 
       const credited = payResult.data.totalCredit ?? amount;
       const bonus = payResult.data.bonus ?? 0;
-      // Mettre à jour le store avec le vrai solde Square + giftCardId
       const { setUser } = useAuthStore.getState();
       const current = useAuthStore.getState().user;
       if (current) {
@@ -159,7 +158,6 @@ export default function RechargeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <ArrowLeft size={18} color={colors.text} strokeWidth={1.5} />
@@ -168,7 +166,6 @@ export default function RechargeScreen() {
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Erreur */}
       {error && (
         <View style={styles.errorBanner}>
           <AlertCircle size={14} color="#C44040" strokeWidth={2} />
@@ -179,13 +176,11 @@ export default function RechargeScreen() {
         </View>
       )}
 
-      {/* Montant */}
       <View style={styles.amountBar}>
         <Wallet size={18} color="#C27B5A" strokeWidth={1.5} />
         <Text style={styles.amountText}>{fmt(amount)} sera crédité sur votre portefeuille</Text>
       </View>
 
-      {/* WebView — même approche que le checkout */}
       <View style={styles.webViewContainer}>
         <WebView
           source={{ html: getRechargeHTML(amount), baseUrl: 'https://web.squarecdn.com' }}
@@ -205,7 +200,6 @@ export default function RechargeScreen() {
         />
       </View>
 
-      {/* Footer */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Shield size={12} color={colors.textMuted} strokeWidth={1.5} />
         <Text style={styles.footerText}>Paiement sécurisé · Square</Text>
@@ -222,11 +216,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 36, height: 36, borderRadius: 8, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontFamily: fonts.bold, fontSize: 17, color: colors.text },
   errorBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginHorizontal: spacing.xl, marginTop: 8, backgroundColor: '#FEF0F0', borderRadius: 12, padding: 12,
+    marginHorizontal: spacing.xl, marginTop: 8, backgroundColor: '#FEF0F0', borderRadius: 8, padding: 12,
   },
   errorText: { fontFamily: fonts.regular, fontSize: 12, color: '#C44040', flex: 1 },
   amountBar: {

@@ -161,9 +161,16 @@ export const useAuthStore = create<AuthState>()(
             updatedAt: new Date().toISOString(),
           };
           set({ user: baseUser, isAuthenticated: true, isLoading: false, isGuest: false });
+          // Paralléliser enrichissement Square + wallet
+          fetchWalletBalance(session.access_token).then((walletResult) => {
+            if (walletResult.data?.success) {
+              set((s) => ({
+                user: s.user ? { ...s.user, walletBalance: walletResult.data!.balance } : s.user,
+              }));
+            }
+          });
           enrichWithSquareData(baseUser, session.access_token).then(async (enriched) => {
             set({ user: enriched });
-            // Persister dans Supabase les données récupérées depuis Square
             try {
               const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
               if (enriched.fullName) updates.full_name = enriched.fullName;
@@ -248,18 +255,22 @@ export const useAuthStore = create<AuthState>()(
               updatedAt: new Date().toISOString(),
             };
             set({ user: baseUser, isAuthenticated: true, isLoading: false });
-            // Rafraîchir les données Square en arrière-plan
-            enrichWithSquareData(baseUser, session.access_token).then(async (enriched) => {
+            // Rafraîchir en PARALLÈLE : données Square + solde wallet
+            const enrichPromise = enrichWithSquareData(baseUser, session.access_token);
+            const walletPromise = fetchWalletBalance(session.access_token);
+
+            // Wallet : mettre à jour dès que disponible (pas besoin d'attendre Square)
+            walletPromise.then((walletResult) => {
+              if (walletResult.data?.success) {
+                set((s) => ({
+                  user: s.user ? { ...s.user, walletBalance: walletResult.data!.balance } : s.user,
+                }));
+              }
+            });
+
+            // Square : mettre à jour puis persister
+            enrichPromise.then(async (enriched) => {
               set({ user: enriched });
-              // Synchroniser le solde wallet depuis Square Gift Cards
-              fetchWalletBalance(session.access_token).then((walletResult) => {
-                if (walletResult.data?.success) {
-                  set((s) => ({
-                    user: s.user ? { ...s.user, walletBalance: walletResult.data!.balance } : s.user,
-                  }));
-                }
-              });
-              // Persister dans Supabase les données récupérées depuis Square
               try {
                 const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
                 if (enriched.fullName) updates.full_name = enriched.fullName;
