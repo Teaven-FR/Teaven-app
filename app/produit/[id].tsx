@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft,
   Share2,
@@ -26,6 +26,7 @@ import {
   Leaf,
   Wheat,
   Heart,
+  Check,
 } from 'lucide-react-native';
 import { ModifierSelector } from '@/components/features/ModifierSelector';
 import { ProductMiniCard } from '@/components/features/ProductMiniCard';
@@ -74,6 +75,26 @@ export default function ProductScreen() {
   const [selectedModifiers, setSelectedModifiers] = useState<Record<string, string[]>>({});
   const [selectedVariationId, setSelectedVariationId] = useState<string | undefined>();
 
+  // Toast inline (visible devant la modale)
+  const [inlineToast, setInlineToast] = useState<string | null>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTranslateY = useRef(new Animated.Value(-40)).current;
+  const showInlineToast = useCallback((msg: string) => {
+    setInlineToast(msg);
+    toastOpacity.setValue(0);
+    toastTranslateY.setValue(-40);
+    Animated.parallel([
+      Animated.spring(toastTranslateY, { toValue: 0, damping: 15, stiffness: 200, useNativeDriver: Platform.OS !== 'web' }),
+      Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: Platform.OS !== 'web' }),
+    ]).start();
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(toastTranslateY, { toValue: -40, duration: 250, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(toastOpacity, { toValue: 0, duration: 200, useNativeDriver: Platform.OS !== 'web' }),
+      ]).start(() => setInlineToast(null));
+    }, 2500);
+  }, [toastOpacity, toastTranslateY]);
+
   // Parallax scroll
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<any>(null);
@@ -85,7 +106,6 @@ export default function ProductScreen() {
 
   // Micro-interaction boutons CTA
   const addScale = useRef(new Animated.Value(1)).current;
-  const orderScale = useRef(new Animated.Value(1)).current;
 
   const resolvedProduct = product;
 
@@ -178,12 +198,8 @@ export default function ProductScreen() {
 
   const handleAddToCart = () => {
     addItem(resolvedProduct, quantity, activeVariation, selectedModifiers);
-    showToast(`${resolvedProduct.name} ajouté au panier`);
-  };
-
-  const handleOrder = () => {
-    addItem(resolvedProduct, quantity, activeVariation, selectedModifiers);
-    router.push('/(tabs)/panier');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showInlineToast(`${resolvedProduct.name} ajouté au panier`);
   };
 
   const animatePressIn = (scale: Animated.Value) => {
@@ -224,14 +240,10 @@ export default function ProductScreen() {
             { transform: [{ translateY: heroTranslate }] },
           ]}
         >
-          <LinearGradient
-            colors={['#2C4A32', '#3A5A40', '#4A6B50']}
-            style={StyleSheet.absoluteFill}
-          />
           <Image
             source={{ uri: resolvedProduct.image }}
-            style={styles.heroImage}
-            contentFit="contain"
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
             transition={400}
             placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
           />
@@ -497,31 +509,36 @@ export default function ProductScreen() {
               onPress={hasUnmetRequired ? undefined : handleAddToCart}
               onPressIn={hasUnmetRequired ? undefined : () => animatePressIn(addScale)}
               onPressOut={hasUnmetRequired ? undefined : () => animatePressOut(addScale)}
-              style={[styles.ctaButton, styles.ctaSecondary, hasUnmetRequired && styles.ctaDisabled]}
+              style={[styles.ctaButton, styles.ctaPrimary, hasUnmetRequired && styles.ctaDisabled]}
               accessibilityLabel="Ajouter au panier"
               accessibilityState={{ disabled: hasUnmetRequired }}
             >
-              <Text style={[styles.ctaSecondaryText, hasUnmetRequired && styles.ctaDisabledText]}>
-                Ajouter au panier
-              </Text>
-            </Pressable>
-          </Animated.View>
-          <Animated.View style={{ flex: 1, transform: [{ scale: orderScale }] }}>
-            <Pressable
-              onPress={hasUnmetRequired ? undefined : handleOrder}
-              onPressIn={hasUnmetRequired ? undefined : () => animatePressIn(orderScale)}
-              onPressOut={hasUnmetRequired ? undefined : () => animatePressOut(orderScale)}
-              style={[styles.ctaButton, styles.ctaPrimary, hasUnmetRequired && styles.ctaDisabled]}
-              accessibilityLabel="Commander maintenant"
-              accessibilityState={{ disabled: hasUnmetRequired }}
-            >
               <Text style={[styles.ctaPrimaryText, hasUnmetRequired && styles.ctaDisabledText]}>
-                Commander
+                Ajouter au panier
               </Text>
             </Pressable>
           </Animated.View>
         </View>
       </View>
+      {/* Toast inline — visible devant la modale */}
+      {inlineToast && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute', top: insets.top + 12, left: 16, right: 16, zIndex: 99999,
+            backgroundColor: '#75967F', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+            paddingVertical: 13, paddingHorizontal: 16,
+            flexDirection: 'row', alignItems: 'center', gap: 12,
+            shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 99,
+            transform: [{ translateY: toastTranslateY }], opacity: toastOpacity,
+          }}
+        >
+          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}>
+            <Check size={16} color="#F0F0E5" strokeWidth={2.5} />
+          </View>
+          <Text style={{ fontFamily: fonts.bold, fontSize: 13.5, color: '#F0F0E5', flex: 1, lineHeight: 19 }}>{inlineToast}</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -543,13 +560,7 @@ const styles = StyleSheet.create({
   // Hero
   hero: {
     height: HERO_HEIGHT,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 20,
-  },
-  heroImage: {
-    width: '100%',
-    height: 280,
+    overflow: 'hidden',
   },
   navButton: {
     position: 'absolute',

@@ -61,7 +61,7 @@ function mapProducts(data: Record<string, unknown>[]): Product[] {
   });
 }
 
-/** Fetch produits depuis Supabase */
+/** Fetch produits depuis Supabase — filtre sur available (Square) ET is_visible_in_app (back-office Teaven) */
 async function queryProducts() {
   return supabase
     .from('products')
@@ -74,27 +74,59 @@ async function queryProducts() {
       )
     `)
     .eq('available', true)
+    .eq('is_visible_in_app', true)
     .order('name');
 }
 
+/** Labels et ordre d'affichage — Carte 2026 (10 catégories) */
 const CATEGORY_LABELS: Record<string, string> = {
-  'patisseries': 'Pâtisseries',
-  'boissons': 'Boissons',
-  'toasts': 'Toasts',
-  'assiettes-bowls': 'Assiettes & Bowls',
-  'salades': 'Salades',
+  'formules-midi': 'Formules midi',
+  'plats-sales': 'Plats salés',
+  'bol-gaufres-sucres': 'Bowls & gaufres sucrés',
+  'patisserie': 'Pâtisseries',
+  'cafe': 'Cafés',
+  'cafe-froid': 'Cafés froids',
+  'matcha': 'Carte du matcha',
+  'autres': 'Chaï, Ube & autres',
+  'the-infusion-chaude': 'Thés & infusions chaudes',
+  'eau-jus': 'Eau, jus & infusions froides',
 };
 
-/** Dérive les catégories depuis les produits actifs */
+/** Ordre fixe d'affichage des catégories (Carte 2026) */
+const CATEGORY_ORDER: string[] = [
+  'formules-midi',
+  'plats-sales',
+  'bol-gaufres-sucres',
+  'patisserie',
+  'cafe',
+  'cafe-froid',
+  'matcha',
+  'autres',
+  'the-infusion-chaude',
+  'eau-jus',
+];
+
+/** Dérive les catégories depuis les produits actifs, triées selon l'ordre Carte 2026 */
 function deriveCategoriesFromProducts(products: Product[]): Category[] {
   const seen = new Set<string>();
-  const cats: Category[] = [{ id: 'all', label: 'Tout' }];
   for (const p of products) {
-    if (p.category && !seen.has(p.category)) {
-      seen.add(p.category);
+    if (p.category) seen.add(p.category);
+  }
+  const cats: Category[] = [{ id: 'all', label: 'Tout' }];
+  for (const slug of CATEGORY_ORDER) {
+    if (seen.has(slug)) {
       cats.push({
-        id: p.category,
-        label: CATEGORY_LABELS[p.category] ?? (p.category.charAt(0).toUpperCase() + p.category.slice(1)),
+        id: slug,
+        label: CATEGORY_LABELS[slug] ?? slug,
+      });
+    }
+  }
+  // Ajouter les catégories non prévues dans l'ordre (sécurité)
+  for (const slug of seen) {
+    if (!CATEGORY_ORDER.includes(slug)) {
+      cats.push({
+        id: slug,
+        label: CATEGORY_LABELS[slug] ?? (slug.charAt(0).toUpperCase() + slug.slice(1)),
       });
     }
   }

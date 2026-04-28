@@ -9,6 +9,7 @@ import {
   Pressable,
   Animated,
   Alert,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -39,6 +40,7 @@ import {
   Wallet,
   Plus,
   Sparkles,
+  Truck,
 } from 'lucide-react-native';
 import { Linking } from 'react-native';
 import { ProgressCircle } from '@/components/ui/ProgressCircle';
@@ -48,6 +50,7 @@ import { useCartStore } from '@/stores/cartStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useUser } from '@/hooks/useUser';
 import { useOrderStore } from '@/stores/orderStore';
+import { useCatalog } from '@/hooks/useCatalog';
 import { colors, fonts, spacing, shadows } from '@/constants/theme';
 
 // Thèmes de carte fidélité selon le niveau
@@ -138,6 +141,7 @@ export default function ProfilScreen() {
   const router = useRouter();
   const { showToast } = useToast();
   const addItem = useCartStore((s) => s.addItem);
+  const { allProducts } = useCatalog();
   const { user, isGuest, loyalty, wallet, rechargeWallet } = useUser();
 
   // Récompenses supprimées — paliers fidélité uniquement
@@ -146,6 +150,7 @@ export default function ProfilScreen() {
   const orderHistory = useOrderStore((s) => s.orderHistory);
 
   const [rechargeVisible, setRechargeVisible] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<typeof orderHistory[0] | null>(null);
 
   // Animation compteur points
   const pointsAnim = useRef(new Animated.Value(0)).current;
@@ -454,7 +459,7 @@ export default function ProfilScreen() {
                 <Pressable
                   key={order.id}
                   style={({ pressed }) => [styles.orderCard, pressed && { opacity: 0.7 }]}
-                  onPress={() => router.push(`/order/${order.id}`)}
+                  onPress={() => setSelectedOrder(order)}
                 >
                   <View style={styles.orderInfo}>
                     <View style={styles.orderIconWrap}>
@@ -553,6 +558,17 @@ export default function ProfilScreen() {
             <ChevronRight size={16} color={colors.textMuted} strokeWidth={1.5} />
           </Pressable>
           <View style={styles.menuSep} />
+          <Pressable
+            style={styles.menuItem}
+            accessibilityRole="button"
+            onPress={() => router.push('/dev-test-delivery')}
+          >
+            <Truck size={18} color={colors.orange} strokeWidth={1.6} />
+            <Text style={styles.menuItemText}>Test livraison (DEV)</Text>
+            <View style={styles.menuItemSpacer} />
+            <ChevronRight size={16} color={colors.textMuted} strokeWidth={1.5} />
+          </Pressable>
+          <View style={styles.menuSep} />
           {isAuthenticated ? (
             <Pressable style={styles.menuItem} onPress={handleLogout} accessibilityRole="button">
               <LogOut size={18} color={colors.error} strokeWidth={1.6} />
@@ -570,6 +586,53 @@ export default function ProfilScreen() {
       </ScrollView>
 
       {/* Modal rechargement */}
+      {/* ──── Modale recommander commande ──── */}
+      <Modal visible={!!selectedOrder} animationType="slide" transparent>
+        <View style={styles.reorderBackdrop}>
+          <View style={styles.reorderSheet}>
+            <View style={styles.reorderHandle} />
+            <Text style={styles.reorderTitle}>
+              Commande du {selectedOrder ? new Date(selectedOrder.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : ''}
+            </Text>
+            <View style={styles.reorderItems}>
+              {selectedOrder?.items.map((item: { name: string; productId?: string; quantity?: number }, i: number) => {
+                const available = allProducts.some((p) => p.id === item.productId || p.name === item.name);
+                return (
+                  <View key={i} style={[styles.reorderItem, !available && { opacity: 0.4 }]}>
+                    <Text style={styles.reorderItemQty}>{item.quantity ?? 1}×</Text>
+                    <Text style={styles.reorderItemName} numberOfLines={1}>{item.name}</Text>
+                    {!available && <Text style={styles.reorderItemUnavailable}>Indisponible</Text>}
+                  </View>
+                );
+              })}
+            </View>
+            <Pressable
+              style={styles.reorderCta}
+              onPress={() => {
+                if (!selectedOrder) return;
+                let added = 0;
+                for (const item of selectedOrder.items) {
+                  const product = allProducts.find((p: { id: string; name: string }) => p.id === item.productId || p.name === item.name);
+                  if (product) { addItem(product, item.quantity ?? 1); added++; }
+                }
+                setSelectedOrder(null);
+                if (added > 0) {
+                  showToast(`${added} article${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''} au panier`);
+                  router.push('/(tabs)/panier');
+                } else {
+                  showToast('Produits non disponibles');
+                }
+              }}
+            >
+              <Text style={styles.reorderCtaText}>Ajouter au panier</Text>
+            </Pressable>
+            <Pressable style={styles.reorderClose} onPress={() => setSelectedOrder(null)}>
+              <Text style={styles.reorderCloseText}>Fermer</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <RechargeModal
         visible={rechargeVisible}
         onClose={() => setRechargeVisible(false)}
@@ -1235,5 +1298,82 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 12,
     color: colors.green,
+  },
+
+  // Modale recommander commande
+  reorderBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  reorderSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 40,
+    paddingTop: 12,
+    maxHeight: '70%',
+  },
+  reorderHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D0D0CC',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  reorderTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 16,
+  },
+  reorderItems: {
+    gap: 10,
+    marginBottom: 20,
+  },
+  reorderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reorderItemQty: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.textSecondary,
+    width: 24,
+  },
+  reorderItemName: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.text,
+    flex: 1,
+  },
+  reorderItemUnavailable: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: '#C44040',
+  },
+  reorderCta: {
+    backgroundColor: colors.green,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  reorderCtaText: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
+  reorderClose: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  reorderCloseText: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.textSecondary,
   },
 });

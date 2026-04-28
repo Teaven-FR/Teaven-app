@@ -6,6 +6,7 @@ import { useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Plus, Star } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
 import type { Product } from '@/lib/types';
 import { useCartStore } from '@/stores/cartStore';
@@ -61,6 +62,7 @@ export function ProductCardCarousel({ product, onPress }: ProductCardCarouselPro
     if (isAnimating.current) return;
     isAnimating.current = true;
     addItem(product);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Phase 1 : masquer "+", étirer le bouton, afficher "AJOUTÉ"
     Animated.parallel([
@@ -159,10 +161,12 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     position: 'relative',
+    height: 200,
+    overflow: 'hidden',
   },
   image: {
     width: '100%',
-    height: 180,
+    height: '100%',
   },
   ratingBadge: {
     position: 'absolute',

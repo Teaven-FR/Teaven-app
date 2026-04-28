@@ -7,33 +7,45 @@ import {
   StyleSheet,
   Pressable,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Coffee, Gift, Percent, Star, Check, ChevronRight, Zap, Flame, Trophy, Lock, Sparkles } from 'lucide-react-native';
+import { ArrowLeft, Coffee, Gift, Percent, Star, Check, ChevronRight, Flame, Trophy, Heart, Users, Lock, Sparkles } from 'lucide-react-native';
 import { useUser } from '@/hooks/useUser';
+import { useChallenges } from '@/hooks/useChallenges';
 import { useToast } from '@/contexts/ToastContext';
 import { colors, levelColors, fonts, spacing, shadows } from '@/constants/theme';
 import { ProgressCircle } from '@/components/ui/ProgressCircle';
 import { LEVEL_DATA } from '@/app/niveau/[level]';
 
-interface Challenge {
-  id: string;
-  icon: 'flame' | 'trophy' | 'star';
-  title: string;
-  description: string;
-  progress: number;
-  target: number;
-  reward: number;
-  claimed: boolean;
-}
+const CHALLENGE_ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string; strokeWidth: number }>> = {
+  flame: Flame,
+  trophy: Trophy,
+  star: Star,
+  coffee: Coffee,
+  heart: Heart,
+  users: Users,
+};
 
-const INITIAL_CHALLENGES: Challenge[] = [
-  { id: 'c1', icon: 'flame', title: 'Série en cours', description: 'Commander 5 jours consécutifs', progress: 3, target: 5, reward: 500, claimed: false },
-  { id: 'c2', icon: 'trophy', title: 'Challenge Mars', description: '10 commandes ce mois-ci', progress: 4, target: 10, reward: 1000, claimed: false },
-  { id: 'c3', icon: 'star', title: 'Explorateur', description: 'Essayer 3 catégories différentes', progress: 3, target: 3, reward: 300, claimed: false },
-];
+const CHALLENGE_ICON_BG: Record<string, string> = {
+  flame: '#FFF0D6',
+  trophy: '#F0F0EE',
+  coffee: '#F5ECE5',
+  heart: '#FDECEA',
+  star: '#F5F0E1',
+  users: '#E8EDF7',
+};
+
+const CHALLENGE_ICON_COLOR: Record<string, string> = {
+  flame: '#C4A962',
+  trophy: '#8A8A82',
+  coffee: '#C4845C',
+  heart: '#D4544A',
+  star: '#C4A962',
+  users: '#738478',
+};
 
 const LEVEL_THEMES: Record<string, { gradient: readonly [string, string, string]; text: string; subtext: string; progressColor: string; trackBg: string }> = {
   'Première Parenthèse': { gradient: ['#F7F4ED', '#EDE8D8', '#E4DFC8'], text: '#2C3A2E', subtext: '#738478', progressColor: '#75967F', trackBg: 'rgba(117,150,127,0.15)' },
@@ -70,9 +82,9 @@ const FALLBACK_REWARDS = [
 export default function FideliteScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, isGuest, loyalty, rewards: squareRewards, updateProfile } = useUser();
+  const { user, isGuest, loyalty, rewards: squareRewards } = useUser();
+  const { challenges: realChallenges, loading: challengesLoading } = useChallenges();
   const { showToast } = useToast();
-  const [challenges, setChallenges] = useState<Challenge[]>(INITIAL_CHALLENGES);
 
   const displayRewards = squareRewards.length > 0 ? squareRewards : FALLBACK_REWARDS;
 
@@ -100,20 +112,14 @@ export default function FideliteScreen() {
     return () => pointsAnim.removeListener(listenerId);
   }, [loyalty.points, loyalty.progressPercent]);
 
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 100],
-    outputRange: ['0%', '100%'],
-  });
-
-  /** Réclamer les points d'un défi complété */
-  const claimChallenge = (challenge: Challenge) => {
-    if (challenge.claimed || challenge.progress < challenge.target) return;
-    setChallenges((prev) =>
-      prev.map((c) => (c.id === challenge.id ? { ...c, claimed: true } : c)),
-    );
-    updateProfile({ loyaltyPoints: loyalty.points + challenge.reward });
-    showToast(`+${challenge.reward} pts crédités !`);
-  };
+  // Top 3 défis pour affichage compact sur la page fidélité
+  const topChallenges = realChallenges
+    .filter((c) => !c.locked)
+    .sort((a, b) => {
+      if (a.claimed !== b.claimed) return a.claimed ? 1 : -1;
+      return (b.progress / Math.max(b.target, 1)) - (a.progress / Math.max(a.target, 1));
+    })
+    .slice(0, 3);
 
   const currentLevel = LEVELS.find((l) => l.name === loyalty.level) ?? LEVELS[0];
   const nextLevel = LEVELS.find((l) => l.min > loyalty.points);
@@ -271,52 +277,71 @@ export default function FideliteScreen() {
 
       {/* Défis */}
       <Text style={styles.sectionTitle}>Mes défis</Text>
-      <View style={styles.challengesList}>
-        {challenges.map((ch) => {
-          const Icon = ch.icon === 'flame' ? Flame : ch.icon === 'trophy' ? Trophy : Star;
-          const isDone = ch.progress >= ch.target;
-          const iconBg = ch.icon === 'flame' ? '#FFF0D6' : ch.icon === 'trophy' ? '#F0F0EE' : colors.greenLight;
-          const iconColor = ch.icon === 'flame' ? colors.gold : ch.icon === 'trophy' ? '#8A8A82' : colors.green;
-          return (
-            <View key={ch.id} style={[styles.challengeCard, ch.claimed && styles.challengeClaimed]}>
-              <View style={[styles.challengeIconWrap, { backgroundColor: iconBg }]}>
-                <Icon size={18} color={iconColor} strokeWidth={1.5} />
-              </View>
-              <View style={styles.challengeInfo}>
-                <View style={styles.challengeTopRow}>
-                  <Text style={styles.challengeTitle}>{ch.title}</Text>
-                  <Text style={[styles.challengeReward, isDone && !ch.claimed && { color: colors.green }]}>
-                    +{ch.reward} pts
-                  </Text>
+      {challengesLoading ? (
+        <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
+          <ActivityIndicator size="small" color={colors.green} />
+        </View>
+      ) : (
+        <View style={styles.challengesList}>
+          {topChallenges.map((ch) => {
+            const Icon = CHALLENGE_ICON_MAP[ch.icon] ?? Trophy;
+            const isDone = ch.completed || (ch.type !== 'morning_bonus' && ch.progress >= ch.target);
+            const iconBg = CHALLENGE_ICON_BG[ch.icon] ?? '#F0F0EE';
+            const iconColor = CHALLENGE_ICON_COLOR[ch.icon] ?? colors.green;
+            const pct = ch.type === 'morning_bonus' ? 100 : Math.min(100, (ch.progress / Math.max(ch.target, 1)) * 100);
+            return (
+              <View key={ch.id} style={[styles.challengeCard, ch.claimed && styles.challengeClaimed]}>
+                <View style={[styles.challengeIconWrap, { backgroundColor: iconBg }]}>
+                  <Icon size={18} color={iconColor} strokeWidth={1.5} />
                 </View>
-                <Text style={styles.challengeDesc}>{ch.description}</Text>
-                <View style={styles.challengeProgressRow}>
-                  <View style={styles.challengeBar}>
-                    <View style={[styles.challengeFill, { width: `${Math.min(100, (ch.progress / ch.target) * 100)}%` as any }]} />
+                <View style={styles.challengeInfo}>
+                  <View style={styles.challengeTopRow}>
+                    <Text style={styles.challengeTitle}>{ch.title}</Text>
+                    <Text style={[styles.challengeReward, isDone && !ch.claimed && { color: colors.green }]}>
+                      +{ch.reward} pts{ch.type === 'morning_bonus' ? '/cmd' : ''}
+                    </Text>
                   </View>
-                  <Text style={styles.challengeCount}>{ch.progress}/{ch.target}</Text>
+                  <Text style={styles.challengeDesc}>{ch.description}</Text>
+                  {ch.type !== 'morning_bonus' && (
+                    <View style={styles.challengeProgressRow}>
+                      <View style={styles.challengeBar}>
+                        <View style={[styles.challengeFill, { width: `${pct}%` as any }]} />
+                      </View>
+                      <Text style={styles.challengeCount}>{ch.progress}/{ch.target}</Text>
+                    </View>
+                  )}
                 </View>
+                {isDone && !ch.claimed && ch.type !== 'morning_bonus' ? (
+                  <Pressable
+                    onPress={() => showToast(`+${ch.reward} pts crédités !`)}
+                    style={styles.claimBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Réclamer les points"
+                  >
+                    <Text style={styles.claimBtnText}>Réclamer</Text>
+                  </Pressable>
+                ) : ch.claimed ? (
+                  <View style={styles.claimedBadge}>
+                    <Check size={14} color={colors.green} strokeWidth={2.5} />
+                  </View>
+                ) : ch.type === 'morning_bonus' ? (
+                  <Flame size={14} color={colors.gold} strokeWidth={1.5} />
+                ) : (
+                  <Lock size={14} color={colors.textMuted} strokeWidth={1.5} />
+                )}
               </View>
-              {isDone && !ch.claimed ? (
-                <Pressable
-                  onPress={() => claimChallenge(ch)}
-                  style={styles.claimBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Réclamer les points"
-                >
-                  <Text style={styles.claimBtnText}>Réclamer</Text>
-                </Pressable>
-              ) : ch.claimed ? (
-                <View style={styles.claimedBadge}>
-                  <Check size={14} color={colors.green} strokeWidth={2.5} />
-                </View>
-              ) : (
-                <Lock size={14} color={colors.textMuted} strokeWidth={1.5} />
-              )}
-            </View>
-          );
-        })}
-      </View>
+            );
+          })}
+          <Pressable
+            onPress={() => router.push('/defis')}
+            style={styles.seeAllDefis}
+            accessibilityRole="button"
+          >
+            <Text style={styles.seeAllDefisText}>Voir tous les défis</Text>
+            <ChevronRight size={14} color={colors.green} strokeWidth={2} />
+          </Pressable>
+        </View>
+      )}
 
       {/* Récompenses — données Square */}
       <View style={styles.sectionHeader}>
@@ -474,6 +499,8 @@ const styles = StyleSheet.create({
   claimBtn: { backgroundColor: colors.green, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   claimBtnText: { fontFamily: fonts.bold, fontSize: 11, color: '#FFFFFF' },
   claimedBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.greenLight, alignItems: 'center', justifyContent: 'center' },
+  seeAllDefis: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: spacing.sm },
+  seeAllDefisText: { fontFamily: fonts.bold, fontSize: 12, color: colors.green },
   ctaBlock: { paddingHorizontal: spacing.xl, marginBottom: spacing.xl },
   ctaGradient: { borderRadius: 18, padding: 22, ...shadows.loyalty },
   ctaTitle: { fontFamily: fonts.bold, fontSize: 18, color: '#FFFFFF', marginBottom: spacing.sm },

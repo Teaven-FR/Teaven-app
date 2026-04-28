@@ -5,6 +5,7 @@ import { useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Plus } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { colors, fonts, radii, spacing } from '@/constants/theme';
 import type { Product } from '@/lib/types';
 import { useCartStore } from '@/stores/cartStore';
@@ -60,6 +61,7 @@ export function ProductGridCard({ product, onPress }: ProductGridCardProps) {
     if (isAnimating.current) return;
     isAnimating.current = true;
     addItem(product);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Phase 1 : masquer "+", étirer le bouton, afficher "AJOUTÉ"
     Animated.parallel([
@@ -170,12 +172,13 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     position: 'relative',
+    overflow: 'hidden',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
   },
   image: {
     width: '100%',
     aspectRatio: 0.8,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
   },
 
   // Badges statut (populaire, nouveau, saison)

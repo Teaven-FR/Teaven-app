@@ -96,17 +96,6 @@ export default function TimeSlotPicker({ slots, selectedId, onSelect }: TimeSlot
                 {slot.timeRange}
               </Text>
             )}
-
-            {/* Nombre en file d'attente */}
-            <Text
-              style={[
-                styles.queueText,
-                isSelected && styles.queueTextSelected,
-                isDisabled && styles.textDisabled,
-              ]}
-            >
-              {slot.queueCount} en file
-            </Text>
           </Pressable>
         );
       })}

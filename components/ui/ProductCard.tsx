@@ -3,6 +3,7 @@ import { useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Plus } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
 import type { Product } from '@/lib/types';
 import { useCartStore } from '@/stores/cartStore';
@@ -36,6 +37,7 @@ export function ProductCard({ product, onPress }: ProductCardProps) {
     if (isAnimating.current) return;
     isAnimating.current = true;
     addItem(product);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Phase 1 : masquer "+", étirer le bouton, afficher "AJOUTÉ"
     Animated.parallel([
@@ -57,12 +59,14 @@ export function ProductCard({ product, onPress }: ProductCardProps) {
   return (
     <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
       <Animated.View style={[styles.card, { transform: [{ scale: cardScale }] }]}>
-      <Image
-        source={{ uri: product.image }}
-        style={styles.image}
-        contentFit="cover"
-        transition={300}
-      />
+      <View style={styles.imageWrapper}>
+        <Image
+          source={{ uri: product.image }}
+          style={styles.image}
+          contentFit="cover"
+          transition={300}
+        />
+      </View>
       <View style={styles.content}>
         <View style={styles.tags}>
           {product.tags.map((tag) => (
@@ -99,9 +103,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadows.card,
   },
+  imageWrapper: {
+    width: '100%',
+    height: 170,
+    overflow: 'hidden',
+  },
   image: {
     width: '100%',
-    height: 140,
+    height: '100%',
   },
   content: {
     padding: spacing.md,

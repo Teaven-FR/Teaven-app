@@ -47,7 +47,7 @@ const MOMENTS = [
     description: 'Un goûter, une pâtisserie, un moment doux',
     amount: 1200,
     icon: Coffee,
-    gradient: ['#E8D5D3', '#D4A5A3'] as const,
+    gradient: ['#8AAE94', '#75967F'] as const,
   },
   {
     id: 'repas-midi',
@@ -55,7 +55,7 @@ const MOMENTS = [
     description: 'De quoi se faire plaisir sur la pause déjeuner',
     amount: 2000,
     icon: UtensilsCrossed,
-    gradient: ['#D4A5A3', '#C9918F'] as const,
+    gradient: ['#75967F', '#5E7E68'] as const,
   },
   {
     id: 'brunch',
@@ -63,7 +63,7 @@ const MOMENTS = [
     description: "L'expérience Teaven en solo",
     amount: 3000,
     icon: Heart,
-    gradient: ['#C9918F', '#B07A78'] as const,
+    gradient: ['#5E7E68', '#4A6B50'] as const,
   },
   {
     id: 'brunch-deux',
@@ -71,7 +71,7 @@ const MOMENTS = [
     description: 'Deux brunchs complets, le moment à partager',
     amount: 6000,
     icon: Users,
-    gradient: ['#B59A5E', '#A08A50'] as const,
+    gradient: ['#4A6B50', '#3A5A40'] as const,
   },
 ] as const;
 
@@ -194,7 +194,7 @@ export default function GiftScreen() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Header doré miel — univers Offrir */}
-        <LinearGradient colors={['#D4A5A3', '#C9918F']} style={styles.heroHeader}>
+        <LinearGradient colors={['#75967F', '#4A6B50']} style={styles.heroHeader}>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.heroBack}>
             <ChevronLeft size={22} color="#FFFFFF" strokeWidth={1.5} />
           </Pressable>

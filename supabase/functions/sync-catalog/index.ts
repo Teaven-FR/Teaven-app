@@ -10,96 +10,41 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// 5 catégories Teaven : patisseries, boissons, toasts, assiettes-bowls, salades
+// ──────────────────────────────────────────────────────────────────────────
+// Carte 2026 — catégories autorisées (noms EXACTS Square, lowercase)
+// Seules ces 10 catégories sont affichées dans l'app.
+// La clé est le nom Square normalisé (lowercase, trimmed, emojis stripped).
+// ──────────────────────────────────────────────────────────────────────────
 const CATEGORY_MAP: Record<string, string> = {
-  // ── Pâtisseries ──
-  '🍰 food – pâtisseries': 'patisseries',
-  'les pâtisseries/desserts ✨🍰💚': 'patisseries',
-  'mini cakes 🍰💚': 'patisseries',
-  'cakes et muffins 🍰🧁💚': 'patisseries',
-  'cookies 🍪✨💚': 'patisseries',
-  'cake sans gluten 🍰💚✨': 'patisseries',
-  'brioches 🥮✨💚': 'patisseries',
-  'véganes 🍃🍰': 'patisseries',
-  'cakes et cookies': 'patisseries',
-  'brioches': 'patisseries',
-  'véganes': 'patisseries',
-  'sans gluten': 'patisseries',
-  'pâtisseries maison ✨🍰': 'patisseries',
-  'desserts ✨🍰💚': 'patisseries',
-  'cakes/cookies/muffins ✨💚': 'patisseries',
-  // ── Boissons ──
-  'boissons ☕️🍵': 'boissons',
-  'boissons – café': 'boissons',
-  'boissons – matcha': 'boissons',
-  'boissons – chaï': 'boissons',
-  'boissons – thés': 'boissons',
-  'boissons – infusions&rooibos': 'boissons',
-  'boissons artisanales – thés glacés': 'boissons',
-  'boissons – smootea': 'boissons',
-  'boissons – jus bien-être': 'boissons',
-  'boissons – eau': 'boissons',
-  'boissons – signatures&lattés': 'boissons',
-  'les boissons 🍹✨💚': 'boissons',
-  'cafés ✨☕️': 'boissons',
-  'cafés ✨☕️💚': 'boissons',
-  'café chaud ✨☕️': 'boissons',
-  'café froid ✨☕️🧊': 'boissons',
-  'café froid ✨🧊 ☕️': 'boissons',
-  'matcha chaud ✨🧊🍵': 'boissons',
-  'matcha froid ✨🧊🍵': 'boissons',
-  'matcha, chaï & signatures ✨🍵': 'boissons',
-  'matcha, chaï & signatures': 'boissons',
-  'signatures ✨🍵': 'boissons',
-  'rooibos ✨❤️': 'boissons',
-  'boissons fraîches ✨🧊': 'boissons',
-  'boissons fraîches ✨🍹🧊': 'boissons',
-  'smooteas ✨🥭': 'boissons',
-  'infusions ✨🍃': 'boissons',
-  'thés ✨🍃': 'boissons',
-  'eaux ✨💧': 'boissons',
-  'jus bien-être 🍃💫💚': 'boissons',
-  // ── Toasts ──
-  'food – toasts': 'toasts',
-  'les toasts et triangles 🥪💚': 'toasts',
-  'toasts signature ✨💚': 'toasts',
-  'toasts et plats hc 🥪✨': 'toasts',
-  // ── Assiettes & Bowls ──
-  'food – assiettes & bowls': 'assiettes-bowls',
-  'bowls et assiettes 🍽️🥗💚': 'assiettes-bowls',
-  'assiettes&bowls&salades ✨🥗💚': 'assiettes-bowls',
-  'bowls et granola 💫☀️🥥': 'assiettes-bowls',
-  'bowls ✨💚': 'assiettes-bowls',
-  'petit-déjeuner ✨🥮': 'assiettes-bowls',
-  'petit-déjeuner': 'assiettes-bowls',
-  'food – petit-déjeuner': 'assiettes-bowls',
-  '🍽 food teaven': 'assiettes-bowls',
-  'salée ✨💚': 'assiettes-bowls',
-  'pour les enfants ✨💚': 'assiettes-bowls',
-  'food - veloutés et soupes': 'assiettes-bowls',
-  'les veloutés ✨🍲': 'assiettes-bowls',
-  'food - cartes saisonnales': 'assiettes-bowls',
-  '✨💙❄️ l\'hivernal - la carte d\'hiver ❄️💙✨': 'assiettes-bowls',
-  '💛☀️✨ l\'estival la carte d\'été 💛☀️✨': 'assiettes-bowls',
-  'saint-valentin': 'assiettes-bowls',
-  // ── Salades ──
-  'food – salades': 'salades',
-  'les salades ✨🥗': 'salades',
-  'les salades et veloutés 🥗🍜✨': 'salades',
-  // ── Formules (rattachées aux assiettes-bowls) ──
-  'food - formules teaven': 'assiettes-bowls',
-  'les formules midi ✨💚': 'assiettes-bowls',
-  'les formules après-midi/soir ✨💚': 'assiettes-bowls',
-  'les formules et les plats ✨🥪💚': 'assiettes-bowls',
-  'formules ✨💚⭐': 'assiettes-bowls',
-  'formules ✨💚': 'assiettes-bowls',
-  'formules 🧡✨': 'assiettes-bowls',
-  'formules': 'assiettes-bowls',
-  'brunch&tea ✨💚': 'assiettes-bowls',
-  'midi / brunch ✨🥪💚': 'assiettes-bowls',
-  '⭐ rituels du matin (formules)': 'assiettes-bowls',
-  'rituel du matin ✨☀️': 'assiettes-bowls',
+  'les formules midi': 'formules-midi',
+  'les plats salés': 'plats-sales',
+  'bowls et gaufres sucrés': 'bol-gaufres-sucres',
+  'patisseries': 'patisserie',
+  'pâtisseries': 'patisserie',
+  'cafés': 'cafe',
+  'cafés froids': 'cafe-froid',
+  'carte du matcha': 'matcha',
+  'chaï, ube et autres': 'autres',
+  'thés et infusions chaudes': 'the-infusion-chaude',
+  'eau, jus et infusions froides': 'eau-jus',
 };
+
+/**
+ * Ordre d'affichage des catégories dans l'app (index = position).
+ * Utilisé pour l'ordinal lors de l'upsert dans Supabase.
+ */
+const CATEGORY_ORDER: string[] = [
+  'formules-midi',
+  'plats-sales',
+  'bol-gaufres-sucres',
+  'patisserie',
+  'cafe',
+  'cafe-froid',
+  'matcha',
+  'autres',
+  'the-infusion-chaude',
+  'eau-jus',
+];
 
 interface SquareObject {
   id: string;
@@ -138,9 +83,23 @@ async function fetchAllSquareObjects(
   return all;
 }
 
-/** Résout le slug de catégorie depuis un nom Square (case-insensitive) */
+/** Supprime les emojis et les espaces superflus d'un nom de catégorie */
+function stripEmojis(str: string): string {
+  return str
+    .replace(/[\u{1F300}-\u{1FAD6}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Résout le slug de catégorie depuis un nom Square (case-insensitive, emojis ignorés) */
 function resolveCategory(name: string): string | null {
-  return CATEGORY_MAP[name.toLowerCase().trim()] ?? null;
+  const lower = name.toLowerCase().trim();
+  // Essai exact d'abord
+  if (CATEGORY_MAP[lower]) return CATEGORY_MAP[lower];
+  // Essai sans emojis
+  const stripped = stripEmojis(lower);
+  if (CATEGORY_MAP[stripped]) return CATEGORY_MAP[stripped];
+  return null;
 }
 
 serve(async (req) => {
@@ -245,16 +204,18 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // 4. Upsert catégories
+    // 4. Upsert catégories (ordinal basé sur CATEGORY_ORDER pour l'ordre Carte 2026)
     const categoryRows = categories
       .filter((c) => !c.is_deleted && resolveCategory(c.category_data?.name ?? '') !== null)
-      .map((c, i) => {
+      .map((c) => {
         const name = c.category_data?.name ?? 'unknown';
+        const slug = resolveCategory(name)!;
+        const ordinal = CATEGORY_ORDER.indexOf(slug);
         return {
           square_category_id: c.id,
-          slug: resolveCategory(name)!,
+          slug,
           label: name,
-          ordinal: i + 1,
+          ordinal: ordinal >= 0 ? ordinal + 1 : 99,
         };
       });
 
@@ -283,13 +244,24 @@ serve(async (req) => {
       const itemData = item.item_data;
       if (!itemData) continue;
 
-      // Résoudre la catégorie (category_id ancien format, categories[] nouveau format Square)
-      const categoryId = itemData.category_id
-        ?? (itemData.categories as { id: string }[] | undefined)?.[0]?.id;
-      const categoryName = categoryId ? categoryMap.get(categoryId) : undefined;
+      // Résoudre la catégorie — tester TOUTES les catégories de l'item (nouveau format Square)
+      const itemCategoryIds: string[] = [];
+      if (itemData.category_id) itemCategoryIds.push(itemData.category_id);
+      if (Array.isArray(itemData.categories)) {
+        for (const cat of itemData.categories as { id: string }[]) {
+          if (cat.id && !itemCategoryIds.includes(cat.id)) itemCategoryIds.push(cat.id);
+        }
+      }
 
-      // Filtrer : n'inclure que les catégories mappées (exclut B2B, fidélisation, etc.)
-      const slug = categoryName ? resolveCategory(categoryName) : null;
+      // Chercher le premier slug Carte 2026 parmi toutes les catégories de l'item
+      let slug: string | null = null;
+      for (const catId of itemCategoryIds) {
+        const catName = categoryMap.get(catId);
+        if (catName) {
+          const resolved = resolveCategory(catName);
+          if (resolved) { slug = resolved; break; }
+        }
+      }
       if (!slug) continue;
 
       const variations = itemData.variations ?? [];

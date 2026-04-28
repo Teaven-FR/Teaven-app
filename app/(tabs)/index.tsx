@@ -9,13 +9,14 @@ import {
   StyleSheet,
   RefreshControl,
   Animated,
+  ActivityIndicator,
   Platform,
 } from 'react-native';
 import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Bell, Search, Leaf, Instagram, Trophy, Flame, Star, Zap, ChevronRight, Wallet } from 'lucide-react-native';
+import { Bell, Search, Leaf, Instagram, Trophy, Flame, Star, Coffee, Heart, Users as UsersIcon, Zap, ChevronRight, Wallet } from 'lucide-react-native';
 import { Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
@@ -28,13 +29,25 @@ import { useInstagramFeed } from '@/hooks/useInstagramFeed';
 import { useCartStore } from '@/stores/cartStore';
 import { useToast } from '@/contexts/ToastContext';
 import { RechargeModal } from '@/components/ui/RechargeModal';
-import { GiftModal } from '@/components/ui/GiftModal';
+import { useChallenges } from '@/hooks/useChallenges';
 import { colors, fonts, radii, shadows, spacing, typography } from '@/constants/theme';
+
+const HOME_CHALLENGE_ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string; strokeWidth: number }>> = {
+  flame: Flame,
+  trophy: Trophy,
+  star: Star,
+  coffee: Coffee,
+  heart: Heart,
+  users: UsersIcon,
+};
 
 // Largeur d'une card carrousel + gap
 const CARD_WIDTH = 260;
 const CARD_GAP = spacing.md;
 const SNAP_INTERVAL = CARD_WIDTH + CARD_GAP;
+
+// Largeur d'une bannière promo (doit matcher styles.promoCard.width)
+const PROMO_CARD_WIDTH = 300;
 
 /** Nombre de sections animées lors de l'entrée */
 const SECTION_COUNT = 5;
@@ -51,6 +64,8 @@ function getGreeting(): string {
 }
 
 /** Formate un prix en centimes pour les lecteurs d'écran */
+import { callEdgeFunction } from '@/lib/square';
+
 function priceAccessibilityLabel(cents: number): string {
   const euros = Math.floor(cents / 100);
   const centimes = cents % 100;
@@ -62,17 +77,30 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { products, allProducts, categories, selectedCategory, setSelectedCategory, refetch } = useCatalog();
-  const { user, isGuest, wallet, rechargeWallet, loyalty } = useUser();
+  const { user, isGuest, wallet, walletLoading, rechargeWallet, loyalty } = useUser();
   const { showToast } = useToast();
+  const { challenges: realChallenges, loading: challengesLoading } = useChallenges();
+  const { bannerHeight } = require('@/contexts/ActiveOrderContext').useActiveOrder();
   const setPromoCode = useCartStore((s) => s.setPromoCode);
   const { posts: instaPosts } = useInstagramFeed(6);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
   const [rechargeVisible, setRechargeVisible] = useState(false);
-  const [giftVisible, setGiftVisible] = useState(false);
   const [defisExpanded, setDefisExpanded] = useState(false);
   const defisAnim = useRef(new Animated.Value(0)).current;
+  const [birthdayMissing, setBirthdayMissing] = useState(false);
+
+  // Vérifier si le birthday est renseigné dans Square
+  useEffect(() => {
+    if (isGuest || !user.squareCustomerId) return;
+    callEdgeFunction<{ success: boolean; customer: { birthday?: string | null } | null }>(
+      'fetch-customer', { phone: user.phone },
+    ).then((res) => {
+      if (res.data?.customer && !res.data.customer.birthday) setBirthdayMissing(true);
+      else setBirthdayMissing(false);
+    });
+  }, [isGuest, user.squareCustomerId, user.phone]);
 
   const DEFI_COMPACT_H = 56;
   const DEFI_FULL_H = 286;
@@ -156,7 +184,7 @@ export default function HomeScreen() {
   return (
     <>
       <ScrollView
-        style={[styles.container, { paddingTop: insets.top }]}
+        style={[styles.container, { paddingTop: insets.top + bannerHeight }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -233,107 +261,161 @@ export default function HomeScreen() {
             transform: [{ translateY: sectionAnims[1].translateY }],
           }}
         >
-          {/* Bandeau rechargement wallet si solde faible */}
-          {!isGuest && wallet.balance < 500 && (
+          {/* Bandeau Wallet permanent */}
+          {!isGuest && (
             <Pressable
               onPress={() => setRechargeVisible(true)}
               style={styles.walletBanner}
               accessibilityRole="button"
-              accessibilityLabel="Recharger votre porte-monnaie"
+              accessibilityLabel={wallet.balance > 0 ? `Solde disponible : ${(wallet.balance / 100).toFixed(2).replace('.', ',')} euros` : 'Recharger votre porte-monnaie'}
             >
-              <Wallet size={13} color="#C27B5A" strokeWidth={1.5} />
-              <Text style={styles.walletBannerText}>
-                Solde : <Text style={styles.walletBannerAmount}>{(wallet.balance / 100).toFixed(2).replace('.', ',')} €</Text>
-              </Text>
-              <Text style={styles.walletBannerCta}>Recharger</Text>
+              <Wallet size={14} color="#C27B5A" strokeWidth={1.5} />
+              {walletLoading ? (
+                <>
+                  <ActivityIndicator size="small" color="#C27B5A" style={{ marginLeft: 4 }} />
+                  <Text style={styles.walletBannerText}>Chargement du solde…</Text>
+                </>
+              ) : wallet.balance > 0 ? (
+                <Text style={styles.walletBannerText}>
+                  Solde disponible : <Text style={styles.walletBannerAmount}>{(wallet.balance / 100).toFixed(2).replace('.', ',')} €</Text>
+                </Text>
+              ) : (
+                <>
+                  <Text style={styles.walletBannerText}>Activez votre portefeuille et recevez un bonus !</Text>
+                  <Text style={styles.walletBannerCta}>Recharger mon compte</Text>
+                </>
+              )}
             </Pressable>
           )}
 
-          {/* Bannières promotionnelles — carrousel */}
+          {/* Bandeau anniversaire si manquant */}
+          {birthdayMissing && (
+            <Pressable
+              onPress={() => router.push('/profil/informations')}
+              style={[styles.walletBanner, { backgroundColor: 'rgba(117,150,127,0.08)' }]}
+              accessibilityRole="button"
+              accessibilityLabel="Ajouter votre date d'anniversaire"
+            >
+              <Text style={{ fontSize: 16 }}>🎂</Text>
+              <Text style={[styles.walletBannerText, { color: colors.text }]}>
+                Ajoutez votre anniversaire et recevez un cadeau !
+              </Text>
+              <Text style={[styles.walletBannerCta, { color: colors.green }]}>Ajouter</Text>
+            </Pressable>
+          )}
+
+          {/* Bannières promotionnelles — carrousel (snap propre par carte) */}
           <ScrollView
             horizontal
-            pagingEnabled
             showsHorizontalScrollIndicator={false}
+            snapToInterval={PROMO_CARD_WIDTH + spacing.md}
+            snapToAlignment="start"
+            decelerationRate="fast"
             style={styles.promosContainer}
             contentContainerStyle={styles.promosContent}
           >
-            {/* Bannières dynamiques contextuelles */}
             {/* Bannière Bienvenue -15% — vert léger */}
-            <LinearGradient colors={['#E8F0EA', '#D4E5D7']} style={styles.promoCard}>
-              <View style={styles.promoContent}>
-                <Text style={styles.promoTitle}>Première commande ?</Text>
-                <Text style={styles.promoSubtitle}>-15% avec le code BIENVENUE</Text>
-                <Pressable
-                  onPress={() => {
-                    setPromoCode('BIENVENUE');
-                    showToast('Code BIENVENUE activé !');
-                    router.push('/(tabs)/carte');
-                  }}
-                >
+            <Pressable
+              onPress={() => {
+                setPromoCode('BIENVENUE');
+                showToast('Code BIENVENUE activé !');
+                router.push('/(tabs)/carte');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Première commande : activer le code BIENVENUE pour -15%"
+            >
+              <LinearGradient colors={['#E8F0EA', '#D4E5D7']} style={styles.promoCard}>
+                <View style={styles.promoContent}>
+                  <Text style={styles.promoTitle}>Première commande ?</Text>
+                  <Text style={styles.promoSubtitle}>-15% avec le code BIENVENUE</Text>
                   <Text style={styles.promoCta}>En profiter</Text>
-                </Pressable>
-              </View>
-              <View style={styles.promoIconWrap}>
-                <Leaf size={36} color={colors.green} strokeWidth={1} />
-              </View>
-            </LinearGradient>
+                </View>
+                <View style={styles.promoIconWrap}>
+                  <Leaf size={36} color={colors.green} strokeWidth={1} />
+                </View>
+              </LinearGradient>
+            </Pressable>
 
             {/* Première recharge incentivée OU recharge classique */}
             {wallet.balance === 0 ? (
-              <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.promoCard}>
-                <View style={styles.promoContent}>
-                  <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Votre première recharge</Text>
-                  <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.85)' }]}>
-                    20 € + 5 € offerts
-                  </Text>
-                  <Pressable onPress={() => setRechargeVisible(true)}>
+              <Pressable
+                onPress={() => setRechargeVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Première recharge : 20 € + 5 € offerts"
+              >
+                <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.promoCard}>
+                  <View style={styles.promoContent}>
+                    <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Votre première recharge</Text>
+                    <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.85)' }]}>
+                      20 € + 5 € offerts
+                    </Text>
                     <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Recharger maintenant</Text>
-                  </Pressable>
-                </View>
-                <View style={styles.promoIconWrap}>
-                  <Wallet size={36} color="rgba(255,255,255,0.3)" strokeWidth={1} />
-                </View>
-              </LinearGradient>
+                  </View>
+                  <View style={styles.promoIconWrap}>
+                    <Wallet size={36} color="rgba(255,255,255,0.3)" strokeWidth={1} />
+                  </View>
+                </LinearGradient>
+              </Pressable>
             ) : wallet.balance < 1000 ? (
-              <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.promoCard}>
-                <View style={styles.promoContent}>
-                  <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Rechargez votre wallet</Text>
-                  <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
-                    Solde : {(wallet.balance / 100).toFixed(2).replace('.', ',')} €
-                  </Text>
-                  <Pressable onPress={() => setRechargeVisible(true)}>
+              <Pressable
+                onPress={() => setRechargeVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Recharger votre portefeuille"
+              >
+                <LinearGradient colors={['#D4937A', '#C27B5A']} style={styles.promoCard}>
+                  <View style={styles.promoContent}>
+                    <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Rechargez votre wallet</Text>
+                    <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
+                      Solde : {(wallet.balance / 100).toFixed(2).replace('.', ',')} €
+                    </Text>
                     <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Recharger</Text>
-                  </Pressable>
-                </View>
-              </LinearGradient>
+                  </View>
+                </LinearGradient>
+              </Pressable>
             ) : null}
 
-            <LinearGradient colors={['#E8D5D3', '#C9918F']} style={styles.promoCard}>
-              <View style={styles.promoContent}>
-                <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Offrez un moment Teaven</Text>
-                <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.85)' }]}>
-                  Un geste simple pour vos proches
-                </Text>
-                <Pressable onPress={() => setGiftVisible(true)}>
+            <Pressable
+              onPress={() => router.push('/gift')}
+              accessibilityRole="button"
+              accessibilityLabel="Offrir un moment Teaven"
+            >
+              <LinearGradient colors={['#A8C5A0', '#7FA486']} style={styles.promoCard}>
+                <View style={styles.promoContent}>
+                  <Text style={[styles.promoTitle, { color: '#FFFFFF' }]}>Offrez un moment Teaven</Text>
+                  <Text style={[styles.promoSubtitle, { color: 'rgba(255,255,255,0.85)' }]}>
+                    Un geste simple pour vos proches
+                  </Text>
                   <Text style={[styles.promoCta, { color: '#FFFFFF' }]}>Découvrir</Text>
-                </Pressable>
-              </View>
-            </LinearGradient>
+                </View>
+              </LinearGradient>
+            </Pressable>
 
-            <LinearGradient colors={['#F5EFDF', '#EDE4CC']} style={styles.promoCard}>
-              <View style={styles.promoContent}>
-                <Text style={styles.promoTitle}>Parrainez un proche</Text>
-                <Text style={styles.promoSubtitle}>5€ pour vous, 5€ pour lui</Text>
-                <Pressable onPress={() => router.push('/referral')}>
+            <Pressable
+              onPress={() => router.push('/referral')}
+              accessibilityRole="button"
+              accessibilityLabel="Parrainer un proche : 5 € pour chacun"
+            >
+              <LinearGradient colors={['#F5EFDF', '#EDE4CC']} style={styles.promoCard}>
+                <View style={styles.promoContent}>
+                  <Text style={styles.promoTitle}>Parrainez un proche</Text>
+                  <Text style={styles.promoSubtitle}>5€ pour vous, 5€ pour lui</Text>
                   <Text style={[styles.promoCta, { color: colors.gold }]}>Parrainer</Text>
-                </Pressable>
-              </View>
-            </LinearGradient>
-
-            {/* Atmosphère retirée de l'accueil — accessible via onglet Blog */}
+                </View>
+              </LinearGradient>
+            </Pressable>
           </ScrollView>
 
           {/* ──── Strip Défis (compact → pleine carte) ──── */}
+          {(() => {
+            const visibleChallenges = realChallenges.filter((c) => !c.locked).slice(0, 3);
+            const activeCount = visibleChallenges.filter((c) => !c.claimed).length;
+            const firstChallenge = visibleChallenges[0];
+            const firstPct = firstChallenge
+              ? firstChallenge.type === 'morning_bonus' ? 100 : Math.min(100, (firstChallenge.progress / Math.max(firstChallenge.target, 1)) * 100)
+              : 0;
+            const totalReward = visibleChallenges.reduce((sum, c) => sum + c.reward, 0);
+
+            return (
           <Animated.View style={[styles.defisAnimContainer, { height: defisContainerHeight }]}>
             <Pressable
               onPress={toggleDefis}
@@ -354,15 +436,21 @@ export default function HomeScreen() {
                       <Flame size={14} color={colors.gold} strokeWidth={2} />
                     </View>
                     <View>
-                      <Text style={styles.defisStripProgram}>DÉFIS · 3 ACTIFS</Text>
-                      <Text style={styles.defisStripChallenge}>Série en cours — 3/5 jours</Text>
+                      <Text style={styles.defisStripProgram}>
+                        {challengesLoading ? 'DÉFIS' : `DÉFIS · ${activeCount} ACTIF${activeCount !== 1 ? 'S' : ''}`}
+                      </Text>
+                      <Text style={styles.defisStripChallenge}>
+                        {firstChallenge ? firstChallenge.title : 'Chargement…'}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.defisStripBarWrap}>
                     <View style={styles.defisStripBar}>
-                      <View style={[styles.defisStripFill, { width: '60%' }]} />
+                      <View style={[styles.defisStripFill, { width: `${firstPct}%` }]} />
                     </View>
-                    <Text style={styles.defisStripPts}>+500 pts</Text>
+                    <Text style={styles.defisStripPts}>
+                      {firstChallenge ? `+${firstChallenge.reward} pts` : ''}
+                    </Text>
                   </View>
                   <ChevronRight size={16} color="rgba(255,255,255,0.4)" strokeWidth={2} />
                 </Animated.View>
@@ -379,24 +467,22 @@ export default function HomeScreen() {
                       <Text style={styles.defisCardTitle}>Vos défis du mois</Text>
                     </View>
                     <View style={styles.defisBadge}>
-                      <Text style={styles.defisBadgeText}>3 actifs</Text>
+                      <Text style={styles.defisBadgeText}>{activeCount} actif{activeCount !== 1 ? 's' : ''}</Text>
                     </View>
                   </View>
 
                   {/* Défis avec progress */}
                   <View style={styles.defisRows}>
-                    {([
-                      { icon: 'flame', label: 'Série en cours', progress: 3, target: 5, pts: 500 },
-                      { icon: 'trophy', label: 'Challenge du mois', progress: 4, target: 10, pts: 1000 },
-                      { icon: 'star', label: 'Explorateur', progress: 3, target: 3, pts: 300 },
-                    ] as const).map((defi) => {
-                      const pct = Math.min((defi.progress / defi.target) * 100, 100);
-                      const done = defi.progress >= defi.target;
-                      const Icon = defi.icon === 'flame' ? Flame : defi.icon === 'trophy' ? Trophy : Star;
+                    {visibleChallenges.map((defi) => {
+                      const pct = defi.type === 'morning_bonus'
+                        ? 100
+                        : Math.min((defi.progress / Math.max(defi.target, 1)) * 100, 100);
+                      const done = defi.completed || (defi.type !== 'morning_bonus' && defi.progress >= defi.target);
+                      const Icon = HOME_CHALLENGE_ICON_MAP[defi.icon] ?? Trophy;
                       const circR = 11;
                       const circC = 2 * Math.PI * circR;
                       return (
-                        <View key={defi.label} style={styles.defisRow}>
+                        <View key={defi.id} style={styles.defisRow}>
                           <View style={styles.defisRowIcon}>
                             <Svg width={26} height={26} viewBox="0 0 26 26" style={{ position: 'absolute' }}>
                               <SvgCircle cx={13} cy={13} r={circR} stroke="rgba(255,255,255,0.1)" strokeWidth={2} fill="none" />
@@ -415,15 +501,19 @@ export default function HomeScreen() {
                           </View>
                           <View style={styles.defisRowContent}>
                             <View style={styles.defisRowTop}>
-                              <Text style={styles.defisRowLabel}>{defi.label}</Text>
+                              <Text style={styles.defisRowLabel}>{defi.title}</Text>
                               <Text style={[styles.defisRowPts, done && { color: colors.gold }]}>
-                                {done ? '✓' : `+${defi.pts} pts`}
+                                {done ? '✓' : `+${defi.reward} pts`}
                               </Text>
                             </View>
-                            <View style={styles.defisProgressTrack}>
-                              <View style={[styles.defisProgressFill, { width: `${pct}%` as `${number}%` }]} />
-                            </View>
-                            <Text style={styles.defisRowCount}>{defi.progress}/{defi.target}</Text>
+                            {defi.type !== 'morning_bonus' && (
+                              <>
+                                <View style={styles.defisProgressTrack}>
+                                  <View style={[styles.defisProgressFill, { width: `${pct}%` as `${number}%` }]} />
+                                </View>
+                                <Text style={styles.defisRowCount}>{defi.progress}/{defi.target}</Text>
+                              </>
+                            )}
                           </View>
                         </View>
                       );
@@ -434,7 +524,7 @@ export default function HomeScreen() {
                   <View style={styles.defisFooter}>
                     <View style={styles.defisFooterPoints}>
                       <Text style={styles.defisFooterPtsLabel}>Jusqu'à</Text>
-                      <Text style={styles.defisFooterPtsValue}>1 800 pts</Text>
+                      <Text style={styles.defisFooterPtsValue}>{totalReward.toLocaleString('fr-FR')} pts</Text>
                       <Text style={styles.defisFooterPtsLabel}>à gagner</Text>
                     </View>
                     <Pressable
@@ -451,6 +541,8 @@ export default function HomeScreen() {
               </LinearGradient>
             </Pressable>
           </Animated.View>
+            );
+          })()}
         </Animated.View>
 
         {/* Pills catégorie */}
@@ -681,7 +773,6 @@ export default function HomeScreen() {
           showToast('Porte-monnaie rechargé !');
         }}
       />
-      <GiftModal visible={giftVisible} onClose={() => setGiftVisible(false)} />
     </>
   );
 }

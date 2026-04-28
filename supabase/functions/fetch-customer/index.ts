@@ -76,7 +76,46 @@ serve(async (req) => {
       );
     }
 
-    const { phone } = body;
+    const { phone, action, updates } = body as {
+      phone?: string;
+      action?: 'fetch' | 'update';
+      updates?: {
+        address?: { address_line_1?: string; locality?: string; postal_code?: string; country?: string };
+        birthday?: string;
+        email?: string;
+        givenName?: string;
+        familyName?: string;
+      };
+    };
+
+    // ── Action UPDATE : mettre à jour un customer Square ──
+    if (action === 'update' && authUser) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('square_customer_id')
+        .eq('id', authUser.id)
+        .single();
+
+      if (!profile?.square_customer_id) {
+        return new Response(
+          JSON.stringify({ error: 'Pas de client Square lié' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const updateBody: Record<string, unknown> = {};
+      if (updates?.address) updateBody.address = updates.address;
+      if (updates?.birthday) updateBody.birthday = updates.birthday;
+      if (updates?.email) updateBody.email_address = updates.email;
+      if (updates?.givenName) updateBody.given_name = updates.givenName;
+      if (updates?.familyName) updateBody.family_name = updates.familyName;
+
+      const updateResult = await squareFetch(`/v2/customers/${profile.square_customer_id}`, 'PUT', updateBody);
+      return new Response(
+        JSON.stringify({ success: true, customer: updateResult.customer }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     if (!phone) {
       return new Response(
@@ -85,25 +124,41 @@ serve(async (req) => {
       );
     }
 
-    // 1. Chercher le client dans Square par téléphone (plusieurs formats)
+    // 1. Chercher le client dans Square par téléphone — recherche exhaustive
+    //    Normalise puis génère toutes les variantes probables pour éviter les doublons.
     let squareCustomer = null;
+    let searchFailed = false;
     try {
       const phoneStr = phone as string;
-      // Variantes du numéro à tester (Supabase stocke sans + : "33768...")
-      const phoneVariants: string[] = [phoneStr];
-      if (phoneStr.startsWith('+33')) {
-        phoneVariants.push('0' + phoneStr.slice(3)); // +33768... → 0768...
-      } else if (phoneStr.startsWith('33') && phoneStr.length >= 11) {
-        phoneVariants.push('+' + phoneStr);           // 33768... → +33768...
-        phoneVariants.push('0' + phoneStr.slice(2));  // 33768... → 0768...
-      } else if (phoneStr.startsWith('0')) {
-        phoneVariants.push('+33' + phoneStr.slice(1)); // 0768... → +33768...
+      const digits = phoneStr.replace(/[^\d]/g, ''); // juste les chiffres
+      const variants = new Set<string>();
+      variants.add(phoneStr);
+
+      // Normalisation France
+      if (digits.startsWith('33') && digits.length === 11) {
+        variants.add('+' + digits);         // +33XXXXXXXXX
+        variants.add(digits);               // 33XXXXXXXXX
+        variants.add('0' + digits.slice(2)); // 0XXXXXXXXX
+      } else if (digits.startsWith('0') && digits.length === 10) {
+        variants.add(digits);               // 0XXXXXXXXX
+        variants.add('33' + digits.slice(1));  // 33XXXXXXXXX
+        variants.add('+33' + digits.slice(1)); // +33XXXXXXXXX
+      } else if (digits.length === 9) {
+        variants.add('0' + digits);
+        variants.add('33' + digits);
+        variants.add('+33' + digits);
       }
 
-      for (const variant of phoneVariants) {
+      for (const variant of variants) {
         const searchResult = await squareFetch('/v2/customers/search', 'POST', {
           query: { filter: { phone_number: { exact: variant } } },
         });
+        if (searchResult?.errors?.length) {
+          // Token invalide ou API down → ne pas créer de doublon par défaut
+          console.error('Square search error:', searchResult.errors);
+          searchFailed = true;
+          break;
+        }
         if (searchResult.customers && searchResult.customers.length > 0) {
           squareCustomer = searchResult.customers[0];
           break;
@@ -111,9 +166,18 @@ serve(async (req) => {
       }
     } catch (err) {
       console.error('Erreur recherche client Square:', err);
+      searchFailed = true;
     }
 
-    // 2. Si pas trouvé, créer le client Square
+    // 2. Si pas trouvé ET search a réussi, créer le client Square.
+    //    Si search a échoué (token KO, réseau KO) : on N'ABSOLUMENT PAS créer
+    //    de nouveau customer (risque de doublon), on remonte l'erreur.
+    if (!squareCustomer && searchFailed) {
+      return new Response(
+        JSON.stringify({ error: 'Recherche client Square échouée — création bloquée pour éviter les doublons' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
     if (!squareCustomer) {
       try {
         const createResult = await squareFetch('/v2/customers', 'POST', {
@@ -147,7 +211,35 @@ serve(async (req) => {
         .upsert(profileData, { onConflict: 'id' });
     }
 
-    // 4. Retourner les données client
+    // 4. Garantir que le customer a une gift card Square active (1 par client).
+    //    Doctrine : Square source de vérité, 1 carte par customer, idempotent.
+    //    Non bloquant si ça échoue — on veut pas bloquer le login pour ça.
+    let giftCardId: string | null = null;
+    if (squareCustomer && authUser) {
+      try {
+        const ensureRes = await fetch(`${supabaseUrl}/functions/v1/ensure-gift-card`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            squareCustomerId: squareCustomer.id,
+            userId: authUser.id,
+          }),
+        });
+        if (ensureRes.ok) {
+          const ensureData = await ensureRes.json();
+          giftCardId = ensureData.giftCardId ?? null;
+        } else {
+          console.warn('[fetch-customer] ensure-gift-card failed:', await ensureRes.text());
+        }
+      } catch (err) {
+        console.warn('[fetch-customer] ensure-gift-card exception:', err);
+      }
+    }
+
+    // 5. Retourner les données client
     return new Response(
       JSON.stringify({
         success: true,
@@ -159,7 +251,10 @@ serve(async (req) => {
                 : '',
               email: squareCustomer.email_address ?? null,
               phone: squareCustomer.phone_number ?? phone,
+              birthday: squareCustomer.birthday ?? null,
+              address: squareCustomer.address ?? null,
               createdAt: squareCustomer.created_at,
+              giftCardId,
             }
           : null,
       }),

@@ -130,16 +130,23 @@ export default function NotificationsScreen() {
         .order('created_at', { ascending: false })
         .limit(50)
         .then(({ data }) => {
-          if (data && data.length > 0) {
-            setNotifications(data.map((n: Record<string, unknown>) => ({
-              id: n.id as string,
-              type: ((n.type as string) || 'info') as AppNotification['type'],
-              title: n.title as string,
-              description: (n.body as string) || '',
-              timestamp: n.created_at as string,
-              read: n.read as boolean,
-            })));
-          }
+          const real: AppNotification[] = (data ?? []).map((n: Record<string, unknown>) => ({
+            id: n.id as string,
+            type: ((n.type as string) || 'system') as AppNotification['type'],
+            title: n.title as string,
+            description: (n.body as string) || '',
+            timestamp: n.created_at as string,
+            read: n.read as boolean,
+          }));
+
+          // Notifications d'onboarding contextuelles (actions à faire)
+          const onboarding: AppNotification[] = [
+            { id: 'onb-recharge', type: 'promo', title: 'Rechargez votre portefeuille', description: 'Recevez un bonus sur votre première recharge !', timestamp: new Date().toISOString(), read: false },
+            { id: 'onb-parrainage', type: 'loyalty', title: 'Parrainez un proche', description: 'Gagnez des points de fidélité en partageant votre code', timestamp: new Date().toISOString(), read: false },
+            { id: 'onb-commande', type: 'order', title: 'Passez votre première commande', description: 'Découvrez notre carte et profitez de -15% avec le code BIENVENUE', timestamp: new Date().toISOString(), read: false },
+          ];
+
+          setNotifications(real.length > 0 ? real : onboarding);
         });
     });
   }, []);
