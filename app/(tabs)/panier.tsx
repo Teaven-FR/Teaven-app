@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenTopPadding } from '@/hooks/useScreenTopPadding';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -98,6 +99,7 @@ function buildPickerSlots(
 
 export default function PanierScreen() {
   const insets = useSafeAreaInsets();
+  const topPadding = useScreenTopPadding();
   const router = useRouter();
   const {
     items,
@@ -301,7 +303,7 @@ export default function PanierScreen() {
   // État vide
   if (items.length === 0) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: topPadding }]}>
         <View style={styles.header}>
           <View style={styles.headerSpacer} />
           <Text style={styles.headerTitle}>Votre panier</Text>

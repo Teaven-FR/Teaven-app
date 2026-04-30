@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenTopPadding } from '@/hooks/useScreenTopPadding';
 import { useRouter } from 'expo-router';
 import { ScrollView } from 'react-native';
 import { Search, Gift } from 'lucide-react-native';
@@ -16,6 +17,7 @@ import type { Product } from '@/lib/types';
 
 export default function CarteScreen() {
   const insets = useSafeAreaInsets();
+  const topPadding = useScreenTopPadding();
   const router = useRouter();
   const { products, categories, selectedCategory, setSelectedCategory, refetch, isLoading } = useCatalog();
   const { loyalty } = useUser();
@@ -73,7 +75,7 @@ export default function CarteScreen() {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: topPadding }]}>
       <SearchModal
         visible={searchVisible}
         onClose={() => setSearchVisible(false)}
