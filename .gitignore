@@ -52,3 +52,4 @@ node_modules/
 
 # Agent maintenance reports
 MAINTENANCE_REPORT.md
+.claude/scheduled_tasks.lock

@@ -161,6 +161,34 @@ export const useAuthStore = create<AuthState>()(
             updatedAt: new Date().toISOString(),
           };
           set({ user: baseUser, isAuthenticated: true, isLoading: false, isGuest: false });
+
+          // Doctrine Teaven : Square = source de vérité unique. À chaque login, on
+          // s'assure que le profil est lié au bon customer Square (par téléphone vérifié OTP).
+          // Smart : ne touche pas au lien si une gift card avec solde existe déjà.
+          // Met à jour profile.square_customer_id et square_gift_card_id côté Supabase.
+          // Non bloquant : tourne en arrière-plan, l'UI s'enrichit ensuite via fetchWallet/enrich.
+          supabase.functions
+            .invoke('link-by-phone', {
+              body: { phone, email: session.user.email },
+            })
+            .then(({ data }) => {
+              if (data?.success && data.squareCustomerId) {
+                set((s) =>
+                  s.user
+                    ? {
+                        user: {
+                          ...s.user,
+                          phone,
+                          squareCustomerId: data.squareCustomerId,
+                          walletBalance: data.balance ?? s.user.walletBalance,
+                        },
+                      }
+                    : s,
+                );
+              }
+            })
+            .catch(() => { /* non bloquant */ });
+
           // Paralléliser enrichissement Square + wallet
           fetchWalletBalance(session.access_token).then((walletResult) => {
             if (walletResult.data?.success) {
