@@ -1,5 +1,5 @@
-// Page Défis Teaven — Mosaïque magazine (Consortium 2026-05-01, Option C)
-// Layout 2 colonnes, hauteurs variables selon importance, distribution équilibrée.
+// Page Défis Teaven — Mosaïque magazine avec photos (Option C+)
+// Layout 2 colonnes, cards immersives avec photo en arrière-plan + overlay.
 import { useMemo } from 'react';
 import {
   View,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
+  ImageBackground,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -24,7 +25,6 @@ import {
   Lock,
   Check,
   Zap,
-  Sparkles,
 } from 'lucide-react-native';
 import { useChallenges, type Challenge } from '@/hooks/useChallenges';
 import { useToast } from '@/contexts/ToastContext';
@@ -40,18 +40,49 @@ const ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string
   users: Users,
 };
 
-const CATEGORY_GRADIENT: Record<string, [string, string, string]> = {
-  fidelite: ['#1F3027', '#2D5A3D', '#3A6642'],
-  boissons: ['#A56843', '#C4845C', '#D89F76'],
-  food: ['#9B8540', '#C4A962', '#D8C285'],
-  social: ['#5C8580', '#7EA5A0', '#9DBDB9'],
+// Photos Unsplash food/café — une par défi pour visuel diversifié.
+// URLs avec query params pour optimiser taille (w=600&q=70).
+const CHALLENGE_IMAGES: Record<string, string> = {
+  // Régularité (fidelite)
+  default_fidelite: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&q=70', // café latte
+  // Variations par défi spécifique
+  'serie-de-3': 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&q=70', // café latte
+  'serie-de-5': 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=600&q=70', // table cafe
+  'marathonien': 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=600&q=70', // running cafe
+  '3-commandes-cette-semaine': 'https://images.unsplash.com/photo-1525629857904-35e84e6f6b3a?w=600&q=70', // matcha
+  'rituel-du-matin': 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600&q=70', // matin
+  'rechargez-votre-wallet': 'https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=600&q=70', // pastry
+  'premier-parrainage': 'https://images.unsplash.com/photo-1542059404-149f8a4f3edd?w=600&q=70', // friends cafe
+  // Catégories fallback
+  default_boissons: 'https://images.unsplash.com/photo-1525629857904-35e84e6f6b3a?w=600&q=70',
+  'decouverte-matcha': 'https://images.unsplash.com/photo-1525629857904-35e84e6f6b3a?w=600&q=70', // matcha
+  default_food: 'https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=600&q=70',
+  default_social: 'https://images.unsplash.com/photo-1542059404-149f8a4f3edd?w=600&q=70',
 };
+
+function imageForChallenge(ch: Challenge): string {
+  // Slug-ify le titre pour matcher les clés
+  const slug = ch.title.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return CHALLENGE_IMAGES[slug]
+    ?? CHALLENGE_IMAGES[`default_${ch.uiCategory}`]
+    ?? CHALLENGE_IMAGES.default_fidelite;
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   fidelite: 'Régularité',
   boissons: 'Explorateur',
   food: 'Mensuel',
   social: 'Social',
+};
+
+const CATEGORY_ACCENT: Record<string, string> = {
+  fidelite: '#2D5A3D',
+  boissons: '#C4845C',
+  food: '#C4A962',
+  social: '#7EA5A0',
 };
 
 const WHY_ITEMS = [
@@ -61,39 +92,30 @@ const WHY_ITEMS = [
   { icon: Zap, title: 'Bonus', text: 'Gagner des points en plus de la fidélité classique.' },
 ];
 
-/**
- * Hauteur d'une card selon son état — pour l'effet mosaïque magazine.
- * Plus la card est importante (en cours, presque finie), plus elle est haute.
- */
 function cardHeight(ch: Challenge): number {
-  if (ch.locked) return 90;
-  if (ch.claimed) return 100;
-  if (ch.type === 'morning_bonus') return 170; // toujours actif, mise en avant
+  if (ch.locked) return 110;
+  if (ch.claimed) return 120;
+  if (ch.type === 'morning_bonus') return 200;
   const pct = ch.progress / Math.max(ch.target, 1);
-  if (pct >= 0.6) return 200; // presque fini = grand
-  if (pct >= 0.3) return 170;
-  if (pct > 0) return 150;
-  return 130; // non commencé
+  if (pct >= 0.6) return 220; // tall pour les défis presque finis
+  if (pct >= 0.3) return 190;
+  if (pct > 0) return 170;
+  return 150;
 }
 
-/**
- * Distribution greedy en 2 colonnes pour équilibrer la mosaïque.
- * À chaque step, ajouter la card à la colonne avec la hauteur cumulée la + petite.
- */
 function distributeCards(challenges: Challenge[]): { left: Challenge[]; right: Challenge[] } {
   const left: Challenge[] = [];
   const right: Challenge[] = [];
   let leftH = 0;
   let rightH = 0;
-  const SPACING = 12;
   for (const ch of challenges) {
     const h = cardHeight(ch);
     if (leftH <= rightH) {
       left.push(ch);
-      leftH += h + SPACING;
+      leftH += h + 12;
     } else {
       right.push(ch);
-      rightH += h + SPACING;
+      rightH += h + 12;
     }
   }
   return { left, right };
@@ -112,8 +134,8 @@ function sortChallenges(challenges: Challenge[]): Challenge[] {
   });
 }
 
-// ─── Card mosaïque ───
-function MosaicCard({
+// ─── Card avec photo ───
+function PhotoCard({
   challenge: ch,
   onClaim,
 }: {
@@ -126,82 +148,82 @@ function MosaicCard({
   const isReadyToClaim = !ch.locked && !ch.claimed && isDone && !isMorning;
   const pct = isMorning ? 100 : Math.min(100, Math.round((ch.progress / Math.max(ch.target, 1)) * 100));
 
-  const gradient = CATEGORY_GRADIENT[ch.uiCategory] ?? CATEGORY_GRADIENT.fidelite;
   const categoryLabel = CATEGORY_LABELS[ch.uiCategory] ?? 'Défi';
+  const accent = CATEGORY_ACCENT[ch.uiCategory] ?? '#2D5A3D';
   const height = cardHeight(ch);
 
+  // Variante locked : carte sombre avec lock + titre
   if (ch.locked) {
     return (
       <View style={[styles.card, styles.cardLocked, { height }]}>
-        <View style={styles.lockedCenter}>
-          <Lock size={18} color={colors.textMuted} strokeWidth={1.8} />
+        <View style={styles.lockedContent}>
+          <Lock size={20} color={colors.textMuted} strokeWidth={1.8} />
           <Text style={styles.lockedTitle} numberOfLines={2}>{ch.title}</Text>
+          <Text style={styles.lockedHint}>Verrouillé</Text>
         </View>
       </View>
     );
   }
 
+  // Variante claimed : carte blanche bordée + check
   if (ch.claimed) {
     return (
-      <View style={[styles.card, styles.cardClaimed, { height }]}>
-        <View style={styles.claimedCenter}>
-          <View style={styles.claimedCheckCircle}>
-            <Check size={18} color="#FFFFFF" strokeWidth={3} />
+      <View style={[styles.card, styles.cardClaimed, { height, borderColor: accent }]}>
+        <View style={styles.claimedContent}>
+          <View style={[styles.claimedCheckCircle, { backgroundColor: accent }]}>
+            <Check size={20} color="#FFFFFF" strokeWidth={3} />
           </View>
           <Text style={styles.claimedTitleText} numberOfLines={2}>{ch.title}</Text>
-          <Text style={styles.claimedReward}>+{ch.reward} pts</Text>
+          <Text style={[styles.claimedReward, { color: accent }]}>+{ch.reward} pts</Text>
         </View>
       </View>
     );
   }
 
+  // Active card : ImageBackground avec photo + overlay gradient + texte devant
   return (
-    <Pressable onPress={isReadyToClaim ? onClaim : undefined} style={[{ height }]}>
-      <LinearGradient
-        colors={gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.card, styles.cardActive]}
+    <Pressable onPress={isReadyToClaim ? onClaim : undefined}>
+      <ImageBackground
+        source={{ uri: imageForChallenge(ch) }}
+        style={[styles.card, styles.cardActive, { height }]}
+        imageStyle={{ borderRadius: 18 }}
+        resizeMode="cover"
       >
-        {/* Decor */}
-        <View style={styles.decorIconWrap} pointerEvents="none">
-          <Icon
-            size={Math.round(height * 0.7)}
-            color="rgba(255,255,255,0.10)"
-            strokeWidth={1.2}
-          />
-        </View>
-        <View style={[styles.decorDot, styles.decorDot1]} />
-        <View style={[styles.decorDot, styles.decorDot2]} />
+        {/* Overlay gradient bottom→top pour lisibilité du texte */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
+          locations={[0, 0.4, 1]}
+          style={StyleSheet.absoluteFill}
+        />
 
-        {/* Top : reward badge */}
+        {/* Top row : icone catégorie + reward */}
         <View style={styles.topRow}>
-          <View style={styles.categoryPill}>
-            <Sparkles size={8} color="#FFFFFF" strokeWidth={2.4} />
-            <Text style={styles.categoryPillText}>{categoryLabel}</Text>
+          <View style={[styles.iconCircle, { backgroundColor: accent }]}>
+            <Icon size={14} color="#FFFFFF" strokeWidth={2.4} />
           </View>
           <View style={styles.rewardBadge}>
             <Text style={styles.rewardText}>+{ch.reward}</Text>
+            <Text style={styles.rewardLabel}>pts</Text>
           </View>
         </View>
 
-        {/* Centre : titre */}
-        <View style={styles.centerBlock}>
-          <Text style={styles.title} numberOfLines={3}>{ch.title}</Text>
-        </View>
-
-        {/* Bottom : progress + status */}
+        {/* Bottom : catégorie + titre + progress */}
         <View style={styles.bottomBlock}>
+          <Text style={styles.categoryLabel}>{categoryLabel}</Text>
+          <Text style={styles.title} numberOfLines={2}>{ch.title}</Text>
+
           {!isMorning ? (
             <>
-              <View style={styles.progressRow}>
+              <View style={styles.progressBar}>
+                <View
+                  style={[styles.progressFill, { width: `${Math.max(8, pct)}%` as any, backgroundColor: '#FFFFFF' }]}
+                />
+              </View>
+              <View style={styles.progressMeta}>
                 <Text style={styles.progressFraction}>
                   {ch.progress}<Text style={styles.progressFractionDim}>/{ch.target}</Text>
                 </Text>
                 <Text style={styles.progressPct}>{pct}%</Text>
-              </View>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${Math.max(8, pct)}%` as any }]} />
               </View>
               {isReadyToClaim && (
                 <View style={styles.claimCTA}>
@@ -212,11 +234,11 @@ function MosaicCard({
           ) : (
             <View style={styles.morningBadge}>
               <Flame size={10} color="#FFD89A" strokeWidth={2.4} />
-              <Text style={styles.morningText}>8h-11h</Text>
+              <Text style={styles.morningText}>Tous les matins · 8h-11h</Text>
             </View>
           )}
         </View>
-      </LinearGradient>
+      </ImageBackground>
     </Pressable>
   );
 }
@@ -294,7 +316,6 @@ export default function DefisScreen() {
         </View>
       )}
 
-      {/* Mosaïque */}
       {!loading && sorted.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Vos cartes défis</Text>
@@ -305,7 +326,7 @@ export default function DefisScreen() {
           <View style={styles.mosaicWrap}>
             <View style={styles.mosaicColumn}>
               {left.map((ch) => (
-                <MosaicCard
+                <PhotoCard
                   key={ch.id}
                   challenge={ch}
                   onClaim={() => showToast(`+${ch.reward} pts crédités !`)}
@@ -314,7 +335,7 @@ export default function DefisScreen() {
             </View>
             <View style={styles.mosaicColumn}>
               {right.map((ch) => (
-                <MosaicCard
+                <PhotoCard
                   key={ch.id}
                   challenge={ch}
                   onClaim={() => showToast(`+${ch.reward} pts crédités !`)}
@@ -325,7 +346,6 @@ export default function DefisScreen() {
         </>
       )}
 
-      {/* L'esprit Teaven */}
       <Text style={styles.sectionTitle}>L'esprit Teaven</Text>
       <Text style={styles.sectionDesc}>Pourquoi nos défis vous accompagnent au quotidien</Text>
       <View style={styles.whyCard}>
@@ -352,7 +372,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   scrollContent: { paddingBottom: 80 },
 
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -376,7 +395,6 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 
-  // Stats hero
   statsHero: {
     marginHorizontal: spacing.xl,
     borderRadius: 22,
@@ -470,7 +488,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // Section
   sectionTitle: {
     fontFamily: fonts.bold,
     fontSize: 17,
@@ -489,7 +506,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
-  // ─── Mosaïque ───
   mosaicWrap: {
     flexDirection: 'row',
     paddingHorizontal: spacing.xl,
@@ -501,7 +517,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
-  // Card commune
+  // ─── Card avec photo ───
   card: {
     borderRadius: 18,
     overflow: 'hidden',
@@ -514,86 +530,81 @@ const styles = StyleSheet.create({
   cardActive: {
     padding: 14,
     justifyContent: 'space-between',
+    backgroundColor: '#1F3027', // fallback si image ne charge pas
   },
 
-  // Decor
-  decorIconWrap: {
-    position: 'absolute',
-    top: -10,
-    right: -20,
-    transform: [{ rotate: '-12deg' }],
-  },
-  decorDot: {
-    position: 'absolute',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-  },
-  decorDot1: { width: 30, height: 30, top: 12, left: -8 },
-  decorDot2: { width: 20, height: 20, bottom: 25, right: 25 },
-
-  // Top
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  categoryPill: {
-    flexDirection: 'row',
+  iconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  categoryPillText: {
-    fontFamily: fonts.bold,
-    fontSize: 8.5,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    justifyContent: 'center',
   },
   rewardBadge: {
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 9,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   rewardText: {
     fontFamily: fonts.monoSemiBold,
-    fontSize: 11,
+    fontSize: 12,
     color: '#1F3027',
   },
+  rewardLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 8.5,
+    color: '#1F3027',
+    marginTop: -2,
+  },
 
-  // Center
-  centerBlock: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 6,
+  bottomBlock: { gap: 5 },
+  categoryLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.85)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 1,
   },
   title: {
     fontFamily: fonts.bold,
-    fontSize: 14,
+    fontSize: 15,
     color: '#FFFFFF',
     letterSpacing: -0.2,
-    lineHeight: 18,
+    lineHeight: 19,
+    marginBottom: 4,
   },
-
-  // Bottom
-  bottomBlock: { gap: 6 },
-  progressRow: {
+  progressBar: {
+    height: 5,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 5,
+    borderRadius: 3,
+  },
+  progressMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
+    marginTop: 2,
   },
   progressFraction: {
     fontFamily: fonts.monoSemiBold,
-    fontSize: 14,
+    fontSize: 13,
     color: '#FFFFFF',
   },
   progressFractionDim: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 11,
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 10.5,
   },
   progressPct: {
     fontFamily: fonts.bold,
@@ -601,53 +612,43 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
-  progressBar: {
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: 4,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 2,
-  },
   claimCTA: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     paddingVertical: 6,
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 6,
   },
   claimCTAText: {
     fontFamily: fonts.bold,
-    fontSize: 10.5,
+    fontSize: 11,
     color: '#1F3027',
   },
   morningBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     alignSelf: 'flex-start',
+    marginTop: 4,
   },
   morningText: {
     fontFamily: fonts.bold,
     fontSize: 10,
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 
   // ─── Variantes ───
   cardLocked: {
     backgroundColor: '#EFEEE7',
-    padding: 12,
+    padding: 14,
     justifyContent: 'center',
   },
-  lockedCenter: {
+  lockedContent: {
     alignItems: 'center',
     gap: 6,
   },
@@ -658,23 +659,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 15,
   },
+  lockedHint: {
+    fontFamily: fonts.regular,
+    fontSize: 10,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
 
   cardClaimed: {
     backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(45,90,61,0.20)',
+    padding: 14,
+    borderWidth: 1.5,
     justifyContent: 'center',
   },
-  claimedCenter: {
+  claimedContent: {
     alignItems: 'center',
     gap: 6,
   },
   claimedCheckCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#2D5A3D',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -688,7 +695,6 @@ const styles = StyleSheet.create({
   claimedReward: {
     fontFamily: fonts.monoSemiBold,
     fontSize: 11,
-    color: '#2D5A3D',
   },
 
   // Why card
