@@ -129,7 +129,7 @@ serve(async (req) => {
 
     const { data: orderRow } = await supabase
       .from('orders')
-      .select('user_id')
+      .select('user_id, items')
       .eq('square_order_id', orderId)
       .single();
 
@@ -451,6 +451,81 @@ serve(async (req) => {
       }
     } catch (loyaltyErr) {
       console.error('Loyalty points error (non-fatal):', loyaltyErr);
+    }
+
+    // ── Défis : déclencher challenge-check après paiement réussi ──
+    // Note : la chaîne via square-webhook ne se déclenche pas (webhook Square non
+    // configuré ou en panne), on invoque ici en direct. challenge-check est
+    // partiellement idempotent (skip défis non-récurrents déjà complétés).
+    if (authUser && orderRow?.user_id) {
+      try {
+        const rawItems = Array.isArray(orderRow.items)
+          ? (orderRow.items as Array<{ name?: string; catalogObjectId?: string }>)
+          : [];
+
+        // Enrichir chaque item avec sa category (square_variation_id → product.category)
+        const variationIds = rawItems
+          .map((i) => i.catalogObjectId)
+          .filter((id): id is string => !!id);
+
+        const categoryByVariationId = new Map<string, string>();
+        if (variationIds.length > 0) {
+          const { data: variations } = await supabase
+            .from('product_variations')
+            .select('square_variation_id, products:product_id(category)')
+            .in('square_variation_id', variationIds);
+          for (const v of (variations ?? []) as Array<{ square_variation_id: string; products: { category: string } | null }>) {
+            if (v.products?.category) {
+              categoryByVariationId.set(v.square_variation_id, v.products.category);
+            }
+          }
+        }
+
+        const enrichedItems = rawItems.map((i) => ({
+          name: i.name,
+          category: i.catalogObjectId ? categoryByVariationId.get(i.catalogObjectId) : undefined,
+        }));
+
+        await supabase.functions.invoke('challenge-check', {
+          body: {
+            user_id: orderRow.user_id,
+            order_total: amount,
+            order_time: new Date().toISOString(),
+            line_items: enrichedItems,
+          },
+        });
+
+        // Mise à jour loyalty_progress (compteur commandes + streak hebdo)
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        const weekStartStr = weekStart.toISOString().split('T')[0];
+
+        const { data: lp } = await supabase
+          .from('loyalty_progress')
+          .upsert(
+            { user_id: orderRow.user_id, total_parentheses: 0 },
+            { onConflict: 'user_id', ignoreDuplicates: true },
+          )
+          .select('total_parentheses, streak_weeks, last_order_week')
+          .maybeSingle();
+
+        const newTotal = (lp?.total_parentheses ?? 0) + 1;
+        const lastWeek = lp?.last_order_week;
+        const isNewWeek = !lastWeek || lastWeek < weekStartStr;
+        const newStreak = isNewWeek ? (lp?.streak_weeks ?? 0) + 1 : (lp?.streak_weeks ?? 0);
+
+        await supabase
+          .from('loyalty_progress')
+          .update({
+            total_parentheses: newTotal,
+            streak_weeks: newStreak,
+            last_order_week: isNewWeek ? weekStartStr : lastWeek,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', orderRow.user_id);
+      } catch (challengeErr) {
+        console.error('Challenge check / loyalty progress error (non-fatal):', challengeErr);
+      }
     }
 
     // Créer une notification pour le client

@@ -16,20 +16,44 @@ interface OrderLineItem {
   modifiers?: { squareModifierId: string }[];
 }
 
-/** Vérifie le JWT Supabase et retourne l'utilisateur authentifié */
-async function authenticateUser(req: Request) {
+/**
+ * Identifie l'utilisateur via le JWT Supabase.
+ * verify_jwt:true au niveau Edge Runtime valide déjà la signature en amont,
+ * on peut donc faire confiance au `sub` du JWT décodé.
+ * Fallback supabase.auth.getUser() si décodage manuel échoue.
+ */
+async function authenticateUser(req: Request): Promise<{ id: string; email?: string } | null> {
   const authHeader = req.headers.get('authorization') ?? '';
   if (!authHeader.startsWith('Bearer ')) return null;
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    { global: { headers: { Authorization: authHeader } } },
-  );
+  // 1. Décodage manuel du JWT pour extraire le sub (user_id)
+  const token = authHeader.slice(7).trim();
+  const parts = token.split('.');
+  if (parts.length === 3) {
+    try {
+      const padded = parts[1] + '='.repeat((4 - (parts[1].length % 4)) % 4);
+      const payload = JSON.parse(atob(padded.replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload?.sub && typeof payload.sub === 'string' && payload.sub.length > 0) {
+        if (payload.sub !== 'anon' && payload.role !== 'anon') {
+          return { id: payload.sub, email: payload.email };
+        }
+      }
+    } catch { /* fallback ci-dessous */ }
+  }
 
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return null;
-  return user;
+  // 2. Fallback : getUser() classique (peut échouer si SDK incompatible)
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return null;
+    return { id: user.id, email: user.email };
+  } catch {
+    return null;
+  }
 }
 
 serve(async (req) => {
