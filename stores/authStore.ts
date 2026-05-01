@@ -190,7 +190,7 @@ export const useAuthStore = create<AuthState>()(
             .catch(() => { /* non bloquant */ });
 
           // Paralléliser enrichissement Square + wallet
-          fetchWalletBalance(session.access_token).then((walletResult) => {
+          fetchWalletBalance(session.access_token, session.user.id).then((walletResult) => {
             if (walletResult.data?.success) {
               set((s) => ({
                 user: s.user ? { ...s.user, walletBalance: walletResult.data!.balance } : s.user,
@@ -285,7 +285,7 @@ export const useAuthStore = create<AuthState>()(
             set({ user: baseUser, isAuthenticated: true, isLoading: false });
             // Rafraîchir en PARALLÈLE : données Square + solde wallet
             const enrichPromise = enrichWithSquareData(baseUser, session.access_token);
-            const walletPromise = fetchWalletBalance(session.access_token);
+            const walletPromise = fetchWalletBalance(session.access_token, session.user.id);
 
             // Wallet : mettre à jour dès que disponible (pas besoin d'attendre Square)
             walletPromise.then((walletResult) => {

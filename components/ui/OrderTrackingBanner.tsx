@@ -1,20 +1,42 @@
-// Banner suivi commande Teaven — overlay informationnel discret.
+// Banner suivi commande Teaven — floating chip expandable.
 //
-// Doctrine UX (révisée) :
-// - Position absolute en haut, MASQUE le contenu derrière (overlay).
-// - Compact uniquement, ne se déploie PAS.
-// - Tap → navigation directe vers l'écran de suivi détaillé.
-// - Couleur signature : gradient vert Teaven (cohérent bannière "Première commande").
-// - Apparaît avec slide-down animé, disparaît avec slide-up.
+// Doctrine UX (révision finale) :
+// - Position absolute en haut (overlay flottant), MARGES horizontales pour
+//   ne pas couvrir l'intégralité du contenu en dessous (chip floating).
+// - Compact ~56px par défaut → tap court = expand vers widget complet (~340px).
+// - Mode expanded affiche : timeline étapes, items, livreur, total, CTA.
+// - CTA "voir suivi complet" = navigate vers la page tracking détaillée.
+// - Tap court ne navigue PAS (évite re-mount + animation à chaque tap).
+// - Couleur signature : gradient vert Teaven.
 
-import { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Animated,
+  Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Truck, Package, ChevronRight, Clock } from 'lucide-react-native';
+import {
+  Truck,
+  Package,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  MapPin,
+  User,
+  Check,
+} from 'lucide-react-native';
 import { useActiveOrder } from '@/contexts/ActiveOrderContext';
+import { useOrderStore } from '@/stores/orderStore';
 import { colors, fonts, spacing } from '@/constants/theme';
+
+const COMPACT_HEIGHT = 56;
+const EXPANDED_HEIGHT = 340;
 
 function getContextualMessage(status: string, mode: 'pickup' | 'delivery'): string {
   if (mode === 'pickup') {
@@ -74,12 +96,42 @@ function getStatusTitle(status: string, mode: 'pickup' | 'delivery'): string {
   return 'Commande confirmée';
 }
 
+function getSteps(mode: 'pickup' | 'delivery'): { key: string; label: string }[] {
+  if (mode === 'pickup') {
+    return [
+      { key: 'payment_confirmed', label: 'Confirmée' },
+      { key: 'preparing', label: 'Préparation' },
+      { key: 'ready', label: 'Prête' },
+      { key: 'delivered', label: 'Récupérée' },
+    ];
+  }
+  return [
+    { key: 'payment_confirmed', label: 'Confirmée' },
+    { key: 'preparing', label: 'Préparation' },
+    { key: 'picked_up', label: 'En route' },
+    { key: 'delivered', label: 'Livrée' },
+  ];
+}
+
+function isStepDone(stepKey: string, currentStatus: string, mode: 'pickup' | 'delivery'): boolean {
+  const order = mode === 'pickup'
+    ? ['payment_confirmed', 'pending', 'preparing', 'ready', 'delivered', 'completed']
+    : ['payment_confirmed', 'pending', 'preparing', 'courier_assigned', 'picked_up', 'en_route', 'delivered'];
+  const stepIdx = order.indexOf(stepKey);
+  const currentIdx = order.indexOf(currentStatus);
+  if (stepIdx === -1 || currentIdx === -1) return false;
+  return currentIdx >= stepIdx;
+}
+
 export function OrderTrackingBanner() {
   const { activeOrder } = useActiveOrder();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const currentOrder = useOrderStore((s) => s.currentOrder);
 
+  const [expanded, setExpanded] = useState(false);
   const slideAnim = useRef(new Animated.Value(activeOrder ? 0 : -200)).current;
+  const expandAnim = useRef(new Animated.Value(0)).current;
   const useNative = Platform.OS !== 'web';
 
   useEffect(() => {
@@ -89,7 +141,17 @@ export function OrderTrackingBanner() {
       stiffness: 220,
       useNativeDriver: useNative,
     }).start();
+    if (!activeOrder) setExpanded(false);
   }, [!!activeOrder]);
+
+  useEffect(() => {
+    Animated.spring(expandAnim, {
+      toValue: expanded ? 1 : 0,
+      damping: 18,
+      stiffness: 180,
+      useNativeDriver: false,
+    }).start();
+  }, [expanded]);
 
   if (!activeOrder) return null;
 
@@ -101,65 +163,163 @@ export function OrderTrackingBanner() {
 
   const title = getStatusTitle(activeOrder.status, activeOrder.mode);
   const subtitle = getContextualMessage(activeOrder.status, activeOrder.mode);
+  const steps = getSteps(activeOrder.mode);
+
+  const fmt = (cents: number) => `${(cents / 100).toFixed(2).replace('.', ',')} €`;
+
+  const animatedHeight = expandAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [COMPACT_HEIGHT, EXPANDED_HEIGHT],
+  });
+
+  const handleNavigateToTracking = () => {
+    setExpanded(false);
+    router.push(route);
+  };
 
   return (
     <Animated.View
       style={[
         styles.container,
         {
-          paddingTop: insets.top + 4,
+          paddingTop: insets.top + 6,
           transform: [{ translateY: slideAnim }],
         },
       ]}
       pointerEvents="box-none"
     >
-      <Pressable
-        onPress={() => router.push(route)}
-        accessibilityRole="button"
-        accessibilityLabel={`Suivi commande : ${title}. Toucher pour ouvrir le suivi détaillé.`}
-        style={styles.tapWrap}
-      >
+      <Animated.View style={[styles.chipShadow, { height: animatedHeight }]}>
         <LinearGradient
           colors={[colors.green, colors.greenDark]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.banner}
+          style={styles.chip}
         >
-          {/* Icon circle */}
-          <View style={styles.iconCircle}>
-            <Icon size={16} color={colors.greenDark} strokeWidth={2.4} />
-          </View>
+          {/* Compact row — toujours visible, tap = toggle expand */}
+          <Pressable
+            onPress={() => setExpanded((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={`${title}. ${expanded ? 'Replier' : 'Voir le détail'}.`}
+            style={styles.compactRow}
+          >
+            <View style={styles.iconCircle}>
+              <Icon size={14} color={colors.greenDark} strokeWidth={2.4} />
+            </View>
 
-          {/* Texts */}
-          <View style={styles.textWrap}>
-            <View style={styles.titleRow}>
-              <Text style={styles.title} numberOfLines={1}>
-                {title}
-              </Text>
-              {activeOrder.eta && (
-                <View style={styles.etaPill}>
-                  <Clock size={9} color={colors.greenDark} strokeWidth={2.6} />
-                  <Text style={styles.etaText}>{activeOrder.eta}</Text>
+            <View style={styles.compactTexts}>
+              <View style={styles.compactTopRow}>
+                <Text style={styles.compactTitle} numberOfLines={1}>{title}</Text>
+                {activeOrder.eta && (
+                  <View style={styles.etaPill}>
+                    <Clock size={9} color={colors.greenDark} strokeWidth={2.6} />
+                    <Text style={styles.etaText}>{activeOrder.eta}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.compactSubtitle} numberOfLines={1}>{subtitle}</Text>
+            </View>
+
+            <View style={styles.expandBtn}>
+              {expanded
+                ? <ChevronUp size={14} color="#FFF" strokeWidth={2.4} />
+                : <ChevronDown size={14} color="#FFF" strokeWidth={2.4} />}
+            </View>
+          </Pressable>
+
+          {/* Expanded content — visible quand déplié */}
+          <Animated.View
+            style={[styles.expanded, { opacity: expandAnim }]}
+            pointerEvents={expanded ? 'auto' : 'none'}
+          >
+            {/* Steps timeline */}
+            <View style={styles.stepsRow}>
+              {steps.map((step, i) => {
+                const done = isStepDone(step.key, activeOrder.status, activeOrder.mode);
+                const isLast = i === steps.length - 1;
+                return (
+                  <View key={step.key} style={styles.stepCol}>
+                    <View style={styles.stepCircleRow}>
+                      <View style={[styles.stepCircle, done && styles.stepCircleDone]}>
+                        {done && <Check size={9} color={colors.greenDark} strokeWidth={3} />}
+                      </View>
+                      {!isLast && <View style={[styles.stepLine, done && styles.stepLineDone]} />}
+                    </View>
+                    <Text style={[styles.stepLabel, done && styles.stepLabelDone]} numberOfLines={1}>
+                      {step.label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Cards row : items + side info */}
+            <View style={styles.cardsRow}>
+              {currentOrder && currentOrder.items.length > 0 && (
+                <View style={styles.itemsCard}>
+                  <Text style={styles.cardLabel}>Votre commande</Text>
+                  {currentOrder.items.slice(0, 2).map((item, i) => (
+                    <Text key={i} style={styles.itemLine} numberOfLines={1}>
+                      <Text style={styles.itemQty}>{item.quantity}× </Text>
+                      {item.name}
+                    </Text>
+                  ))}
+                  {currentOrder.items.length > 2 && (
+                    <Text style={styles.itemMore}>+{currentOrder.items.length - 2} autre{currentOrder.items.length - 2 > 1 ? 's' : ''}</Text>
+                  )}
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>Total</Text>
+                    <Text style={styles.totalValue}>{fmt(currentOrder.total)}</Text>
+                  </View>
                 </View>
               )}
-            </View>
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
-            {/* Mini progress bar */}
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${Math.max(8, activeOrder.progressPercent)}%` },
-                ]}
-              />
-            </View>
-          </View>
 
-          <ChevronRight size={16} color="rgba(255,255,255,0.85)" strokeWidth={2.2} />
+              <View style={styles.sideCard}>
+                {isDelivery ? (
+                  <>
+                    <Text style={styles.cardLabel}>Livreur</Text>
+                    {activeOrder.courierName ? (
+                      <View style={styles.courierRow}>
+                        <View style={styles.courierAvatar}>
+                          <User size={13} color={colors.greenDark} strokeWidth={2.2} />
+                        </View>
+                        <Text style={styles.courierName} numberOfLines={1}>{activeOrder.courierName}</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.courierPending}>En attente</Text>
+                    )}
+                    {currentOrder?.deliveryAddress && (
+                      <View style={styles.addressRow}>
+                        <MapPin size={10} color="rgba(255,255,255,0.7)" strokeWidth={2} />
+                        <Text style={styles.addressText} numberOfLines={2}>
+                          {currentOrder.deliveryAddress.street}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.cardLabel}>Retrait</Text>
+                    <View style={styles.courierRow}>
+                      <View style={styles.courierAvatar}>
+                        <Package size={13} color={colors.greenDark} strokeWidth={2.2} />
+                      </View>
+                      <Text style={styles.courierName}>Au comptoir</Text>
+                    </View>
+                    <Text style={styles.addressText}>
+                      Présentez votre nom au comptoir
+                    </Text>
+                  </>
+                )}
+              </View>
+            </View>
+
+            {/* CTA pour ouvrir la page tracking complète */}
+            <Pressable onPress={handleNavigateToTracking} style={styles.cta} accessibilityRole="button">
+              <Text style={styles.ctaText}>Voir le suivi complet</Text>
+            </Pressable>
+          </Animated.View>
         </LinearGradient>
-      </Pressable>
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -173,40 +333,46 @@ const styles = StyleSheet.create({
     zIndex: 999,
     paddingHorizontal: spacing.md,
   },
-  tapWrap: {
-    borderRadius: 14,
+  chipShadow: {
+    borderRadius: 16,
     shadowColor: '#1F3027',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 10,
+    overflow: 'hidden',
   },
-  banner: {
+  chip: {
+    flex: 1,
+    borderRadius: 16,
+  },
+
+  // Compact
+  compactRow: {
+    height: COMPACT_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
     gap: 10,
-    borderRadius: 14,
   },
   iconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  textWrap: {
+  compactTexts: {
     flex: 1,
     gap: 2,
   },
-  titleRow: {
+  compactTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  title: {
+  compactTitle: {
     fontFamily: fonts.bold,
     fontSize: 12,
     color: '#FFF',
@@ -227,22 +393,188 @@ const styles = StyleSheet.create({
     color: colors.greenDark,
     letterSpacing: 0.3,
   },
-  subtitle: {
+  compactSubtitle: {
     fontFamily: fonts.regular,
     fontSize: 10.5,
-    color: 'rgba(255,255,255,0.88)',
+    color: 'rgba(255,255,255,0.85)',
     lineHeight: 13,
   },
-  progressTrack: {
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 1.5,
-    overflow: 'hidden',
-    marginTop: 3,
+  expandBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  progressFill: {
-    height: 2,
+
+  // Expanded
+  expanded: {
+    paddingHorizontal: 12,
+    paddingBottom: 14,
+    gap: 12,
+  },
+
+  // Steps timeline
+  stepsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 4,
+    marginTop: 4,
+  },
+  stepCol: {
+    flex: 1,
+    alignItems: 'flex-start',
+    gap: 5,
+  },
+  stepCircleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  stepCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCircleDone: {
     backgroundColor: '#FFF',
-    borderRadius: 1.5,
+    borderColor: '#FFF',
+  },
+  stepLine: {
+    flex: 1,
+    height: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: 2,
+  },
+  stepLineDone: {
+    backgroundColor: '#FFF',
+  },
+  stepLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  stepLabelDone: {
+    color: '#FFF',
+    fontFamily: fonts.bold,
+  },
+
+  // Cards
+  cardsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  itemsCard: {
+    flex: 1.4,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 10,
+    padding: 10,
+    gap: 3,
+  },
+  sideCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 10,
+    padding: 10,
+    gap: 5,
+  },
+  cardLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.7)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  itemLine: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: '#FFF',
+    lineHeight: 15,
+  },
+  itemQty: {
+    fontFamily: fonts.bold,
+    color: '#FFF',
+  },
+  itemMore: {
+    fontFamily: fonts.regular,
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.7)',
+    fontStyle: 'italic',
+    marginTop: 1,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.18)',
+  },
+  totalLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  totalValue: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 12,
+    color: '#FFF',
+  },
+  courierRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  courierAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  courierName: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: '#FFF',
+    flex: 1,
+  },
+  courierPending: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
+    fontStyle: 'italic',
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  addressText: {
+    fontFamily: fonts.regular,
+    fontSize: 9.5,
+    color: 'rgba(255,255,255,0.85)',
+    lineHeight: 12,
+    flex: 1,
+  },
+
+  // CTA
+  cta: {
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  ctaText: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.greenDark,
+    letterSpacing: 0.3,
   },
 });

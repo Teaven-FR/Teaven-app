@@ -89,9 +89,8 @@ export default function DeliveryTrackingScreen() {
   const [loading, setLoading] = useState(true);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
 
-  // Animations
+  // Animations — fade léger seulement (pas de slide pour éviter l'effet "rejoue à chaque visite")
   const heroOpacity = useRef(new Animated.Value(0)).current;
-  const cardSlide = useRef(new Animated.Value(40)).current;
   const progressWidth = useRef(new Animated.Value(0)).current;
 
   const fetchStatus = useCallback(async () => {
@@ -122,10 +121,7 @@ export default function DeliveryTrackingScreen() {
   // Entrance animations
   useEffect(() => {
     if (!loading) {
-      Animated.parallel([
-        Animated.timing(heroOpacity, { toValue: 1, duration: 500, useNativeDriver: useNative }),
-        Animated.spring(cardSlide, { toValue: 0, damping: 18, stiffness: 160, useNativeDriver: useNative }),
-      ]).start();
+      Animated.timing(heroOpacity, { toValue: 1, duration: 250, useNativeDriver: useNative }).start();
     }
   }, [loading]);
 
@@ -240,7 +236,7 @@ export default function DeliveryTrackingScreen() {
       </Animated.View>
 
       {/* Bottom card with status details */}
-      <Animated.View style={[styles.bottomSheet, { transform: [{ translateY: cardSlide }] }]}>
+      <Animated.View style={[styles.bottomSheet, { opacity: heroOpacity }]}>
         {/* Progress bar */}
         <View style={styles.progressSection}>
           <View style={styles.progressHeader}>

@@ -10,7 +10,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import {
   ArrowLeft,
   Flame,
@@ -94,8 +93,12 @@ export default function DefisScreen() {
   const { challenges, loading } = useChallenges();
   const { showToast } = useToast();
 
-  // Nombre de défis en cours (progression > 0, pas encore réclamé)
+  // Statistiques user pour le hero
   const inProgressCount = challenges.filter((c) => c.progress > 0 && !c.claimed && !c.locked).length;
+  const completedCount = challenges.filter((c) => c.claimed).length;
+  const totalPointsFromChallenges = challenges
+    .filter((c) => c.claimed)
+    .reduce((sum, c) => sum + c.reward, 0);
 
   const renderChallenge = (ch: Challenge) => {
     const Icon = ICON_MAP[ch.icon] ?? Trophy;
@@ -205,22 +208,9 @@ export default function DefisScreen() {
             <View style={styles.progressBar}>
               <View style={[styles.progressFill, { width: `${pct}%` as any }]} />
             </View>
-            <View style={styles.progressCircleWrap}>
-              <Svg width={38} height={38} viewBox="0 0 38 38">
-                <SvgCircle cx={19} cy={19} r={16} stroke="rgba(45,90,61,0.12)" strokeWidth={2.5} fill="none" />
-                <SvgCircle
-                  cx={19} cy={19} r={16}
-                  stroke="#2D5A3D"
-                  strokeWidth={2.5}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 16}`}
-                  strokeDashoffset={`${2 * Math.PI * 16 * (1 - pct / 100)}`}
-                  transform="rotate(-90 19 19)"
-                />
-              </Svg>
-              <Text style={styles.progressCircleText}>{ch.progress}/{ch.target}</Text>
-            </View>
+            <Text style={styles.progressFractionText}>
+              {ch.progress}<Text style={styles.progressFractionDim}>/{ch.target}</Text>
+            </Text>
           </View>
         )}
 
@@ -289,24 +279,41 @@ export default function DefisScreen() {
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Hero */}
+      {/* Hero — gradient pillar défis avec stats user */}
       <LinearGradient
-        colors={['#243D29', '#2E5235', '#3A6642']}
+        colors={['#1F3027', '#2D5A3D', '#3A6642']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.hero}
       >
         <View style={styles.heroDecor} />
         <View style={styles.heroDecor2} />
-        <Trophy size={36} color="rgba(255,255,255,0.9)" strokeWidth={1.3} style={{ marginBottom: spacing.lg }} />
-        <Text style={styles.heroTitle}>Relevez nos défis</Text>
+        <View style={styles.heroDecor3} />
+
+        <View style={styles.heroIconWrap}>
+          <Trophy size={28} color="#FFF" strokeWidth={1.5} />
+        </View>
+        <Text style={styles.heroTitle}>Vos défis Teaven</Text>
         <Text style={styles.heroText}>
-          Chez Teaven, on croit que chaque découverte mérite d'être célébrée. Relevez nos défis, explorez notre carte et gagnez des points bonus à chaque étape.
+          Chaque commande devient une parenthèse récompensée. Explorez, savourez, gagnez.
         </Text>
-        <View style={styles.heroBadge}>
-          <Text style={styles.heroBadgeText}>
-            {loading ? '…' : `${inProgressCount} défi${inProgressCount !== 1 ? 's' : ''} en cours`}
-          </Text>
+
+        {/* Stats line — chiffres iconiques */}
+        <View style={styles.heroStatsRow}>
+          <View style={styles.heroStat}>
+            <Text style={styles.heroStatValue}>{loading ? '…' : inProgressCount}</Text>
+            <Text style={styles.heroStatLabel}>en cours</Text>
+          </View>
+          <View style={styles.heroStatDivider} />
+          <View style={styles.heroStat}>
+            <Text style={styles.heroStatValue}>{loading ? '…' : completedCount}</Text>
+            <Text style={styles.heroStatLabel}>réussis</Text>
+          </View>
+          <View style={styles.heroStatDivider} />
+          <View style={styles.heroStat}>
+            <Text style={styles.heroStatValue}>{loading ? '…' : totalPointsFromChallenges}</Text>
+            <Text style={styles.heroStatLabel}>pts gagnés</Text>
+          </View>
         </View>
       </LinearGradient>
 
@@ -339,15 +346,16 @@ export default function DefisScreen() {
         );
       })}
 
-      {/* Pourquoi des défis */}
-      <Text style={styles.sectionTitle}>Pourquoi des défis ?</Text>
+      {/* Pourquoi des défis — section harmonisée pillar */}
+      <Text style={styles.sectionTitle}>L'esprit Teaven</Text>
+      <Text style={styles.sectionDesc}>Pourquoi nos défis vous accompagnent au quotidien</Text>
       <View style={styles.whyCard}>
         {WHY_ITEMS.map((item, i) => {
           const Icon = item.icon;
           return (
             <View key={i} style={[styles.whyRow, i < WHY_ITEMS.length - 1 && styles.whyRowBorder]}>
               <View style={styles.whyIcon}>
-                <Icon size={16} color={colors.green} strokeWidth={1.8} />
+                <Icon size={16} color="#2D5A3D" strokeWidth={1.8} />
               </View>
               <View style={styles.whyContent}>
                 <Text style={styles.whyTitle}>{item.title}</Text>
@@ -389,60 +397,103 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 
-  // Hero
+  // Hero — gradient pillar défis avec stats
   hero: {
     marginHorizontal: spacing.xl,
-    borderRadius: 20,
+    borderRadius: 22,
     padding: spacing.xxl,
     marginBottom: spacing.xxxl,
     overflow: 'hidden',
     alignItems: 'center',
-    ...shadows.loyalty,
+    shadowColor: '#1F3027',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 10,
   },
   heroDecor: {
     position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    top: -40,
+    right: -40,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   heroDecor2: {
     position: 'absolute',
-    bottom: -20,
+    bottom: -30,
+    left: -30,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  heroDecor3: {
+    position: 'absolute',
+    top: 30,
     left: -20,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  heroIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
   },
   heroTitle: {
     fontFamily: fonts.bold,
-    fontSize: 22,
+    fontSize: 24,
     color: '#FFFFFF',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   heroText: {
     fontFamily: fonts.regular,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(255,255,255,0.78)',
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: 19,
     marginBottom: spacing.xl,
+    paddingHorizontal: spacing.sm,
   },
-  heroBadge: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+  heroStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: 20,
+    paddingVertical: spacing.md,
+    width: '100%',
   },
-  heroBadgeText: {
-    fontFamily: fonts.bold,
-    fontSize: 12,
+  heroStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  heroStatValue: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 22,
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  heroStatLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.7)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  heroStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
 
   // Loading
@@ -457,14 +508,15 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // Section title
+  // Section title — couleur pillar défis
   sectionTitle: {
     fontFamily: fonts.bold,
-    fontSize: 16,
-    color: colors.green,
+    fontSize: 17,
+    color: '#2D5A3D',
     paddingHorizontal: spacing.xl,
     marginBottom: 4,
-    marginTop: spacing.sm,
+    marginTop: spacing.lg,
+    letterSpacing: -0.2,
   },
   sectionDesc: {
     fontFamily: fonts.regular,
@@ -472,6 +524,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     paddingHorizontal: spacing.xl,
     marginBottom: spacing.md,
+    lineHeight: 17,
   },
 
   // Challenges
@@ -565,17 +618,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.green,
     borderRadius: 3,
   },
-  progressCircleWrap: {
-    width: 38,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressCircleText: {
-    position: 'absolute',
+  progressFractionText: {
     fontFamily: fonts.monoSemiBold,
-    fontSize: 9,
-    color: colors.green,
+    fontSize: 14,
+    color: '#2D5A3D',
+    minWidth: 44,
+    textAlign: 'right',
+  },
+  progressFractionDim: {
+    color: 'rgba(45,90,61,0.4)',
+    fontSize: 11,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -806,7 +858,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: colors.greenLight,
+    backgroundColor: 'rgba(45,90,61,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

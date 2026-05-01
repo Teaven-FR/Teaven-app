@@ -87,10 +87,11 @@ export async function fetchCustomer(phone: string, accessToken?: string) {
 }
 
 /** Récupérer le solde du wallet (Square Gift Cards) */
-export async function fetchWalletBalance(accessToken?: string) {
+export async function fetchWalletBalance(accessToken?: string, userId?: string) {
   return callEdgeFunction<{ success: boolean; balance: number; giftCardId?: string }>(
     'manage-wallet',
-    { action: 'balance' },
+    // userId : fallback côté edge si le JWT user est rejeté par le SDK Supabase
+    { action: 'balance', userId },
     accessToken,
   );
 }
