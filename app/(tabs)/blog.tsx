@@ -11,7 +11,6 @@ import {
   Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useScreenTopPadding } from '@/hooks/useScreenTopPadding';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -38,7 +37,6 @@ const blogCategories = [
 
 export default function BlogScreen() {
   const insets = useSafeAreaInsets();
-  const topPadding = useScreenTopPadding();
   const router = useRouter();
   const {
     articles,
@@ -106,7 +104,7 @@ export default function BlogScreen() {
 
   return (
     <ScrollView
-      style={[styles.container, { paddingTop: topPadding }]}
+      style={[styles.container, { paddingTop: insets.top }]}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
       refreshControl={

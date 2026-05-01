@@ -80,7 +80,6 @@ export default function HomeScreen() {
   const { user, isGuest, wallet, walletLoading, rechargeWallet, loyalty } = useUser();
   const { showToast } = useToast();
   const { challenges: realChallenges, loading: challengesLoading } = useChallenges();
-  const topPadding = require('@/hooks/useScreenTopPadding').useScreenTopPadding();
   const setPromoCode = useCartStore((s) => s.setPromoCode);
   const { posts: instaPosts } = useInstagramFeed(6);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
@@ -184,7 +183,7 @@ export default function HomeScreen() {
   return (
     <>
       <ScrollView
-        style={[styles.container, { paddingTop: topPadding }]}
+        style={[styles.container, { paddingTop: insets.top }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={

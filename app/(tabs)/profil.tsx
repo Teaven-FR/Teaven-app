@@ -12,7 +12,6 @@ import {
   Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useScreenTopPadding } from '@/hooks/useScreenTopPadding';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -139,7 +138,6 @@ const INSTAGRAM_DEEPLINK = 'instagram://user?username=teaven.co';
 
 export default function ProfilScreen() {
   const insets = useSafeAreaInsets();
-  const topPadding = useScreenTopPadding();
   const router = useRouter();
   const { showToast } = useToast();
   const addItem = useCartStore((s) => s.addItem);
@@ -219,7 +217,7 @@ export default function ProfilScreen() {
   return (
     <>
       <ScrollView
-        style={[styles.container, { paddingTop: topPadding }]}
+        style={[styles.container, { paddingTop: insets.top }]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >

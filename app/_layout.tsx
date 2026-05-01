@@ -185,13 +185,9 @@ export default function RootLayout() {
         <ToastProvider>
           <ActiveOrderProvider>
             <StatusBar />
-            {/* Banner en tête : pousse le contenu vers le bas plutôt que de l'overlayer */}
-            <View style={{ flex: 1 }}>
-              <OrderTrackingBanner />
-              <View style={{ flex: 1 }}>
-                <RootNavigator />
-              </View>
-            </View>
+            <RootNavigator />
+            {/* Banner en overlay : flotte au-dessus de tous les écrans, masque le haut */}
+            <OrderTrackingBanner />
           </ActiveOrderProvider>
         </ToastProvider>
       </GestureHandlerRootView>
