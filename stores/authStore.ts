@@ -155,7 +155,8 @@ export const useAuthStore = create<AuthState>()(
             dietaryPreferences: [],
             loyaltyPoints: profileLoyaltyPoints ?? 0,
             loyaltyLevel: (profileLoyaltyLevel ?? 'Première Parenthèse') as LoyaltyLevel,
-            walletBalance: profileWalletBalance ?? 0,
+            // wallet_balance Supabase = cache déprécié, toujours 0. Vrai solde via Square.
+            walletBalance: 0,
             squareCustomerId: profileSquareCustomerId,
             createdAt: session.user.created_at,
             updatedAt: new Date().toISOString(),
@@ -276,7 +277,10 @@ export const useAuthStore = create<AuthState>()(
               dietaryPreferences: persistedUser?.dietaryPreferences ?? [],
               loyaltyPoints: profileLoyaltyPoints ?? persistedUser?.loyaltyPoints ?? 0,
               loyaltyLevel: (profileLoyaltyLevel ?? persistedUser?.loyaltyLevel ?? 'Première Parenthèse') as LoyaltyLevel,
-              walletBalance: profileWalletBalance ?? persistedUser?.walletBalance ?? 0,
+              // wallet_balance Supabase est un cache déprécié (toujours 0 depuis la doctrine
+               // Square = source de vérité). On garde la valeur persistée en local pour
+               // éviter le flicker "53,20€ → 0€ → 53,20€" pendant le fetch Square.
+              walletBalance: persistedUser?.walletBalance ?? 0,
               squareCustomerId: profileSquareCustomerId || persistedUser?.squareCustomerId,
               squareGiftCardId: persistedUser?.squareGiftCardId,
               createdAt: session.user.created_at,

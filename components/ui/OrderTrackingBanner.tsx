@@ -30,13 +30,15 @@ import {
   MapPin,
   User,
   Check,
+  X,
 } from 'lucide-react-native';
 import { useActiveOrder } from '@/contexts/ActiveOrderContext';
 import { useOrderStore } from '@/stores/orderStore';
 import { colors, fonts, spacing } from '@/constants/theme';
 
 const COMPACT_HEIGHT = 56;
-const EXPANDED_HEIGHT = 340;
+// Hauteur expanded calibrée sur le contenu réel : steps + cards row + CTA.
+const EXPANDED_HEIGHT = 290;
 
 function getContextualMessage(status: string, mode: 'pickup' | 'delivery'): string {
   if (mode === 'pickup') {
@@ -130,19 +132,30 @@ export function OrderTrackingBanner() {
   const currentOrder = useOrderStore((s) => s.currentOrder);
 
   const [expanded, setExpanded] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const slideAnim = useRef(new Animated.Value(activeOrder ? 0 : -200)).current;
   const expandAnim = useRef(new Animated.Value(0)).current;
+  const lastStatusRef = useRef<string | undefined>(activeOrder?.status);
   const useNative = Platform.OS !== 'web';
 
+  // Quand le statut change, réinitialiser hidden (le banner réapparaît).
   useEffect(() => {
+    if (activeOrder?.status && activeOrder.status !== lastStatusRef.current) {
+      setHidden(false);
+      lastStatusRef.current = activeOrder.status;
+    }
+  }, [activeOrder?.status]);
+
+  useEffect(() => {
+    const visible = !!activeOrder && !hidden;
     Animated.spring(slideAnim, {
-      toValue: activeOrder ? 0 : -200,
+      toValue: visible ? 0 : -200,
       damping: 22,
       stiffness: 220,
       useNativeDriver: useNative,
     }).start();
-    if (!activeOrder) setExpanded(false);
-  }, [!!activeOrder]);
+    if (!visible) setExpanded(false);
+  }, [!!activeOrder, hidden]);
 
   useEffect(() => {
     Animated.spring(expandAnim, {
@@ -231,6 +244,17 @@ export function OrderTrackingBanner() {
             style={[styles.expanded, { opacity: expandAnim }]}
             pointerEvents={expanded ? 'auto' : 'none'}
           >
+            {/* Bouton X — réduit le banner (réapparaît au changement de statut) */}
+            <Pressable
+              onPress={() => setHidden(true)}
+              style={styles.dismissBtn}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Réduire le banner de suivi"
+            >
+              <X size={12} color="#FFF" strokeWidth={2.4} />
+            </Pressable>
+
             {/* Steps timeline */}
             <View style={styles.stepsRow}>
               {steps.map((step, i) => {
@@ -305,8 +329,8 @@ export function OrderTrackingBanner() {
                       </View>
                       <Text style={styles.courierName}>Au comptoir</Text>
                     </View>
-                    <Text style={styles.addressText}>
-                      Présentez votre nom au comptoir
+                    <Text style={styles.addressText} numberOfLines={2}>
+                      Présentez votre nom à l'arrivée
                     </Text>
                   </>
                 )}
@@ -411,8 +435,20 @@ const styles = StyleSheet.create({
   // Expanded
   expanded: {
     paddingHorizontal: 12,
-    paddingBottom: 14,
-    gap: 12,
+    paddingBottom: 12,
+    gap: 10,
+  },
+  dismissBtn: {
+    position: 'absolute',
+    top: -2,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
 
   // Steps timeline
