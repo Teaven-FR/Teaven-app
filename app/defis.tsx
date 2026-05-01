@@ -1,4 +1,5 @@
-// Page Défis Teaven — philosophie, liste des défis actifs, progression
+// Page Défis Teaven — Mon wallet de défis (stack style Apple Wallet)
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -22,6 +23,8 @@ import {
   Lock,
   Check,
   Zap,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react-native';
 import { useChallenges, type Challenge } from '@/hooks/useChallenges';
 import { useToast } from '@/contexts/ToastContext';
@@ -37,55 +40,197 @@ const ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string
   users: Users,
 };
 
-const ICON_BG: Record<string, string> = {
-  flame: '#FFF0D6',
-  trophy: '#F0F0EE',
-  leaf: '#E8F0EA',
-  coffee: '#F5ECE5',
-  heart: '#FDECEA',
-  star: '#F5F0E1',
-  users: '#E8EDF7',
+// Couleur signature par CATÉGORIE de défi (pillar colors Teaven)
+const CATEGORY_GRADIENT: Record<string, [string, string, string]> = {
+  fidelite: ['#1F3027', '#2D5A3D', '#3A6642'],   // pillar défis vert profond
+  boissons: ['#A56843', '#C4845C', '#D89F76'],   // pillar wallet terracotta
+  food: ['#9B8540', '#C4A962', '#D8C285'],       // doré gold
+  social: ['#5C8580', '#7EA5A0', '#9DBDB9'],     // pillar atmosphère
 };
 
-const ICON_COLOR: Record<string, string> = {
-  flame: colors.gold,
-  trophy: '#8A8A82',
-  leaf: colors.green,
-  coffee: '#C4845C',
-  heart: colors.error,
-  star: colors.gold,
-  users: colors.greenSecondary,
+const CATEGORY_LABELS: Record<string, string> = {
+  fidelite: 'Régularité',
+  boissons: 'Explorateur',
+  food: 'Mensuel',
+  social: 'Social',
 };
-
-const CATEGORY_SECTIONS = [
-  { key: 'fidelite', label: 'Régularité', desc: 'Récompensez vos bonnes habitudes' },
-  { key: 'boissons', label: 'Explorateur', desc: 'Découvrez notre carte sous toutes ses formes' },
-  { key: 'food', label: 'Challenge du mois', desc: 'Défi mensuel unique' },
-  { key: 'social', label: 'Social', desc: "Partagez l'expérience Teaven" },
-];
 
 const WHY_ITEMS = [
-  {
-    icon: Leaf,
-    title: 'Découverte',
-    text: 'Explorer notre carte et oser de nouvelles saveurs.',
-  },
-  {
-    icon: Flame,
-    title: 'Régularité',
-    text: 'Récompenser votre fidélité au quotidien.',
-  },
-  {
-    icon: Star,
-    title: 'Ludique',
-    text: 'Rendre chaque commande une petite aventure.',
-  },
-  {
-    icon: Zap,
-    title: 'Bonus',
-    text: 'Gagner des points en plus de la fidélité classique.',
-  },
+  { icon: Leaf, title: 'Découverte', text: 'Explorer notre carte et oser de nouvelles saveurs.' },
+  { icon: Flame, title: 'Régularité', text: 'Récompenser votre fidélité au quotidien.' },
+  { icon: Star, title: 'Ludique', text: 'Rendre chaque commande une petite aventure.' },
+  { icon: Zap, title: 'Bonus', text: 'Gagner des points en plus de la fidélité classique.' },
 ];
+
+/**
+ * Tri pour wallet stack :
+ * 1. Locked → en bas
+ * 2. Claimed → bas
+ * 3. En cours (progress > 0) → top
+ * 4. Par % progression décroissant
+ */
+function sortChallenges(challenges: Challenge[]): Challenge[] {
+  return [...challenges].sort((a, b) => {
+    if (a.locked !== b.locked) return a.locked ? 1 : -1;
+    if (a.claimed !== b.claimed) return a.claimed ? 1 : -1;
+    const aInProgress = a.progress > 0 && !a.claimed;
+    const bInProgress = b.progress > 0 && !b.claimed;
+    if (aInProgress !== bInProgress) return aInProgress ? -1 : 1;
+    const aPct = a.progress / Math.max(a.target, 1);
+    const bPct = b.progress / Math.max(b.target, 1);
+    return bPct - aPct;
+  });
+}
+
+interface WalletCardProps {
+  challenge: Challenge;
+  expanded: boolean;
+  onTap: () => void;
+  onClaim: () => void;
+}
+
+function WalletCard({ challenge: ch, expanded, onTap, onClaim }: WalletCardProps) {
+  const Icon = ICON_MAP[ch.icon] ?? Trophy;
+  const isMorning = ch.type === 'morning_bonus';
+  const isDone = ch.completed || (!isMorning && ch.progress >= ch.target);
+  const isReadyToClaim = !ch.locked && !ch.claimed && isDone && !isMorning;
+  const pct = isMorning ? 100 : Math.min(100, Math.round((ch.progress / Math.max(ch.target, 1)) * 100));
+
+  const gradient = CATEGORY_GRADIENT[ch.uiCategory] ?? CATEGORY_GRADIENT.fidelite;
+  const categoryLabel = CATEGORY_LABELS[ch.uiCategory] ?? 'Défi';
+
+  // Variantes visuelles selon état
+  if (ch.locked) {
+    return (
+      <Pressable onPress={onTap} style={[styles.walletCard, styles.walletCardLocked]}>
+        <View style={styles.cardHeader}>
+          <View style={styles.iconCircleLocked}>
+            <Lock size={16} color={colors.textMuted} strokeWidth={1.8} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardCategory}>{categoryLabel}</Text>
+            <Text style={[styles.cardTitle, { color: colors.textMuted }]} numberOfLines={1}>
+              {ch.title}
+            </Text>
+          </View>
+          <Text style={styles.cardLockedHint}>Verrouillé</Text>
+        </View>
+      </Pressable>
+    );
+  }
+
+  if (ch.claimed) {
+    return (
+      <Pressable onPress={onTap} style={[styles.walletCard, styles.walletCardClaimed]}>
+        <View style={styles.cardHeader}>
+          <View style={styles.iconCircleClaimed}>
+            <Check size={16} color={colors.green} strokeWidth={2.5} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardCategory}>{categoryLabel}</Text>
+            <Text style={styles.cardTitleClaimed} numberOfLines={1}>{ch.title}</Text>
+          </View>
+          <Text style={styles.cardClaimedReward}>+{ch.reward} pts</Text>
+        </View>
+      </Pressable>
+    );
+  }
+
+  // Active card (en cours, non commencé, ou morning_bonus) : gradient catégorie
+  return (
+    <Pressable onPress={onTap}>
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.walletCard, styles.walletCardActive]}
+      >
+        <View style={styles.cardDecor} />
+        <View style={styles.cardDecor2} />
+
+        {/* Header — toujours visible */}
+        <View style={styles.cardHeader}>
+          <View style={styles.iconCircleActive}>
+            <Icon size={16} color="#FFF" strokeWidth={2.2} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardCategoryActive}>{categoryLabel}</Text>
+            <Text style={styles.cardTitleActive} numberOfLines={1}>{ch.title}</Text>
+          </View>
+          <View style={styles.rewardBadgeActive}>
+            <Text style={styles.rewardTextActive}>+{ch.reward}</Text>
+            <Text style={styles.rewardLabelActive}>pts</Text>
+          </View>
+        </View>
+
+        {/* Progress bar — toujours visible (la "tranche") */}
+        {!isMorning && (
+          <View style={styles.cardProgressRow}>
+            <View style={styles.cardProgressBar}>
+              <View style={[styles.cardProgressFill, { width: `${Math.max(8, pct)}%` as any }]} />
+            </View>
+            <Text style={styles.cardProgressFraction}>
+              {ch.progress}<Text style={styles.cardProgressFractionDim}>/{ch.target}</Text>
+            </Text>
+          </View>
+        )}
+
+        {/* Bottom row — visible */}
+        <View style={styles.cardBottomRow}>
+          {isMorning ? (
+            <View style={styles.cardStatusPill}>
+              <Flame size={10} color="#FFD89A" strokeWidth={2.4} />
+              <Text style={styles.cardStatusText}>Actif tous les matins</Text>
+            </View>
+          ) : isReadyToClaim ? (
+            <View style={[styles.cardStatusPill, styles.cardStatusPillReady]}>
+              <Star size={10} color="#FFF" strokeWidth={2.4} />
+              <Text style={styles.cardStatusText}>Prêt à réclamer</Text>
+            </View>
+          ) : ch.progress > 0 ? (
+            <View style={styles.cardStatusPill}>
+              <Text style={styles.cardStatusText}>En cours · {pct}%</Text>
+            </View>
+          ) : (
+            <View style={styles.cardStatusPill}>
+              <Text style={styles.cardStatusText}>À démarrer</Text>
+            </View>
+          )}
+
+          <View style={styles.cardChevron}>
+            {expanded
+              ? <ChevronUp size={14} color="#FFF" strokeWidth={2.5} />
+              : <ChevronDown size={14} color="#FFF" strokeWidth={2.5} />}
+          </View>
+        </View>
+
+        {/* Expanded zone — description + claim button */}
+        {expanded && (
+          <View style={styles.cardExpanded}>
+            <Text style={styles.cardDescription}>{ch.description}</Text>
+            <Text style={styles.cardRecurrence}>
+              {isMorning
+                ? 'Bonus à chaque commande entre 8h et 11h'
+                : ch.isRecurring
+                  ? 'Défi mensuel — se réinitialise chaque mois'
+                  : 'Défi à compléter une fois'}
+            </Text>
+            {isReadyToClaim && (
+              <Pressable
+                onPress={(e) => { e.stopPropagation(); onClaim(); }}
+                style={styles.claimBtnExpanded}
+              >
+                <Text style={styles.claimBtnExpandedText}>
+                  Réclamer {ch.reward} pts
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+      </LinearGradient>
+    </Pressable>
+  );
+}
 
 export default function DefisScreen() {
   const insets = useSafeAreaInsets();
@@ -93,171 +238,15 @@ export default function DefisScreen() {
   const { challenges, loading } = useChallenges();
   const { showToast } = useToast();
 
-  // Statistiques user pour le hero
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   const inProgressCount = challenges.filter((c) => c.progress > 0 && !c.claimed && !c.locked).length;
   const completedCount = challenges.filter((c) => c.claimed).length;
   const totalPointsFromChallenges = challenges
     .filter((c) => c.claimed)
     .reduce((sum, c) => sum + c.reward, 0);
 
-  const renderChallenge = (ch: Challenge) => {
-    const Icon = ICON_MAP[ch.icon] ?? Trophy;
-    const isDone = ch.completed || (ch.type !== 'morning_bonus' && ch.progress >= ch.target);
-    const pct = ch.type === 'morning_bonus'
-      ? 100
-      : Math.min(100, Math.round((ch.progress / ch.target) * 100));
-
-    // Variantes visuelles selon l'état :
-    // - locked : grisée, opacity réduite
-    // - in-progress (progress > 0, !done, !claimed) : MISE EN AVANT vert foncé pillar
-    // - done & !claimed : card avec halo vert, CTA "réclamer"
-    // - claimed : check large, opacity légère
-    // - non-commencé : neutre, fond blanc
-    const isInProgress = !ch.locked && !ch.claimed && !isDone && ch.progress > 0 && ch.type !== 'morning_bonus';
-    const isReadyToClaim = !ch.locked && !ch.claimed && isDone && ch.type !== 'morning_bonus';
-    const isMorning = ch.type === 'morning_bonus';
-
-    if (isInProgress) {
-      // ── Variante hero : défi en cours, card vert foncé pillar ──
-      return (
-        <View key={ch.id} style={styles.cardInProgressWrap}>
-          <LinearGradient
-            colors={['#1F3027', '#2D5A3D', '#3A6642']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.cardInProgress}
-          >
-            <View style={styles.cardInProgressDecor} />
-            <View style={styles.cardInProgressDecor2} />
-
-            {/* Top row */}
-            <View style={styles.cardTop}>
-              <View style={styles.iconWrapHero}>
-                <Icon size={22} color="#FFFFFF" strokeWidth={1.8} />
-              </View>
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardTitleHero}>{ch.title}</Text>
-                <Text style={styles.cardDescHero}>{ch.description}</Text>
-              </View>
-              <View style={styles.rewardBadgeHero}>
-                <Text style={styles.rewardTextHero}>+{ch.reward}</Text>
-                <Text style={styles.rewardLabelHero}>pts</Text>
-              </View>
-            </View>
-
-            {/* Progress bar massive + fraction */}
-            <View style={styles.progressRowHero}>
-              <View style={styles.progressBarHero}>
-                <View style={[styles.progressFillHero, { width: `${pct}%` as any }]} />
-              </View>
-              <Text style={styles.progressFractionHero}>
-                {ch.progress}<Text style={styles.progressFractionHeroDim}>/{ch.target}</Text>
-              </Text>
-            </View>
-
-            <View style={styles.cardFooterHero}>
-              <Text style={styles.cardFooterTextHero}>
-                {ch.isRecurring ? 'Mensuel' : 'En cours'}
-              </Text>
-              <View style={styles.flameRow}>
-                <Flame size={11} color="#FFD89A" strokeWidth={2.2} />
-                <Text style={styles.cardFooterPctHero}>{pct}%</Text>
-              </View>
-            </View>
-          </LinearGradient>
-        </View>
-      );
-    }
-
-    return (
-      <View
-        key={ch.id}
-        style={[
-          styles.challengeCard,
-          ch.claimed && styles.challengeClaimed,
-          ch.locked && styles.challengeLocked,
-          isReadyToClaim && styles.challengeReady,
-        ]}
-      >
-        {isReadyToClaim && <View style={styles.readyAccent} />}
-
-        {/* Top row */}
-        <View style={styles.cardTop}>
-          <View style={[styles.iconWrap, { backgroundColor: ICON_BG[ch.icon] ?? '#F0F0EE' }]}>
-            {ch.locked
-              ? <Lock size={20} color={colors.textMuted} strokeWidth={1.5} />
-              : ch.claimed
-                ? <Check size={20} color={colors.green} strokeWidth={2.5} />
-                : <Icon size={20} color={ICON_COLOR[ch.icon] ?? colors.green} strokeWidth={1.5} />
-            }
-          </View>
-          <View style={styles.cardInfo}>
-            <Text style={[styles.cardTitle, ch.locked && { color: colors.textMuted }]}>{ch.title}</Text>
-            <Text style={styles.cardDesc}>{ch.description}</Text>
-          </View>
-          <View style={styles.rewardBadge}>
-            <Text style={styles.rewardText}>+{ch.reward}</Text>
-            <Text style={styles.rewardLabel}>pts</Text>
-            {isMorning && <Text style={styles.rewardRecurring}>par commande</Text>}
-          </View>
-        </View>
-
-        {/* Progress (pour les défis non commencés) */}
-        {!isMorning && !ch.locked && !ch.claimed && (
-          <View style={styles.progressRow}>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${pct}%` as any }]} />
-            </View>
-            <Text style={styles.progressFractionText}>
-              {ch.progress}<Text style={styles.progressFractionDim}>/{ch.target}</Text>
-            </Text>
-          </View>
-        )}
-
-        {/* Footer */}
-        <View style={styles.cardFooter}>
-          {isMorning ? (
-            <Text style={styles.recurringText}>
-              {ch.progress > 0 ? `${ch.progress} commande${ch.progress > 1 ? 's' : ''} matinale${ch.progress > 1 ? 's' : ''}` : 'Commandez entre 8h et 11h'}
-            </Text>
-          ) : ch.isRecurring && ch.type === 'referral' ? (
-            <Text style={styles.recurringText}>Récurrent — chaque parrainage</Text>
-          ) : (
-            <Text style={styles.durationText}>
-              {ch.isRecurring ? 'Mensuel' : 'One-shot'}
-            </Text>
-          )}
-
-          {ch.locked ? (
-            <View style={styles.notStartedRow}>
-              <Lock size={12} color={colors.textMuted} strokeWidth={1.5} />
-              <Text style={styles.notStartedText}>Prérequis requis</Text>
-            </View>
-          ) : isReadyToClaim ? (
-            <Pressable
-              onPress={() => showToast(`+${ch.reward} pts crédités !`)}
-              style={styles.claimBtn}
-              accessibilityRole="button"
-            >
-              <Text style={styles.claimBtnText}>Réclamer {ch.reward} pts</Text>
-            </Pressable>
-          ) : ch.claimed ? (
-            <View style={styles.claimedRow}>
-              <Check size={14} color={colors.green} strokeWidth={2.5} />
-              <Text style={styles.claimedText}>Réclamé</Text>
-            </View>
-          ) : isMorning ? (
-            <View style={styles.activeRow}>
-              <Flame size={12} color={colors.gold} strokeWidth={2} />
-              <Text style={styles.inProgressText}>Actif en permanence</Text>
-            </View>
-          ) : (
-            <Text style={styles.notStartedText}>Non commencé</Text>
-          )}
-        </View>
-      </View>
-    );
-  };
+  const sorted = sortChallenges(challenges);
 
   return (
     <ScrollView
@@ -275,11 +264,11 @@ export default function DefisScreen() {
         >
           <ArrowLeft size={20} color={colors.text} strokeWidth={1.5} />
         </Pressable>
-        <Text style={styles.headerTitle}>Les Défis Teaven</Text>
+        <Text style={styles.headerTitle}>Mes défis</Text>
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Hero — gradient pillar défis avec stats user */}
+      {/* Hero — stats user iconiques */}
       <LinearGradient
         colors={['#1F3027', '#2D5A3D', '#3A6642']}
         start={{ x: 0, y: 0 }}
@@ -288,17 +277,15 @@ export default function DefisScreen() {
       >
         <View style={styles.heroDecor} />
         <View style={styles.heroDecor2} />
-        <View style={styles.heroDecor3} />
 
         <View style={styles.heroIconWrap}>
-          <Trophy size={28} color="#FFF" strokeWidth={1.5} />
+          <Trophy size={26} color="#FFF" strokeWidth={1.5} />
         </View>
-        <Text style={styles.heroTitle}>Vos défis Teaven</Text>
+        <Text style={styles.heroTitle}>Votre wallet de défis</Text>
         <Text style={styles.heroText}>
-          Chaque commande devient une parenthèse récompensée. Explorez, savourez, gagnez.
+          Vos défis du mois, toujours actifs. Chaque commande vous fait progresser.
         </Text>
 
-        {/* Stats line — chiffres iconiques */}
         <View style={styles.heroStatsRow}>
           <View style={styles.heroStat}>
             <Text style={styles.heroStatValue}>{loading ? '…' : inProgressCount}</Text>
@@ -320,33 +307,46 @@ export default function DefisScreen() {
       {/* Loading */}
       {loading && (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="small" color={colors.green} />
+          <ActivityIndicator size="small" color="#2D5A3D" />
           <Text style={styles.loadingText}>Chargement des défis…</Text>
         </View>
       )}
 
-      {/* Défis par catégorie */}
-      {!loading && CATEGORY_SECTIONS.map((cat) => {
-        const catChallenges = challenges
-          .filter((c) => c.uiCategory === cat.key)
-          .sort((a, b) => {
-            // Verrouillés en dernier, puis par progression décroissante
-            if (a.locked !== b.locked) return a.locked ? 1 : -1;
-            return (b.progress / Math.max(b.target, 1)) - (a.progress / Math.max(a.target, 1));
-          });
-        if (catChallenges.length === 0) return null;
-        return (
-          <View key={cat.key}>
-            <Text style={styles.sectionTitle}>{cat.label}</Text>
-            <Text style={styles.sectionDesc}>{cat.desc}</Text>
-            <View style={styles.challengesList}>
-              {catChallenges.map(renderChallenge)}
-            </View>
-          </View>
-        );
-      })}
+      {/* Wallet stack — défis empilés style Apple Wallet */}
+      {!loading && sorted.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Vos cartes défis</Text>
+          <Text style={styles.sectionDesc}>
+            Toutes actives. La carte la plus avancée est en haut.
+          </Text>
 
-      {/* Pourquoi des défis — section harmonisée pillar */}
+          <View style={styles.walletStack}>
+            {sorted.map((ch, i) => (
+              <View
+                key={ch.id}
+                style={{
+                  marginTop: i === 0 ? 0 : (expandedId ? 12 : -100),
+                  zIndex: sorted.length - i,
+                  // elevation Android : croît avec i pour que les cards du dessous restent visibles derrière
+                  elevation: sorted.length - i,
+                }}
+              >
+                <WalletCard
+                  challenge={ch}
+                  expanded={expandedId === ch.id}
+                  onTap={() => setExpandedId((curr) => (curr === ch.id ? null : ch.id))}
+                  onClaim={() => {
+                    showToast(`+${ch.reward} pts crédités !`);
+                    setExpandedId(null);
+                  }}
+                />
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      {/* L'esprit Teaven */}
       <Text style={styles.sectionTitle}>L'esprit Teaven</Text>
       <Text style={styles.sectionDesc}>Pourquoi nos défis vous accompagnent au quotidien</Text>
       <View style={styles.whyCard}>
@@ -397,12 +397,12 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 
-  // Hero — gradient pillar défis avec stats
+  // Hero
   hero: {
     marginHorizontal: spacing.xl,
     borderRadius: 22,
     padding: spacing.xxl,
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xl,
     overflow: 'hidden',
     alignItems: 'center',
     shadowColor: '#1F3027',
@@ -429,27 +429,18 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  heroDecor3: {
-    position: 'absolute',
-    top: 30,
-    left: -20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
   heroIconWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   heroTitle: {
     fontFamily: fonts.bold,
-    fontSize: 24,
+    fontSize: 22,
     color: '#FFFFFF',
     marginBottom: spacing.sm,
     textAlign: 'center',
@@ -457,26 +448,23 @@ const styles = StyleSheet.create({
   },
   heroText: {
     fontFamily: fonts.regular,
-    fontSize: 13,
+    fontSize: 12.5,
     color: 'rgba(255,255,255,0.78)',
     textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: spacing.xl,
+    lineHeight: 18,
+    marginBottom: spacing.lg,
     paddingHorizontal: spacing.sm,
   },
   heroStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    paddingHorizontal: spacing.lg,
+    borderRadius: 14,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     width: '100%',
   },
-  heroStat: {
-    flex: 1,
-    alignItems: 'center',
-  },
+  heroStat: { flex: 1, alignItems: 'center' },
   heroStatValue: {
     fontFamily: fonts.monoSemiBold,
     fontSize: 22,
@@ -485,14 +473,14 @@ const styles = StyleSheet.create({
   },
   heroStatLabel: {
     fontFamily: fonts.regular,
-    fontSize: 10,
+    fontSize: 9.5,
     color: 'rgba(255,255,255,0.7)',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
   heroStatDivider: {
     width: 1,
-    height: 28,
+    height: 24,
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
 
@@ -508,7 +496,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // Section title — couleur pillar défis
+  // Section title
   sectionTitle: {
     fontFamily: fonts.bold,
     fontSize: 17,
@@ -527,310 +515,253 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
-  // Challenges
-  challengesList: {
+  // ─── Wallet stack ───
+  walletStack: {
     paddingHorizontal: spacing.xl,
-    gap: spacing.md,
     marginBottom: spacing.xxxl,
   },
-  challengeCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    gap: spacing.md,
-    ...shadows.card,
-  },
-  challengeClaimed: {
-    opacity: 0.65,
-  },
-  challengeLocked: {
-    opacity: 0.5,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  cardInfo: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 2,
-  },
-  cardDesc: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-  rewardBadge: {
-    alignItems: 'center',
-    backgroundColor: colors.greenLight,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    flexShrink: 0,
-  },
-  rewardText: {
-    fontFamily: fonts.monoSemiBold,
-    fontSize: 14,
-    color: colors.green,
-  },
-  rewardLabel: {
-    fontFamily: fonts.regular,
-    fontSize: 9,
-    color: colors.green,
-    marginTop: -1,
-  },
-  rewardRecurring: {
-    fontFamily: fonts.regular,
-    fontSize: 8,
-    color: colors.green,
-    marginTop: 2,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  progressBar: {
-    flex: 1,
-    height: 6,
-    backgroundColor: colors.border,
-    borderRadius: 3,
+
+  // Card commune
+  walletCard: {
+    borderRadius: 18,
+    padding: spacing.lg,
+    minHeight: 140,
     overflow: 'hidden',
+    shadowColor: '#1F3027',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  progressFill: {
-    height: 6,
-    backgroundColor: colors.green,
-    borderRadius: 3,
+  walletCardActive: {
+    // gradient appliqué via LinearGradient
   },
-  progressFractionText: {
-    fontFamily: fonts.monoSemiBold,
-    fontSize: 14,
-    color: '#2D5A3D',
-    minWidth: 44,
-    textAlign: 'right',
+  walletCardLocked: {
+    backgroundColor: '#EFEEE7',
+    minHeight: 80,
+    paddingVertical: 14,
+    opacity: 0.7,
   },
-  progressFractionDim: {
-    color: 'rgba(45,90,61,0.4)',
-    fontSize: 11,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  durationText: {
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  recurringText: {
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
-  claimBtn: {
-    backgroundColor: colors.green,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 7,
-    borderRadius: 10,
-  },
-  claimBtnText: {
-    fontFamily: fonts.bold,
-    fontSize: 12,
-    color: '#FFFFFF',
-  },
-  claimedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  claimedText: {
-    fontFamily: fonts.bold,
-    fontSize: 12,
-    color: colors.green,
-  },
-  activeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  notStartedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  notStartedText: {
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  inProgressText: {
-    fontFamily: fonts.bold,
-    fontSize: 11,
-    color: colors.green,
+  walletCardClaimed: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(45,90,61,0.25)',
+    minHeight: 80,
+    paddingVertical: 14,
   },
 
-  // ── Variante "en cours" (mise en avant) ──
-  cardInProgressWrap: {
-    borderRadius: 18,
-    shadowColor: '#1F3027',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 10,
-  },
-  cardInProgress: {
-    borderRadius: 18,
-    padding: 18,
-    overflow: 'hidden',
-    gap: 14,
-  },
-  cardInProgressDecor: {
+  // Decor
+  cardDecor: {
     position: 'absolute',
-    top: -40,
-    right: -30,
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    top: -30,
+    right: -25,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
-  cardInProgressDecor2: {
+  cardDecor2: {
     position: 'absolute',
-    bottom: -25,
-    left: -20,
+    bottom: -20,
+    left: -15,
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  iconWrapHero: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+
+  // Header card
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  iconCircleActive: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.20)',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  cardTitleHero: {
+  iconCircleLocked: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconCircleClaimed: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(45,90,61,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardCategory: {
+    fontFamily: fonts.regular,
+    fontSize: 9,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  cardCategoryActive: {
+    fontFamily: fonts.regular,
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.75)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  cardTitle: {
     fontFamily: fonts.bold,
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginBottom: 3,
+    fontSize: 15,
+    color: colors.text,
     letterSpacing: -0.2,
   },
-  cardDescHero: {
-    fontFamily: fonts.regular,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.78)',
-    lineHeight: 17,
+  cardTitleActive: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
-  rewardBadgeHero: {
+  cardTitleClaimed: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.text,
+  },
+  cardLockedHint: {
+    fontFamily: fonts.regular,
+    fontSize: 10,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+  },
+  cardClaimedReward: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 13,
+    color: '#2D5A3D',
+  },
+
+  // Reward badge
+  rewardBadgeActive: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingHorizontal: 11,
     paddingVertical: 7,
-    flexShrink: 0,
   },
-  rewardTextHero: {
+  rewardTextActive: {
     fontFamily: fonts.monoSemiBold,
-    fontSize: 15,
+    fontSize: 14,
     color: '#1F3027',
   },
-  rewardLabelHero: {
+  rewardLabelActive: {
     fontFamily: fonts.regular,
     fontSize: 9,
     color: '#1F3027',
     marginTop: -1,
-    letterSpacing: 0.4,
   },
-  progressRowHero: {
+
+  // Progress
+  cardProgressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginBottom: 14,
   },
-  progressBarHero: {
+  cardProgressBar: {
     flex: 1,
-    height: 8,
+    height: 7,
     backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 4,
     overflow: 'hidden',
   },
-  progressFillHero: {
-    height: 8,
+  cardProgressFill: {
+    height: 7,
     backgroundColor: '#FFFFFF',
     borderRadius: 4,
   },
-  progressFractionHero: {
+  cardProgressFraction: {
     fontFamily: fonts.monoSemiBold,
-    fontSize: 18,
+    fontSize: 16,
     color: '#FFFFFF',
     minWidth: 50,
     textAlign: 'right',
   },
-  progressFractionHeroDim: {
+  cardProgressFractionDim: {
     color: 'rgba(255,255,255,0.55)',
-    fontSize: 14,
+    fontSize: 12,
   },
-  cardFooterHero: {
+
+  // Bottom
+  cardBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  cardFooterTextHero: {
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  flameRow: {
+  cardStatusPill: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
-  cardFooterPctHero: {
+  cardStatusPillReady: {
+    backgroundColor: 'rgba(255,255,255,0.32)',
+  },
+  cardStatusText: {
     fontFamily: fonts.bold,
-    fontSize: 12,
-    color: '#FFD89A',
+    fontSize: 10.5,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  cardChevron: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  // ── Variante "prêt à réclamer" (border vert épais) ──
-  challengeReady: {
-    borderColor: '#2D5A3D',
-    borderWidth: 1.5,
-    shadowColor: '#2D5A3D',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+  // Expanded
+  cardExpanded: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.18)',
+    gap: 6,
   },
-  readyAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: 4,
-    backgroundColor: '#2D5A3D',
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+  cardDescription: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.88)',
+    lineHeight: 17,
+  },
+  cardRecurrence: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.65)',
+    fontStyle: 'italic',
+  },
+  claimBtnExpanded: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  claimBtnExpandedText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: '#1F3027',
+    letterSpacing: 0.2,
   },
 
   // Why card
@@ -863,9 +794,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  whyContent: {
-    flex: 1,
-  },
+  whyContent: { flex: 1 },
   whyTitle: {
     fontFamily: fonts.bold,
     fontSize: 13,
