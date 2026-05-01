@@ -101,20 +101,91 @@ export default function DefisScreen() {
     const Icon = ICON_MAP[ch.icon] ?? Trophy;
     const isDone = ch.completed || (ch.type !== 'morning_bonus' && ch.progress >= ch.target);
     const pct = ch.type === 'morning_bonus'
-      ? 100 // always "active"
+      ? 100
       : Math.min(100, Math.round((ch.progress / ch.target) * 100));
+
+    // Variantes visuelles selon l'état :
+    // - locked : grisée, opacity réduite
+    // - in-progress (progress > 0, !done, !claimed) : MISE EN AVANT vert foncé pillar
+    // - done & !claimed : card avec halo vert, CTA "réclamer"
+    // - claimed : check large, opacity légère
+    // - non-commencé : neutre, fond blanc
+    const isInProgress = !ch.locked && !ch.claimed && !isDone && ch.progress > 0 && ch.type !== 'morning_bonus';
+    const isReadyToClaim = !ch.locked && !ch.claimed && isDone && ch.type !== 'morning_bonus';
+    const isMorning = ch.type === 'morning_bonus';
+
+    if (isInProgress) {
+      // ── Variante hero : défi en cours, card vert foncé pillar ──
+      return (
+        <View key={ch.id} style={styles.cardInProgressWrap}>
+          <LinearGradient
+            colors={['#1F3027', '#2D5A3D', '#3A6642']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.cardInProgress}
+          >
+            <View style={styles.cardInProgressDecor} />
+            <View style={styles.cardInProgressDecor2} />
+
+            {/* Top row */}
+            <View style={styles.cardTop}>
+              <View style={styles.iconWrapHero}>
+                <Icon size={22} color="#FFFFFF" strokeWidth={1.8} />
+              </View>
+              <View style={styles.cardInfo}>
+                <Text style={styles.cardTitleHero}>{ch.title}</Text>
+                <Text style={styles.cardDescHero}>{ch.description}</Text>
+              </View>
+              <View style={styles.rewardBadgeHero}>
+                <Text style={styles.rewardTextHero}>+{ch.reward}</Text>
+                <Text style={styles.rewardLabelHero}>pts</Text>
+              </View>
+            </View>
+
+            {/* Progress bar massive + fraction */}
+            <View style={styles.progressRowHero}>
+              <View style={styles.progressBarHero}>
+                <View style={[styles.progressFillHero, { width: `${pct}%` as any }]} />
+              </View>
+              <Text style={styles.progressFractionHero}>
+                {ch.progress}<Text style={styles.progressFractionHeroDim}>/{ch.target}</Text>
+              </Text>
+            </View>
+
+            <View style={styles.cardFooterHero}>
+              <Text style={styles.cardFooterTextHero}>
+                {ch.isRecurring ? 'Mensuel' : 'En cours'}
+              </Text>
+              <View style={styles.flameRow}>
+                <Flame size={11} color="#FFD89A" strokeWidth={2.2} />
+                <Text style={styles.cardFooterPctHero}>{pct}%</Text>
+              </View>
+            </View>
+          </LinearGradient>
+        </View>
+      );
+    }
 
     return (
       <View
         key={ch.id}
-        style={[styles.challengeCard, ch.claimed && styles.challengeClaimed, ch.locked && styles.challengeLocked]}
+        style={[
+          styles.challengeCard,
+          ch.claimed && styles.challengeClaimed,
+          ch.locked && styles.challengeLocked,
+          isReadyToClaim && styles.challengeReady,
+        ]}
       >
+        {isReadyToClaim && <View style={styles.readyAccent} />}
+
         {/* Top row */}
         <View style={styles.cardTop}>
           <View style={[styles.iconWrap, { backgroundColor: ICON_BG[ch.icon] ?? '#F0F0EE' }]}>
             {ch.locked
               ? <Lock size={20} color={colors.textMuted} strokeWidth={1.5} />
-              : <Icon size={20} color={ICON_COLOR[ch.icon] ?? colors.green} strokeWidth={1.5} />
+              : ch.claimed
+                ? <Check size={20} color={colors.green} strokeWidth={2.5} />
+                : <Icon size={20} color={ICON_COLOR[ch.icon] ?? colors.green} strokeWidth={1.5} />
             }
           </View>
           <View style={styles.cardInfo}>
@@ -124,24 +195,22 @@ export default function DefisScreen() {
           <View style={styles.rewardBadge}>
             <Text style={styles.rewardText}>+{ch.reward}</Text>
             <Text style={styles.rewardLabel}>pts</Text>
-            {ch.isRecurring && ch.type === 'morning_bonus' && (
-              <Text style={styles.rewardRecurring}>par commande</Text>
-            )}
+            {isMorning && <Text style={styles.rewardRecurring}>par commande</Text>}
           </View>
         </View>
 
-        {/* Progress — pas affiché pour morning_bonus ni les défis verrouillés */}
-        {ch.type !== 'morning_bonus' && !ch.locked && (
+        {/* Progress (pour les défis non commencés) */}
+        {!isMorning && !ch.locked && !ch.claimed && (
           <View style={styles.progressRow}>
             <View style={styles.progressBar}>
               <View style={[styles.progressFill, { width: `${pct}%` as any }]} />
             </View>
             <View style={styles.progressCircleWrap}>
               <Svg width={38} height={38} viewBox="0 0 38 38">
-                <SvgCircle cx={19} cy={19} r={16} stroke="rgba(117,150,127,0.15)" strokeWidth={2.5} fill="none" />
+                <SvgCircle cx={19} cy={19} r={16} stroke="rgba(45,90,61,0.12)" strokeWidth={2.5} fill="none" />
                 <SvgCircle
                   cx={19} cy={19} r={16}
-                  stroke="#75967F"
+                  stroke="#2D5A3D"
                   strokeWidth={2.5}
                   fill="none"
                   strokeLinecap="round"
@@ -157,9 +226,9 @@ export default function DefisScreen() {
 
         {/* Footer */}
         <View style={styles.cardFooter}>
-          {ch.type === 'morning_bonus' ? (
+          {isMorning ? (
             <Text style={styles.recurringText}>
-              {ch.progress > 0 ? `${ch.progress} commande${ch.progress > 1 ? 's' : ''} matinale${ch.progress > 1 ? 's' : ''}` : 'Commandez avant 11h'}
+              {ch.progress > 0 ? `${ch.progress} commande${ch.progress > 1 ? 's' : ''} matinale${ch.progress > 1 ? 's' : ''}` : 'Commandez entre 8h et 11h'}
             </Text>
           ) : ch.isRecurring && ch.type === 'referral' ? (
             <Text style={styles.recurringText}>Récurrent — chaque parrainage</Text>
@@ -174,7 +243,7 @@ export default function DefisScreen() {
               <Lock size={12} color={colors.textMuted} strokeWidth={1.5} />
               <Text style={styles.notStartedText}>Prérequis requis</Text>
             </View>
-          ) : isDone && !ch.claimed && ch.type !== 'morning_bonus' ? (
+          ) : isReadyToClaim ? (
             <Pressable
               onPress={() => showToast(`+${ch.reward} pts crédités !`)}
               style={styles.claimBtn}
@@ -187,15 +256,13 @@ export default function DefisScreen() {
               <Check size={14} color={colors.green} strokeWidth={2.5} />
               <Text style={styles.claimedText}>Réclamé</Text>
             </View>
-          ) : ch.type === 'morning_bonus' ? (
+          ) : isMorning ? (
             <View style={styles.activeRow}>
               <Flame size={12} color={colors.gold} strokeWidth={2} />
               <Text style={styles.inProgressText}>Actif en permanence</Text>
             </View>
-          ) : ch.progress === 0 ? (
-            <Text style={styles.notStartedText}>Non commencé</Text>
           ) : (
-            <Text style={styles.inProgressText}>En cours ({pct}%)</Text>
+            <Text style={styles.notStartedText}>Non commencé</Text>
           )}
         </View>
       </View>
@@ -565,6 +632,153 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 11,
     color: colors.green,
+  },
+
+  // ── Variante "en cours" (mise en avant) ──
+  cardInProgressWrap: {
+    borderRadius: 18,
+    shadowColor: '#1F3027',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  cardInProgress: {
+    borderRadius: 18,
+    padding: 18,
+    overflow: 'hidden',
+    gap: 14,
+  },
+  cardInProgressDecor: {
+    position: 'absolute',
+    top: -40,
+    right: -30,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  cardInProgressDecor2: {
+    position: 'absolute',
+    bottom: -25,
+    left: -20,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  iconWrapHero: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardTitleHero: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 3,
+    letterSpacing: -0.2,
+  },
+  cardDescHero: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.78)',
+    lineHeight: 17,
+  },
+  rewardBadgeHero: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    flexShrink: 0,
+  },
+  rewardTextHero: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 15,
+    color: '#1F3027',
+  },
+  rewardLabelHero: {
+    fontFamily: fonts.regular,
+    fontSize: 9,
+    color: '#1F3027',
+    marginTop: -1,
+    letterSpacing: 0.4,
+  },
+  progressRowHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  progressBarHero: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFillHero: {
+    height: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 4,
+  },
+  progressFractionHero: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 18,
+    color: '#FFFFFF',
+    minWidth: 50,
+    textAlign: 'right',
+  },
+  progressFractionHeroDim: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 14,
+  },
+  cardFooterHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardFooterTextHero: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.7)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  flameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cardFooterPctHero: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: '#FFD89A',
+  },
+
+  // ── Variante "prêt à réclamer" (border vert épais) ──
+  challengeReady: {
+    borderColor: '#2D5A3D',
+    borderWidth: 1.5,
+    shadowColor: '#2D5A3D',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  readyAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: '#2D5A3D',
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
   },
 
   // Why card

@@ -352,6 +352,44 @@ export default function DeliveryTrackingScreen() {
           </View>
         )}
 
+        {/* Moment Teaven — micro-message warm contextuel */}
+        {!isCancelled && (
+          <View style={styles.momentCard}>
+            <View style={styles.momentIcon}>
+              <Sparkles size={14} color={colors.green} strokeWidth={1.8} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.momentTitle}>
+                {isDelivered ? 'Bon moment Teaven' :
+                  currentStep >= 3 ? 'On y est presque' :
+                  currentStep >= 2 ? 'Votre commande arrive' :
+                  currentStep >= 1 ? 'On prépare avec soin' :
+                  'Confirmation reçue'}
+              </Text>
+              <Text style={styles.momentText}>
+                {isDelivered ? 'Régalez-vous, et à très vite chez Teaven.' :
+                  currentStep >= 3 ? 'Le livreur arrive bientôt. Préparez-vous une parenthèse.' :
+                  currentStep >= 2 ? 'Votre commande est en route. Le moment approche.' :
+                  currentStep >= 1 ? 'Notre équipe prépare votre commande avec attention.' :
+                  'Votre commande est entre les mains de notre équipe.'}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Support — appeler la boutique si problème */}
+        {!isDelivered && !isCancelled && (
+          <Pressable
+            onPress={() => Linking.openURL('tel:+33130100000')}
+            style={({ pressed }) => [styles.supportBtn, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Appeler la boutique en cas de problème"
+          >
+            <Phone size={14} color={colors.green} strokeWidth={1.8} />
+            <Text style={styles.supportBtnText}>Besoin d'aide ? Appeler la boutique</Text>
+          </Pressable>
+        )}
+
         {/* Retour accueil */}
         <Pressable
           onPress={() => router.replace('/(tabs)')}
@@ -398,7 +436,7 @@ const styles = StyleSheet.create({
 
   // Map
   mapContainer: {
-    height: 280, width: '100%', overflow: 'hidden',
+    height: 360, width: '100%', overflow: 'hidden',
   },
   map: { flex: 1 },
   etaOverlay: {
@@ -503,6 +541,58 @@ const styles = StyleSheet.create({
   orderItemQty: { fontFamily: fonts.bold, fontSize: 11, color: colors.textMuted, width: 24 },
   orderItemName: { fontFamily: fonts.regular, fontSize: 12, color: colors.text, flex: 1 },
   orderItemPrice: { fontFamily: fonts.monoSemiBold, fontSize: 11, color: colors.textSecondary },
+
+  // Moment Teaven — micro-card warm
+  momentCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: colors.greenLight,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: spacing.md,
+  },
+  momentIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  momentTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.greenDark,
+    marginBottom: 3,
+  },
+  momentText: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.greenDark,
+    opacity: 0.85,
+    lineHeight: 16,
+  },
+
+  // Support button — appel boutique
+  supportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 44,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  supportBtnText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.green,
+  },
 
   // Home
   homeBtn: {
