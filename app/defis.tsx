@@ -1,6 +1,6 @@
-// Page Défis Teaven — Wallet stack vrai pattern Apple Wallet
-// 1 card active full + rabats des cards rangées dessous
-import { useState, useEffect, useMemo } from 'react';
+// Page Défis Teaven — Cartes postales (pivot Consortium 2026-05-01)
+// Liste aérée de cartes avec gradients riches, icones décoratives, hiérarchie claire.
+import { useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import {
   Lock,
   Check,
   Zap,
+  Sparkles,
 } from 'lucide-react-native';
 import { useChallenges, type Challenge } from '@/hooks/useChallenges';
 import { useToast } from '@/contexts/ToastContext';
@@ -39,11 +40,12 @@ const ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string
   users: Users,
 };
 
+// Gradient par catégorie pillar (DS Teaven)
 const CATEGORY_GRADIENT: Record<string, [string, string, string]> = {
-  fidelite: ['#1F3027', '#2D5A3D', '#3A6642'],
-  boissons: ['#A56843', '#C4845C', '#D89F76'],
-  food: ['#9B8540', '#C4A962', '#D8C285'],
-  social: ['#5C8580', '#7EA5A0', '#9DBDB9'],
+  fidelite: ['#1F3027', '#2D5A3D', '#3A6642'],   // pillar défis vert profond
+  boissons: ['#A56843', '#C4845C', '#D89F76'],   // pillar wallet terracotta
+  food: ['#9B8540', '#C4A962', '#D8C285'],       // doré gold
+  social: ['#5C8580', '#7EA5A0', '#9DBDB9'],     // pillar atmosphère
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -73,8 +75,17 @@ function sortChallenges(challenges: Challenge[]): Challenge[] {
   });
 }
 
-// ─── Card ACTIVE — totalement visible, tous les détails ───
-function WalletCardActive({ challenge: ch, onClaim }: { challenge: Challenge; onClaim: () => void }) {
+// ─── Carte postale "défi" ───
+// Card riche avec gradient catégorie + icone décorative large + texte devant.
+function ChallengeCard({
+  challenge: ch,
+  isHero,
+  onClaim,
+}: {
+  challenge: Challenge;
+  isHero?: boolean;
+  onClaim: () => void;
+}) {
   const Icon = ICON_MAP[ch.icon] ?? Trophy;
   const isMorning = ch.type === 'morning_bonus';
   const isDone = ch.completed || (!isMorning && ch.progress >= ch.target);
@@ -84,170 +95,120 @@ function WalletCardActive({ challenge: ch, onClaim }: { challenge: Challenge; on
   const gradient = CATEGORY_GRADIENT[ch.uiCategory] ?? CATEGORY_GRADIENT.fidelite;
   const categoryLabel = CATEGORY_LABELS[ch.uiCategory] ?? 'Défi';
 
+  // Variante locked
   if (ch.locked) {
     return (
-      <View style={[styles.activeCard, styles.activeCardLocked]}>
-        <View style={styles.activeIconWrapLocked}>
-          <Lock size={22} color={colors.textMuted} strokeWidth={1.8} />
-        </View>
-        <Text style={styles.activeCategoryLocked}>{categoryLabel}</Text>
-        <Text style={styles.activeTitleLocked}>{ch.title}</Text>
-        <Text style={styles.activeLockedDesc}>Ce défi se débloque après en avoir terminé un autre</Text>
-      </View>
-    );
-  }
-
-  if (ch.claimed) {
-    return (
-      <View style={[styles.activeCard, styles.activeCardClaimed]}>
-        <View style={styles.activeIconWrapClaimed}>
-          <Check size={26} color="#2D5A3D" strokeWidth={2.5} />
-        </View>
-        <Text style={[styles.activeCategoryActive, { color: colors.textSecondary }]}>{categoryLabel}</Text>
-        <Text style={styles.activeTitleClaimed}>{ch.title}</Text>
-        <Text style={styles.activeClaimedReward}>+{ch.reward} pts crédités</Text>
-      </View>
-    );
-  }
-
-  return (
-    <LinearGradient
-      colors={gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.activeCard}
-    >
-      <View style={styles.activeDecor} />
-      <View style={styles.activeDecor2} />
-
-      {/* Header */}
-      <View style={styles.activeHeader}>
-        <View style={styles.activeIconWrap}>
-          <Icon size={20} color="#FFF" strokeWidth={2.2} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.activeCategoryActive}>{categoryLabel}</Text>
-          <Text style={styles.activeTitleActive}>{ch.title}</Text>
-        </View>
-        <View style={styles.activeRewardBadge}>
-          <Text style={styles.activeRewardText}>+{ch.reward}</Text>
-          <Text style={styles.activeRewardLabel}>pts</Text>
-        </View>
-      </View>
-
-      {/* Description */}
-      <Text style={styles.activeDescription}>{ch.description}</Text>
-
-      {/* Progress */}
-      {!isMorning && (
-        <View style={styles.activeProgressBlock}>
-          <View style={styles.activeProgressRow}>
-            <Text style={styles.activeProgressFraction}>
-              {ch.progress}<Text style={styles.activeProgressFractionDim}>/{ch.target}</Text>
-            </Text>
-            <Text style={styles.activeProgressPct}>{pct}%</Text>
-          </View>
-          <View style={styles.activeProgressBar}>
-            <View style={[styles.activeProgressFill, { width: `${Math.max(8, pct)}%` as any }]} />
-          </View>
-        </View>
-      )}
-
-      {/* Status / CTA */}
-      {isReadyToClaim ? (
-        <Pressable onPress={onClaim} style={styles.activeClaimBtn}>
-          <Text style={styles.activeClaimText}>Réclamer {ch.reward} pts</Text>
-        </Pressable>
-      ) : isMorning ? (
-        <View style={styles.activeStatusRow}>
-          <Flame size={12} color="#FFD89A" strokeWidth={2.4} />
-          <Text style={styles.activeStatusText}>
-            Actif chaque matin entre 8h et 11h · {ch.progress} commande{ch.progress > 1 ? 's' : ''}
-          </Text>
-        </View>
-      ) : (
-        <Text style={styles.activeRecurrenceText}>
-          {ch.isRecurring ? 'Mensuel · se réinitialise chaque mois' : 'À compléter une fois'}
-        </Text>
-      )}
-    </LinearGradient>
-  );
-}
-
-// ─── Card COLLAPSED — rabat (60-70px) avec juste le top ───
-function WalletCardCollapsed({
-  challenge: ch,
-  onTap,
-  index,
-}: {
-  challenge: Challenge;
-  onTap: () => void;
-  index: number;
-}) {
-  const Icon = ICON_MAP[ch.icon] ?? Trophy;
-  const gradient = CATEGORY_GRADIENT[ch.uiCategory] ?? CATEGORY_GRADIENT.fidelite;
-  const categoryLabel = CATEGORY_LABELS[ch.uiCategory] ?? 'Défi';
-  const pct = ch.type === 'morning_bonus' ? 100 : Math.min(100, Math.round((ch.progress / Math.max(ch.target, 1)) * 100));
-
-  // Effet stack : décalage léger croissant pour donner l'illusion de profondeur
-  const stackOffset = index * 1.5;
-
-  if (ch.locked) {
-    return (
-      <Pressable onPress={onTap} style={[styles.collapsedCard, styles.collapsedCardLocked, { transform: [{ scale: 1 - stackOffset / 100 }] }]}>
-        <View style={styles.collapsedRow}>
-          <View style={styles.collapsedIconLocked}>
-            <Lock size={13} color={colors.textMuted} strokeWidth={2} />
+      <View style={[styles.card, styles.cardLocked]}>
+        <View style={styles.lockedContent}>
+          <View style={styles.lockedIcon}>
+            <Lock size={20} color={colors.textMuted} strokeWidth={1.8} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.collapsedCategoryLocked}>{categoryLabel}</Text>
-            <Text style={styles.collapsedTitleLocked} numberOfLines={1}>{ch.title}</Text>
+            <Text style={styles.lockedCategory}>{categoryLabel}</Text>
+            <Text style={styles.lockedTitle} numberOfLines={1}>{ch.title}</Text>
+            <Text style={styles.lockedHint}>Terminez un autre défi pour débloquer</Text>
           </View>
-          <Text style={styles.collapsedLockedHint}>Verrouillé</Text>
         </View>
-      </Pressable>
+      </View>
     );
   }
 
+  // Variante claimed
   if (ch.claimed) {
     return (
-      <Pressable onPress={onTap} style={[styles.collapsedCard, styles.collapsedCardClaimed]}>
-        <View style={styles.collapsedRow}>
-          <View style={styles.collapsedIconClaimed}>
-            <Check size={13} color="#2D5A3D" strokeWidth={2.5} />
+      <View style={[styles.card, styles.cardClaimed]}>
+        <View style={styles.claimedAccent} />
+        <View style={styles.claimedContent}>
+          <View style={styles.claimedIcon}>
+            <Check size={22} color="#2D5A3D" strokeWidth={2.5} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.collapsedCategoryClaimed}>{categoryLabel}</Text>
-            <Text style={styles.collapsedTitleClaimed} numberOfLines={1}>{ch.title}</Text>
+            <Text style={styles.claimedCategory}>{categoryLabel}</Text>
+            <Text style={styles.claimedTitle} numberOfLines={1}>{ch.title}</Text>
           </View>
-          <Text style={styles.collapsedClaimedReward}>+{ch.reward}</Text>
+          <View style={styles.claimedBadge}>
+            <Text style={styles.claimedBadgeText}>+{ch.reward}</Text>
+          </View>
         </View>
-      </Pressable>
+      </View>
     );
   }
 
+  // Active card (hero ou liste) — gradient catégorie + icone décorative large
   return (
-    <Pressable onPress={onTap} accessibilityRole="button" accessibilityLabel={`Activer la carte ${ch.title}`}>
+    <Pressable onPress={isReadyToClaim ? onClaim : undefined}>
       <LinearGradient
         colors={gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.collapsedCard}
+        style={[styles.card, isHero ? styles.cardHero : styles.cardListItem]}
       >
-        <View style={styles.collapsedRow}>
-          <View style={styles.collapsedIconActive}>
-            <Icon size={14} color="#FFF" strokeWidth={2.4} />
+        {/* Icone décorative large semi-transparente — donne de la matière visuelle */}
+        <View style={styles.decorIcon}>
+          <Icon
+            size={isHero ? 140 : 100}
+            color="rgba(255,255,255,0.08)"
+            strokeWidth={1.2}
+          />
+        </View>
+        {/* Pattern dots décoratifs */}
+        <View style={[styles.decorDot, styles.decorDot1]} />
+        <View style={[styles.decorDot, styles.decorDot2]} />
+        {isHero && <View style={[styles.decorDot, styles.decorDot3]} />}
+
+        {/* Top row : catégorie + reward */}
+        <View style={styles.topRow}>
+          <View style={styles.categoryPill}>
+            <Sparkles size={9} color="#FFFFFF" strokeWidth={2.4} />
+            <Text style={styles.categoryPillText}>{categoryLabel}</Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.collapsedCategoryActive}>{categoryLabel}</Text>
-            <Text style={styles.collapsedTitleActive} numberOfLines={1}>{ch.title}</Text>
+          <View style={styles.rewardBadge}>
+            <Text style={styles.rewardText}>+{ch.reward}</Text>
+            <Text style={styles.rewardLabel}>pts</Text>
           </View>
-          <View style={styles.collapsedRight}>
-            <Text style={styles.collapsedReward}>+{ch.reward}</Text>
-            {ch.type !== 'morning_bonus' && (
-              <Text style={styles.collapsedPct}>{pct}%</Text>
-            )}
-          </View>
+        </View>
+
+        {/* Title block */}
+        <View style={styles.titleBlock}>
+          <Text style={[styles.title, isHero && styles.titleHero]} numberOfLines={2}>
+            {ch.title}
+          </Text>
+          {isHero && (
+            <Text style={styles.description} numberOfLines={2}>
+              {ch.description}
+            </Text>
+          )}
+        </View>
+
+        {/* Bottom : progress + status/CTA */}
+        <View style={styles.bottomBlock}>
+          {!isMorning && (
+            <View style={styles.progressRow}>
+              <Text style={styles.progressFraction}>
+                {ch.progress}<Text style={styles.progressFractionDim}>/{ch.target}</Text>
+              </Text>
+              <Text style={styles.progressPct}>{pct}%</Text>
+            </View>
+          )}
+          {!isMorning && (
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${Math.max(8, pct)}%` as any }]} />
+            </View>
+          )}
+
+          {isReadyToClaim && (
+            <View style={styles.claimCTA}>
+              <Text style={styles.claimCTAText}>Toucher pour réclamer</Text>
+            </View>
+          )}
+          {isMorning && (
+            <View style={styles.morningBadge}>
+              <Flame size={10} color="#FFD89A" strokeWidth={2.4} />
+              <Text style={styles.morningText}>
+                Actif tous les matins · 8h-11h
+              </Text>
+            </View>
+          )}
         </View>
       </LinearGradient>
     </Pressable>
@@ -262,23 +223,14 @@ export default function DefisScreen() {
 
   const sorted = useMemo(() => sortChallenges(challenges), [challenges]);
 
-  const [activeId, setActiveId] = useState<string | null>(null);
-
-  // Au premier chargement, sélectionner la première card (ou laisser null)
-  useEffect(() => {
-    if (!activeId && sorted.length > 0) {
-      setActiveId(sorted[0].id);
-    }
-  }, [sorted, activeId]);
-
-  const activeChallenge = sorted.find((c) => c.id === activeId) ?? sorted[0];
-  const collapsedChallenges = sorted.filter((c) => c.id !== activeChallenge?.id);
-
   const inProgressCount = challenges.filter((c) => c.progress > 0 && !c.claimed && !c.locked).length;
   const completedCount = challenges.filter((c) => c.claimed).length;
   const totalPointsFromChallenges = challenges
     .filter((c) => c.claimed)
     .reduce((sum, c) => sum + c.reward, 0);
+
+  const heroChallenge = sorted[0];
+  const restChallenges = sorted.slice(1);
 
   return (
     <ScrollView
@@ -295,22 +247,22 @@ export default function DefisScreen() {
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Hero */}
+      {/* Hero stats */}
       <LinearGradient
         colors={['#1F3027', '#2D5A3D', '#3A6642']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.hero}
+        style={styles.statsHero}
       >
-        <View style={styles.heroDecor} />
-        <View style={styles.heroDecor2} />
+        <View style={styles.statsHeroDecor} />
+        <View style={styles.statsHeroDecor2} />
 
         <View style={styles.heroIconWrap}>
           <Trophy size={26} color="#FFF" strokeWidth={1.5} />
         </View>
-        <Text style={styles.heroTitle}>Votre wallet de défis</Text>
-        <Text style={styles.heroText}>
-          Vos défis du mois rangés dans votre portefeuille. Tapez une carte pour la mettre en avant.
+        <Text style={styles.heroTitle}>Vos défis Teaven</Text>
+        <Text style={styles.heroSubtitle}>
+          Chaque commande devient une parenthèse récompensée.
         </Text>
 
         <View style={styles.heroStatsRow}>
@@ -338,40 +290,31 @@ export default function DefisScreen() {
         </View>
       )}
 
-      {/* Wallet section */}
-      {!loading && activeChallenge && (
-        <View style={styles.walletSection}>
-          {/* Card active — totalement visible */}
-          <WalletCardActive
-            challenge={activeChallenge}
-            onClaim={() => {
-              showToast(`+${activeChallenge.reward} pts crédités !`);
-            }}
+      {/* Hero challenge (le plus avancé) */}
+      {!loading && heroChallenge && (
+        <View style={styles.heroChallengeWrap}>
+          <ChallengeCard
+            challenge={heroChallenge}
+            isHero
+            onClaim={() => showToast(`+${heroChallenge.reward} pts crédités !`)}
           />
-
-          {/* Stack des cards collapsed */}
-          {collapsedChallenges.length > 0 && (
-            <View style={styles.collapsedStack}>
-              <Text style={styles.stackHint}>Vos {collapsedChallenges.length} autres cartes</Text>
-              {collapsedChallenges.map((ch, i) => (
-                <View
-                  key={ch.id}
-                  style={{
-                    marginTop: i === 0 ? 0 : -10,
-                    zIndex: collapsedChallenges.length - i,
-                    elevation: collapsedChallenges.length - i,
-                  }}
-                >
-                  <WalletCardCollapsed
-                    challenge={ch}
-                    onTap={() => setActiveId(ch.id)}
-                    index={i}
-                  />
-                </View>
-              ))}
-            </View>
-          )}
         </View>
+      )}
+
+      {/* Liste aérée des autres défis */}
+      {!loading && restChallenges.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Vos {restChallenges.length} autres cartes</Text>
+          <View style={styles.cardsList}>
+            {restChallenges.map((ch) => (
+              <ChallengeCard
+                key={ch.id}
+                challenge={ch}
+                onClaim={() => showToast(`+${ch.reward} pts crédités !`)}
+              />
+            ))}
+          </View>
+        </>
       )}
 
       {/* L'esprit Teaven */}
@@ -425,8 +368,8 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 
-  // Hero
-  hero: {
+  // Stats hero (en haut, données globales user)
+  statsHero: {
     marginHorizontal: spacing.xl,
     borderRadius: 22,
     padding: spacing.xxl,
@@ -434,12 +377,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     shadowColor: '#1F3027',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  heroDecor: {
+  statsHeroDecor: {
     position: 'absolute',
     top: -40,
     right: -40,
@@ -448,7 +391,7 @@ const styles = StyleSheet.create({
     borderRadius: 70,
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  heroDecor2: {
+  statsHeroDecor2: {
     position: 'absolute',
     bottom: -30,
     left: -30,
@@ -474,7 +417,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: -0.3,
   },
-  heroText: {
+  heroSubtitle: {
     fontFamily: fonts.regular,
     fontSize: 12.5,
     color: 'rgba(255,255,255,0.78)',
@@ -519,352 +462,269 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // Wallet section
-  walletSection: {
+  // ─── Cartes postales défi ───
+  heroChallengeWrap: {
     paddingHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  cardsList: {
+    paddingHorizontal: spacing.xl,
+    gap: 14,
     marginBottom: spacing.xxxl,
   },
 
-  // ─── Card ACTIVE (full) ───
-  activeCard: {
-    borderRadius: 22,
-    padding: spacing.xl,
-    minHeight: 220,
+  card: {
+    borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#1F3027',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    elevation: 14,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  cardHero: {
+    padding: spacing.xl,
+    minHeight: 200,
     gap: 14,
   },
-  activeCardLocked: {
-    backgroundColor: '#EFEEE7',
-    minHeight: 180,
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardListItem: {
+    padding: spacing.lg,
+    minHeight: 150,
     gap: 10,
   },
-  activeCardClaimed: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(45,90,61,0.25)',
-    minHeight: 180,
+
+  // Decor
+  decorIcon: {
+    position: 'absolute',
+    top: -20,
+    right: -20,
+    transform: [{ rotate: '-12deg' }],
+  },
+  decorDot: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  decorDot1: { width: 40, height: 40, top: 16, left: -10 },
+  decorDot2: { width: 24, height: 24, bottom: 30, right: 30 },
+  decorDot3: { width: 60, height: 60, bottom: -20, left: 60 },
+
+  // Top row
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
   },
-  activeDecor: {
-    position: 'absolute',
-    top: -50,
-    right: -40,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-  },
-  activeDecor2: {
-    position: 'absolute',
-    bottom: -30,
-    left: -25,
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  activeHeader: {
+  categoryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  activeIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.20)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activeIconWrapLocked: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activeIconWrapClaimed: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(45,90,61,0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activeCategoryActive: {
-    fontFamily: fonts.regular,
+  categoryPillText: {
+    fontFamily: fonts.bold,
     fontSize: 9.5,
-    color: 'rgba(255,255,255,0.75)',
-    textTransform: 'uppercase',
+    color: '#FFFFFF',
     letterSpacing: 0.6,
-    marginBottom: 2,
+    textTransform: 'uppercase',
   },
-  activeCategoryLocked: {
+  rewardBadge: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  rewardText: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 14,
+    color: '#1F3027',
+  },
+  rewardLabel: {
     fontFamily: fonts.regular,
-    fontSize: 9.5,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginTop: 4,
+    fontSize: 9,
+    color: '#1F3027',
+    marginTop: -2,
   },
-  activeTitleActive: {
+
+  // Title block
+  titleBlock: { gap: 6 },
+  title: {
     fontFamily: fonts.bold,
     fontSize: 17,
     color: '#FFFFFF',
     letterSpacing: -0.3,
+    lineHeight: 22,
   },
-  activeTitleLocked: {
-    fontFamily: fonts.bold,
-    fontSize: 16,
-    color: colors.textMuted,
-    textAlign: 'center',
+  titleHero: {
+    fontSize: 22,
+    lineHeight: 28,
   },
-  activeTitleClaimed: {
-    fontFamily: fonts.bold,
-    fontSize: 16,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  activeLockedDesc: {
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingHorizontal: spacing.lg,
-    fontStyle: 'italic',
-  },
-  activeClaimedReward: {
-    fontFamily: fonts.bold,
-    fontSize: 13,
-    color: '#2D5A3D',
-  },
-  activeRewardBadge: {
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  activeRewardText: {
-    fontFamily: fonts.monoSemiBold,
-    fontSize: 16,
-    color: '#1F3027',
-  },
-  activeRewardLabel: {
-    fontFamily: fonts.regular,
-    fontSize: 10,
-    color: '#1F3027',
-    marginTop: -2,
-  },
-  activeDescription: {
+  description: {
     fontFamily: fonts.regular,
     fontSize: 12.5,
     color: 'rgba(255,255,255,0.85)',
     lineHeight: 18,
   },
-  activeProgressBlock: {
-    gap: 6,
-  },
-  activeProgressRow: {
+
+  // Bottom
+  bottomBlock: { gap: 8 },
+  progressRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
   },
-  activeProgressFraction: {
+  progressFraction: {
     fontFamily: fonts.monoSemiBold,
-    fontSize: 24,
+    fontSize: 18,
     color: '#FFFFFF',
   },
-  activeProgressFractionDim: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 16,
+  progressFractionDim: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 13,
   },
-  activeProgressPct: {
+  progressPct: {
     fontFamily: fonts.bold,
     fontSize: 12,
-    color: '#FFD89A',
-    letterSpacing: 0.4,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
-  activeProgressBar: {
-    height: 8,
+  progressBar: {
+    height: 6,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 4,
+    borderRadius: 3,
     overflow: 'hidden',
   },
-  activeProgressFill: {
-    height: 8,
+  progressFill: {
+    height: 6,
     backgroundColor: '#FFFFFF',
-    borderRadius: 4,
+    borderRadius: 3,
   },
-  activeStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+  claimCTA: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
-    paddingHorizontal: 12,
     paddingVertical: 8,
-    alignSelf: 'flex-start',
-  },
-  activeStatusText: {
-    fontFamily: fonts.bold,
-    fontSize: 11,
-    color: '#FFFFFF',
-  },
-  activeRecurrenceText: {
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.65)',
-    fontStyle: 'italic',
-  },
-  activeClaimBtn: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 13,
     alignItems: 'center',
+    marginTop: 4,
   },
-  activeClaimText: {
+  claimCTAText: {
     fontFamily: fonts.bold,
-    fontSize: 14,
+    fontSize: 11.5,
     color: '#1F3027',
     letterSpacing: 0.2,
   },
-
-  // ─── Stack collapsed ───
-  collapsedStack: {
-    marginTop: spacing.lg,
-    gap: 0,
-  },
-  stackHint: {
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: spacing.sm,
-  },
-
-  // Card collapsed (rabat)
-  collapsedCard: {
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: 60,
-    overflow: 'hidden',
-    shadowColor: '#1F3027',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  collapsedCardLocked: {
-    backgroundColor: '#EFEEE7',
-    opacity: 0.85,
-  },
-  collapsedCardClaimed: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(45,90,61,0.25)',
-  },
-  collapsedRow: {
+  morningBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    alignSelf: 'flex-start',
   },
-  collapsedIconActive: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+  morningText: {
+    fontFamily: fonts.bold,
+    fontSize: 10.5,
+    color: '#FFFFFF',
+  },
+
+  // ─── Variante locked ───
+  cardLocked: {
+    backgroundColor: '#EFEEE7',
+    padding: spacing.lg,
+    minHeight: 90,
+  },
+  lockedContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
   },
-  collapsedIconLocked: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
+  lockedIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     backgroundColor: 'rgba(0,0,0,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  collapsedIconClaimed: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
+  lockedCategory: {
+    fontFamily: fonts.regular,
+    fontSize: 9.5,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  lockedTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  lockedHint: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+
+  // ─── Variante claimed ───
+  cardClaimed: {
+    backgroundColor: '#FFFFFF',
+    minHeight: 80,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.lg,
+    paddingLeft: spacing.lg + 4,
+    borderWidth: 1,
+    borderColor: 'rgba(45,90,61,0.20)',
+  },
+  claimedAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: '#2D5A3D',
+    borderTopLeftRadius: 20,
+    borderBottomLeftRadius: 20,
+  },
+  claimedContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  claimedIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     backgroundColor: 'rgba(45,90,61,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  collapsedCategoryActive: {
+  claimedCategory: {
     fontFamily: fonts.regular,
-    fontSize: 8.5,
-    color: 'rgba(255,255,255,0.75)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  collapsedCategoryLocked: {
-    fontFamily: fonts.regular,
-    fontSize: 8.5,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  collapsedCategoryClaimed: {
-    fontFamily: fonts.regular,
-    fontSize: 8.5,
+    fontSize: 9.5,
     color: colors.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
-  collapsedTitleActive: {
+  claimedTitle: {
     fontFamily: fonts.bold,
-    fontSize: 13,
-    color: '#FFFFFF',
-    marginTop: 1,
-  },
-  collapsedTitleLocked: {
-    fontFamily: fonts.bold,
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 1,
-  },
-  collapsedTitleClaimed: {
-    fontFamily: fonts.bold,
-    fontSize: 13,
+    fontSize: 14,
     color: colors.text,
-    marginTop: 1,
+    marginTop: 2,
   },
-  collapsedRight: {
-    alignItems: 'flex-end',
-    gap: 1,
+  claimedBadge: {
+    backgroundColor: 'rgba(45,90,61,0.10)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
-  collapsedReward: {
-    fontFamily: fonts.monoSemiBold,
-    fontSize: 12,
-    color: '#FFFFFF',
-  },
-  collapsedPct: {
-    fontFamily: fonts.regular,
-    fontSize: 9.5,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  collapsedLockedHint: {
-    fontFamily: fonts.regular,
-    fontSize: 9.5,
-    color: colors.textMuted,
-    fontStyle: 'italic',
-  },
-  collapsedClaimedReward: {
+  claimedBadgeText: {
     fontFamily: fonts.monoSemiBold,
     fontSize: 12,
     color: '#2D5A3D',
@@ -877,7 +737,7 @@ const styles = StyleSheet.create({
     color: '#2D5A3D',
     paddingHorizontal: spacing.xl,
     marginBottom: 4,
-    marginTop: spacing.lg,
+    marginTop: spacing.sm,
     letterSpacing: -0.2,
   },
   sectionDesc: {
