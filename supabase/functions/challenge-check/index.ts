@@ -104,7 +104,18 @@ serve(async (req) => {
 
     const today = new Date().toISOString().split('T')[0];
     const currentMonth = today.slice(0, 7); // YYYY-MM
-    const orderHour = order_time ? new Date(order_time).getHours() : new Date().getHours();
+
+    // Heure de la commande en TZ Europe/Paris (Deno tourne en UTC par défaut).
+    // Important pour `morning_bonus` : la fenêtre est définie en heure locale boutique.
+    const orderDate = order_time ? new Date(order_time) : new Date();
+    const orderHour = parseInt(
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Paris',
+        hour: 'numeric',
+        hourCycle: 'h23',
+      }).format(orderDate),
+      10,
+    );
 
     // Récupérer les défis actifs
     const { data: activeChallenges } = await supabase
@@ -198,7 +209,8 @@ serve(async (req) => {
       switch (challenge.type) {
         // ── Bonus récurrent commande du matin ──
         case 'morning_bonus': {
-          if (orderHour < 11) {
+          // Créneau matinal Teaven : 8h-11h heure de Paris (boutique).
+          if (orderHour >= 8 && orderHour < 11) {
             // Bonus direct — pas de "completion", juste award à chaque commande qualifiante
             await awardPoints(supabase, user_id, challenge.reward_points, `Défi : ${challenge.title}`);
             // Incrémenter le compteur pour l'affichage
