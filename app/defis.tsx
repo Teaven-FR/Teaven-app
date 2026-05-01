@@ -1,5 +1,5 @@
-// Page Défis Teaven — Cartes postales (pivot Consortium 2026-05-01)
-// Liste aérée de cartes avec gradients riches, icones décoratives, hiérarchie claire.
+// Page Défis Teaven — Mosaïque magazine (Consortium 2026-05-01, Option C)
+// Layout 2 colonnes, hauteurs variables selon importance, distribution équilibrée.
 import { useMemo } from 'react';
 import {
   View,
@@ -40,12 +40,11 @@ const ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string
   users: Users,
 };
 
-// Gradient par catégorie pillar (DS Teaven)
 const CATEGORY_GRADIENT: Record<string, [string, string, string]> = {
-  fidelite: ['#1F3027', '#2D5A3D', '#3A6642'],   // pillar défis vert profond
-  boissons: ['#A56843', '#C4845C', '#D89F76'],   // pillar wallet terracotta
-  food: ['#9B8540', '#C4A962', '#D8C285'],       // doré gold
-  social: ['#5C8580', '#7EA5A0', '#9DBDB9'],     // pillar atmosphère
+  fidelite: ['#1F3027', '#2D5A3D', '#3A6642'],
+  boissons: ['#A56843', '#C4845C', '#D89F76'],
+  food: ['#9B8540', '#C4A962', '#D8C285'],
+  social: ['#5C8580', '#7EA5A0', '#9DBDB9'],
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -62,6 +61,44 @@ const WHY_ITEMS = [
   { icon: Zap, title: 'Bonus', text: 'Gagner des points en plus de la fidélité classique.' },
 ];
 
+/**
+ * Hauteur d'une card selon son état — pour l'effet mosaïque magazine.
+ * Plus la card est importante (en cours, presque finie), plus elle est haute.
+ */
+function cardHeight(ch: Challenge): number {
+  if (ch.locked) return 90;
+  if (ch.claimed) return 100;
+  if (ch.type === 'morning_bonus') return 170; // toujours actif, mise en avant
+  const pct = ch.progress / Math.max(ch.target, 1);
+  if (pct >= 0.6) return 200; // presque fini = grand
+  if (pct >= 0.3) return 170;
+  if (pct > 0) return 150;
+  return 130; // non commencé
+}
+
+/**
+ * Distribution greedy en 2 colonnes pour équilibrer la mosaïque.
+ * À chaque step, ajouter la card à la colonne avec la hauteur cumulée la + petite.
+ */
+function distributeCards(challenges: Challenge[]): { left: Challenge[]; right: Challenge[] } {
+  const left: Challenge[] = [];
+  const right: Challenge[] = [];
+  let leftH = 0;
+  let rightH = 0;
+  const SPACING = 12;
+  for (const ch of challenges) {
+    const h = cardHeight(ch);
+    if (leftH <= rightH) {
+      left.push(ch);
+      leftH += h + SPACING;
+    } else {
+      right.push(ch);
+      rightH += h + SPACING;
+    }
+  }
+  return { left, right };
+}
+
 function sortChallenges(challenges: Challenge[]): Challenge[] {
   return [...challenges].sort((a, b) => {
     if (a.locked !== b.locked) return a.locked ? 1 : -1;
@@ -75,15 +112,12 @@ function sortChallenges(challenges: Challenge[]): Challenge[] {
   });
 }
 
-// ─── Carte postale "défi" ───
-// Card riche avec gradient catégorie + icone décorative large + texte devant.
-function ChallengeCard({
+// ─── Card mosaïque ───
+function MosaicCard({
   challenge: ch,
-  isHero,
   onClaim,
 }: {
   challenge: Challenge;
-  isHero?: boolean;
   onClaim: () => void;
 }) {
   const Icon = ICON_MAP[ch.icon] ?? Trophy;
@@ -94,119 +128,91 @@ function ChallengeCard({
 
   const gradient = CATEGORY_GRADIENT[ch.uiCategory] ?? CATEGORY_GRADIENT.fidelite;
   const categoryLabel = CATEGORY_LABELS[ch.uiCategory] ?? 'Défi';
+  const height = cardHeight(ch);
 
-  // Variante locked
   if (ch.locked) {
     return (
-      <View style={[styles.card, styles.cardLocked]}>
-        <View style={styles.lockedContent}>
-          <View style={styles.lockedIcon}>
-            <Lock size={20} color={colors.textMuted} strokeWidth={1.8} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.lockedCategory}>{categoryLabel}</Text>
-            <Text style={styles.lockedTitle} numberOfLines={1}>{ch.title}</Text>
-            <Text style={styles.lockedHint}>Terminez un autre défi pour débloquer</Text>
-          </View>
+      <View style={[styles.card, styles.cardLocked, { height }]}>
+        <View style={styles.lockedCenter}>
+          <Lock size={18} color={colors.textMuted} strokeWidth={1.8} />
+          <Text style={styles.lockedTitle} numberOfLines={2}>{ch.title}</Text>
         </View>
       </View>
     );
   }
 
-  // Variante claimed
   if (ch.claimed) {
     return (
-      <View style={[styles.card, styles.cardClaimed]}>
-        <View style={styles.claimedAccent} />
-        <View style={styles.claimedContent}>
-          <View style={styles.claimedIcon}>
-            <Check size={22} color="#2D5A3D" strokeWidth={2.5} />
+      <View style={[styles.card, styles.cardClaimed, { height }]}>
+        <View style={styles.claimedCenter}>
+          <View style={styles.claimedCheckCircle}>
+            <Check size={18} color="#FFFFFF" strokeWidth={3} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.claimedCategory}>{categoryLabel}</Text>
-            <Text style={styles.claimedTitle} numberOfLines={1}>{ch.title}</Text>
-          </View>
-          <View style={styles.claimedBadge}>
-            <Text style={styles.claimedBadgeText}>+{ch.reward}</Text>
-          </View>
+          <Text style={styles.claimedTitleText} numberOfLines={2}>{ch.title}</Text>
+          <Text style={styles.claimedReward}>+{ch.reward} pts</Text>
         </View>
       </View>
     );
   }
 
-  // Active card (hero ou liste) — gradient catégorie + icone décorative large
   return (
-    <Pressable onPress={isReadyToClaim ? onClaim : undefined}>
+    <Pressable onPress={isReadyToClaim ? onClaim : undefined} style={[{ height }]}>
       <LinearGradient
         colors={gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.card, isHero ? styles.cardHero : styles.cardListItem]}
+        style={[styles.card, styles.cardActive]}
       >
-        {/* Icone décorative large semi-transparente — donne de la matière visuelle */}
-        <View style={styles.decorIcon}>
+        {/* Decor */}
+        <View style={styles.decorIconWrap} pointerEvents="none">
           <Icon
-            size={isHero ? 140 : 100}
-            color="rgba(255,255,255,0.08)"
+            size={Math.round(height * 0.7)}
+            color="rgba(255,255,255,0.10)"
             strokeWidth={1.2}
           />
         </View>
-        {/* Pattern dots décoratifs */}
         <View style={[styles.decorDot, styles.decorDot1]} />
         <View style={[styles.decorDot, styles.decorDot2]} />
-        {isHero && <View style={[styles.decorDot, styles.decorDot3]} />}
 
-        {/* Top row : catégorie + reward */}
+        {/* Top : reward badge */}
         <View style={styles.topRow}>
           <View style={styles.categoryPill}>
-            <Sparkles size={9} color="#FFFFFF" strokeWidth={2.4} />
+            <Sparkles size={8} color="#FFFFFF" strokeWidth={2.4} />
             <Text style={styles.categoryPillText}>{categoryLabel}</Text>
           </View>
           <View style={styles.rewardBadge}>
             <Text style={styles.rewardText}>+{ch.reward}</Text>
-            <Text style={styles.rewardLabel}>pts</Text>
           </View>
         </View>
 
-        {/* Title block */}
-        <View style={styles.titleBlock}>
-          <Text style={[styles.title, isHero && styles.titleHero]} numberOfLines={2}>
-            {ch.title}
-          </Text>
-          {isHero && (
-            <Text style={styles.description} numberOfLines={2}>
-              {ch.description}
-            </Text>
-          )}
+        {/* Centre : titre */}
+        <View style={styles.centerBlock}>
+          <Text style={styles.title} numberOfLines={3}>{ch.title}</Text>
         </View>
 
-        {/* Bottom : progress + status/CTA */}
+        {/* Bottom : progress + status */}
         <View style={styles.bottomBlock}>
-          {!isMorning && (
-            <View style={styles.progressRow}>
-              <Text style={styles.progressFraction}>
-                {ch.progress}<Text style={styles.progressFractionDim}>/{ch.target}</Text>
-              </Text>
-              <Text style={styles.progressPct}>{pct}%</Text>
-            </View>
-          )}
-          {!isMorning && (
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${Math.max(8, pct)}%` as any }]} />
-            </View>
-          )}
-
-          {isReadyToClaim && (
-            <View style={styles.claimCTA}>
-              <Text style={styles.claimCTAText}>Toucher pour réclamer</Text>
-            </View>
-          )}
-          {isMorning && (
+          {!isMorning ? (
+            <>
+              <View style={styles.progressRow}>
+                <Text style={styles.progressFraction}>
+                  {ch.progress}<Text style={styles.progressFractionDim}>/{ch.target}</Text>
+                </Text>
+                <Text style={styles.progressPct}>{pct}%</Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${Math.max(8, pct)}%` as any }]} />
+              </View>
+              {isReadyToClaim && (
+                <View style={styles.claimCTA}>
+                  <Text style={styles.claimCTAText}>Réclamer</Text>
+                </View>
+              )}
+            </>
+          ) : (
             <View style={styles.morningBadge}>
               <Flame size={10} color="#FFD89A" strokeWidth={2.4} />
-              <Text style={styles.morningText}>
-                Actif tous les matins · 8h-11h
-              </Text>
+              <Text style={styles.morningText}>8h-11h</Text>
             </View>
           )}
         </View>
@@ -222,15 +228,13 @@ export default function DefisScreen() {
   const { showToast } = useToast();
 
   const sorted = useMemo(() => sortChallenges(challenges), [challenges]);
+  const { left, right } = useMemo(() => distributeCards(sorted), [sorted]);
 
   const inProgressCount = challenges.filter((c) => c.progress > 0 && !c.claimed && !c.locked).length;
   const completedCount = challenges.filter((c) => c.claimed).length;
   const totalPointsFromChallenges = challenges
     .filter((c) => c.claimed)
     .reduce((sum, c) => sum + c.reward, 0);
-
-  const heroChallenge = sorted[0];
-  const restChallenges = sorted.slice(1);
 
   return (
     <ScrollView
@@ -290,29 +294,33 @@ export default function DefisScreen() {
         </View>
       )}
 
-      {/* Hero challenge (le plus avancé) */}
-      {!loading && heroChallenge && (
-        <View style={styles.heroChallengeWrap}>
-          <ChallengeCard
-            challenge={heroChallenge}
-            isHero
-            onClaim={() => showToast(`+${heroChallenge.reward} pts crédités !`)}
-          />
-        </View>
-      )}
-
-      {/* Liste aérée des autres défis */}
-      {!loading && restChallenges.length > 0 && (
+      {/* Mosaïque */}
+      {!loading && sorted.length > 0 && (
         <>
-          <Text style={styles.sectionTitle}>Vos {restChallenges.length} autres cartes</Text>
-          <View style={styles.cardsList}>
-            {restChallenges.map((ch) => (
-              <ChallengeCard
-                key={ch.id}
-                challenge={ch}
-                onClaim={() => showToast(`+${ch.reward} pts crédités !`)}
-              />
-            ))}
+          <Text style={styles.sectionTitle}>Vos cartes défis</Text>
+          <Text style={styles.sectionDesc}>
+            Toutes actives. Les plus avancées sont mises en avant.
+          </Text>
+
+          <View style={styles.mosaicWrap}>
+            <View style={styles.mosaicColumn}>
+              {left.map((ch) => (
+                <MosaicCard
+                  key={ch.id}
+                  challenge={ch}
+                  onClaim={() => showToast(`+${ch.reward} pts crédités !`)}
+                />
+              ))}
+            </View>
+            <View style={styles.mosaicColumn}>
+              {right.map((ch) => (
+                <MosaicCard
+                  key={ch.id}
+                  challenge={ch}
+                  onClaim={() => showToast(`+${ch.reward} pts crédités !`)}
+                />
+              ))}
+            </View>
           </View>
         </>
       )}
@@ -368,7 +376,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 
-  // Stats hero (en haut, données globales user)
+  // Stats hero
   statsHero: {
     marginHorizontal: spacing.xl,
     borderRadius: 22,
@@ -462,282 +470,14 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // ─── Cartes postales défi ───
-  heroChallengeWrap: {
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-  },
-  cardsList: {
-    paddingHorizontal: spacing.xl,
-    gap: 14,
-    marginBottom: spacing.xxxl,
-  },
-
-  card: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#1F3027',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  cardHero: {
-    padding: spacing.xl,
-    minHeight: 200,
-    gap: 14,
-  },
-  cardListItem: {
-    padding: spacing.lg,
-    minHeight: 150,
-    gap: 10,
-  },
-
-  // Decor
-  decorIcon: {
-    position: 'absolute',
-    top: -20,
-    right: -20,
-    transform: [{ rotate: '-12deg' }],
-  },
-  decorDot: {
-    position: 'absolute',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-  },
-  decorDot1: { width: 40, height: 40, top: 16, left: -10 },
-  decorDot2: { width: 24, height: 24, bottom: 30, right: 30 },
-  decorDot3: { width: 60, height: 60, bottom: -20, left: 60 },
-
-  // Top row
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  categoryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  categoryPillText: {
-    fontFamily: fonts.bold,
-    fontSize: 9.5,
-    color: '#FFFFFF',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  rewardBadge: {
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-  },
-  rewardText: {
-    fontFamily: fonts.monoSemiBold,
-    fontSize: 14,
-    color: '#1F3027',
-  },
-  rewardLabel: {
-    fontFamily: fonts.regular,
-    fontSize: 9,
-    color: '#1F3027',
-    marginTop: -2,
-  },
-
-  // Title block
-  titleBlock: { gap: 6 },
-  title: {
-    fontFamily: fonts.bold,
-    fontSize: 17,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-    lineHeight: 22,
-  },
-  titleHero: {
-    fontSize: 22,
-    lineHeight: 28,
-  },
-  description: {
-    fontFamily: fonts.regular,
-    fontSize: 12.5,
-    color: 'rgba(255,255,255,0.85)',
-    lineHeight: 18,
-  },
-
-  // Bottom
-  bottomBlock: { gap: 8 },
-  progressRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-  },
-  progressFraction: {
-    fontFamily: fonts.monoSemiBold,
-    fontSize: 18,
-    color: '#FFFFFF',
-  },
-  progressFractionDim: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 13,
-  },
-  progressPct: {
-    fontFamily: fonts.bold,
-    fontSize: 12,
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: 6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 3,
-  },
-  claimCTA: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingVertical: 8,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  claimCTAText: {
-    fontFamily: fonts.bold,
-    fontSize: 11.5,
-    color: '#1F3027',
-    letterSpacing: 0.2,
-  },
-  morningBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    alignSelf: 'flex-start',
-  },
-  morningText: {
-    fontFamily: fonts.bold,
-    fontSize: 10.5,
-    color: '#FFFFFF',
-  },
-
-  // ─── Variante locked ───
-  cardLocked: {
-    backgroundColor: '#EFEEE7',
-    padding: spacing.lg,
-    minHeight: 90,
-  },
-  lockedContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  lockedIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lockedCategory: {
-    fontFamily: fonts.regular,
-    fontSize: 9.5,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  lockedTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 15,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  lockedHint: {
-    fontFamily: fonts.regular,
-    fontSize: 11,
-    color: colors.textMuted,
-    fontStyle: 'italic',
-    marginTop: 2,
-  },
-
-  // ─── Variante claimed ───
-  cardClaimed: {
-    backgroundColor: '#FFFFFF',
-    minHeight: 80,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.lg,
-    paddingLeft: spacing.lg + 4,
-    borderWidth: 1,
-    borderColor: 'rgba(45,90,61,0.20)',
-  },
-  claimedAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    backgroundColor: '#2D5A3D',
-    borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
-  },
-  claimedContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  claimedIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: 'rgba(45,90,61,0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  claimedCategory: {
-    fontFamily: fonts.regular,
-    fontSize: 9.5,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  claimedTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 14,
-    color: colors.text,
-    marginTop: 2,
-  },
-  claimedBadge: {
-    backgroundColor: 'rgba(45,90,61,0.10)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  claimedBadgeText: {
-    fontFamily: fonts.monoSemiBold,
-    fontSize: 12,
-    color: '#2D5A3D',
-  },
-
-  // Section title
+  // Section
   sectionTitle: {
     fontFamily: fonts.bold,
     fontSize: 17,
     color: '#2D5A3D',
     paddingHorizontal: spacing.xl,
     marginBottom: 4,
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
     letterSpacing: -0.2,
   },
   sectionDesc: {
@@ -747,6 +487,208 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     marginBottom: spacing.md,
     lineHeight: 17,
+  },
+
+  // ─── Mosaïque ───
+  mosaicWrap: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.xl,
+    gap: 12,
+    marginBottom: spacing.xxxl,
+  },
+  mosaicColumn: {
+    flex: 1,
+    gap: 12,
+  },
+
+  // Card commune
+  card: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#1F3027',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  cardActive: {
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+
+  // Decor
+  decorIconWrap: {
+    position: 'absolute',
+    top: -10,
+    right: -20,
+    transform: [{ rotate: '-12deg' }],
+  },
+  decorDot: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  decorDot1: { width: 30, height: 30, top: 12, left: -8 },
+  decorDot2: { width: 20, height: 20, bottom: 25, right: 25 },
+
+  // Top
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  categoryPillText: {
+    fontFamily: fonts.bold,
+    fontSize: 8.5,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  rewardBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 9,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  rewardText: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 11,
+    color: '#1F3027',
+  },
+
+  // Center
+  centerBlock: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingVertical: 6,
+  },
+  title: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+    lineHeight: 18,
+  },
+
+  // Bottom
+  bottomBlock: { gap: 6 },
+  progressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  progressFraction: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  progressFractionDim: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+  },
+  progressPct: {
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 2,
+  },
+  claimCTA: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingVertical: 6,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  claimCTAText: {
+    fontFamily: fonts.bold,
+    fontSize: 10.5,
+    color: '#1F3027',
+  },
+  morningBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+  },
+  morningText: {
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+
+  // ─── Variantes ───
+  cardLocked: {
+    backgroundColor: '#EFEEE7',
+    padding: 12,
+    justifyContent: 'center',
+  },
+  lockedCenter: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  lockedTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+
+  cardClaimed: {
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(45,90,61,0.20)',
+    justifyContent: 'center',
+  },
+  claimedCenter: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  claimedCheckCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#2D5A3D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  claimedTitleText: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.text,
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+  claimedReward: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 11,
+    color: '#2D5A3D',
   },
 
   // Why card
