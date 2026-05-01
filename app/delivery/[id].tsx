@@ -13,6 +13,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft,
   Truck,
@@ -25,6 +26,7 @@ import {
   ChefHat,
   Navigation,
   Sparkles,
+  Clock,
 } from 'lucide-react-native';
 import { useOrderStore } from '@/stores/orderStore';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/constants/config';
@@ -167,15 +169,62 @@ export default function DeliveryTrackingScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header transparent overlay */}
-      <View style={styles.headerOverlay}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft size={20} color={colors.text} strokeWidth={1.5} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Suivi de livraison</Text>
-        <View style={{ width: 36 }} />
-      </View>
+    <View style={styles.container}>
+      {/* Header gradient — cohérent avec le toast suivi */}
+      <LinearGradient
+        colors={[colors.green, colors.greenDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.headerGradient, { paddingTop: insets.top + 8 }]}
+      >
+        <View style={styles.headerTop}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <ArrowLeft size={20} color="#FFFFFF" strokeWidth={2} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Suivi de votre commande</Text>
+          <View style={{ width: 36 }} />
+        </View>
+
+        {/* Hero status row : titre + sub-message + ETA */}
+        <View style={styles.heroStatusRow}>
+          <View style={styles.heroIconCircle}>
+            <currentStepData.icon size={18} color={colors.greenDark} strokeWidth={2.4} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.heroStatusTitle}>{currentStepData.label}</Text>
+            <Text style={styles.heroStatusSub}>
+              {isDelivered ? 'Bon moment Teaven' :
+                isCancelled ? 'Commande annulée' :
+                currentStep >= 3 ? 'Le livreur arrive bientôt' :
+                currentStep >= 2 ? 'Votre commande est en route' :
+                currentStep >= 1 ? 'On prépare avec soin' :
+                'Confirmation reçue'}
+            </Text>
+          </View>
+          {deliveryStatus?.estimated_dropoff_at && !isDelivered && !isCancelled && (
+            <View style={styles.heroEtaPill}>
+              <Clock size={11} color={colors.greenDark} strokeWidth={2.6} />
+              <Text style={styles.heroEtaText}>{formatETATime(deliveryStatus.estimated_dropoff_at)}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Progress bar massive blanche (cohérent toast) */}
+        <View style={styles.heroProgressTrack}>
+          <Animated.View style={[styles.heroProgressFill, { width: animatedWidth }]} />
+        </View>
+        <View style={styles.heroStepsRow}>
+          {STATUS_STEPS.map((step, i) => (
+            <Text
+              key={step.key}
+              style={[styles.heroStepLabel, i <= currentStep && styles.heroStepLabelActive]}
+              numberOfLines={1}
+            >
+              {step.shortLabel}
+            </Text>
+          ))}
+        </View>
+      </LinearGradient>
 
       {/* Map */}
       <Animated.View style={[styles.mapContainer, { opacity: heroOpacity }]}>
@@ -235,38 +284,8 @@ export default function DeliveryTrackingScreen() {
         )}
       </Animated.View>
 
-      {/* Bottom card with status details */}
+      {/* Bottom card with status details (status déjà dans le hero) */}
       <Animated.View style={[styles.bottomSheet, { opacity: heroOpacity }]}>
-        {/* Progress bar */}
-        <View style={styles.progressSection}>
-          <View style={styles.progressHeader}>
-            <View style={[styles.statusBadge, isDelivered && styles.statusBadgeDone, isCancelled && styles.statusBadgeCancelled]}>
-              <currentStepData.icon size={12} color="#FFFFFF" strokeWidth={2} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.statusTitle}>{currentStepData.label}</Text>
-              {deliveryStatus?.estimated_dropoff_at && !isDelivered && (
-                <Text style={styles.statusETA}>{formatETA(deliveryStatus.estimated_dropoff_at)}</Text>
-              )}
-            </View>
-          </View>
-
-          {/* Horizontal progress bar */}
-          <View style={styles.progressTrack}>
-            <Animated.View style={[styles.progressFill, { width: animatedWidth }]} />
-          </View>
-          <View style={styles.progressLabels}>
-            {STATUS_STEPS.map((step, i) => (
-              <Text
-                key={step.key}
-                style={[styles.progressStepLabel, i <= currentStep && styles.progressStepLabelActive]}
-              >
-                {step.shortLabel}
-              </Text>
-            ))}
-          </View>
-        </View>
-
         {/* Courier info */}
         {deliveryStatus?.courier && (
           <View style={styles.courierCard}>
@@ -417,18 +436,93 @@ const styles = StyleSheet.create({
   centered: { alignItems: 'center', justifyContent: 'center' },
   loadingText: { fontFamily: fonts.regular, fontSize: 14, color: colors.textSecondary, marginTop: spacing.md },
 
-  // Header
-  headerOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl, paddingTop: spacing.lg + 48, paddingBottom: spacing.sm,
+  // ── Header gradient (cohérent toast suivi) ──
+  headerGradient: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   backBtn: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surface,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.20)',
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
   },
-  headerTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.text },
+  headerTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  heroStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  heroIconCircle: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  heroStatusTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  heroStatusSub: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.85)',
+    lineHeight: 15,
+  },
+  heroEtaPill: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  heroEtaText: {
+    fontFamily: fonts.monoSemiBold,
+    fontSize: 11,
+    color: colors.greenDark,
+    letterSpacing: 0.3,
+  },
+  heroProgressTrack: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  heroProgressFill: {
+    height: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 2,
+  },
+  heroStepsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  heroStepLabel: {
+    fontFamily: fonts.regular,
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.6)',
+    flex: 1,
+    textAlign: 'center',
+  },
+  heroStepLabelActive: {
+    fontFamily: fonts.bold,
+    color: '#FFFFFF',
+  },
 
   // Map
   mapContainer: {
