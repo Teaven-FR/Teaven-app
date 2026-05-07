@@ -119,6 +119,26 @@ export default function InformationsScreen() {
       dietaryPreferences: dietary,
     });
 
+    // Pousser nom + email vers Square (source de vérité fiche client).
+    // Best-effort : on n'interrompt pas la sauvegarde si Square est down.
+    const trimmedName = fullName.trim();
+    const trimmedEmail = email.trim();
+    const nameChanged = trimmedName !== (user.fullName ?? '').trim();
+    const emailChanged = trimmedEmail !== (user.email ?? '').trim();
+    if (nameChanged || (emailChanged && trimmedEmail)) {
+      const [givenName, ...rest] = trimmedName.split(/\s+/);
+      const familyName = rest.join(' ');
+      const updates: Record<string, string> = {};
+      if (nameChanged && givenName) updates.givenName = givenName;
+      if (nameChanged && familyName) updates.familyName = familyName;
+      if (emailChanged && trimmedEmail) updates.email = trimmedEmail;
+      if (Object.keys(updates).length > 0) {
+        callEdgeFunction('fetch-customer', { action: 'update', updates }).catch((err) => {
+          console.warn('[informations] sync Square KO', err);
+        });
+      }
+    }
+
     // Si l'anniversaire a changé → enregistrer côté Square + (éventuel) bonus
     let bonusAwarded = 0;
     if (birthdayChanged && isoBirthday) {

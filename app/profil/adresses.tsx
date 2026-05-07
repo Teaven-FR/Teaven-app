@@ -29,6 +29,23 @@ const ICONS: Record<string, typeof Home> = {
   Bureau: Briefcase,
 };
 
+/** Pousse l'adresse par défaut vers la fiche Square Customer (source de vérité). */
+function syncAddressToSquare(addr: Address) {
+  callEdgeFunction('fetch-customer', {
+    action: 'update',
+    updates: {
+      address: {
+        address_line_1: addr.street,
+        locality: addr.city,
+        postal_code: addr.postalCode,
+        country: 'FR',
+      },
+    },
+  }).catch((err) => {
+    console.warn('[adresses] sync Square KO', err);
+  });
+}
+
 export default function AdressesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -93,9 +110,12 @@ export default function AdressesScreen() {
   };
 
   const setDefault = (id: string) => {
-    setAddresses((prev) =>
-      prev.map((a) => ({ ...a, isDefault: a.id === id })),
-    );
+    setAddresses((prev) => {
+      const next = prev.map((a) => ({ ...a, isDefault: a.id === id }));
+      const newDefault = next.find((a) => a.id === id);
+      if (newDefault) syncAddressToSquare(newDefault);
+      return next;
+    });
   };
 
   const deleteAddress = (id: string) => {
@@ -113,6 +133,7 @@ export default function AdressesScreen() {
               // Si on supprime la default et qu'il reste des adresses, on met la première en default
               if (prev.find((a) => a.id === id)?.isDefault && filtered.length > 0) {
                 filtered[0].isDefault = true;
+                syncAddressToSquare(filtered[0]);
               }
               return filtered;
             }),
@@ -132,6 +153,7 @@ export default function AdressesScreen() {
       isDefault: addresses.length === 0,
     };
     setAddresses((prev) => [...prev, newAddr]);
+    if (newAddr.isDefault) syncAddressToSquare(newAddr);
     setModalVisible(false);
     setFormLabel('');
     setFormStreet('');
