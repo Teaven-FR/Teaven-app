@@ -535,7 +535,8 @@ export default function ProfilScreen() {
         </Pressable>
 
         {/* ──── Aide & Déconnexion ──── */}
-        <View style={[styles.menu, { marginTop: spacing.md }]}>
+        <Text style={styles.helpSectionLabel}>AIDE & COMPTE</Text>
+        <View style={[styles.menu, { marginTop: spacing.sm }]}>
           <Pressable style={styles.menuItem} accessibilityRole="button" onPress={() => router.push('/faq')}>
             <HelpCircle size={18} color={colors.green} strokeWidth={1.6} />
             <Text style={styles.menuItemText}>Aide & FAQ</Text>
@@ -1258,20 +1259,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.lg,
   },
   menuItemText: {
+    flex: 1,
     fontFamily: fonts.regular,
     fontSize: 15,
     color: colors.text,
+    paddingRight: spacing.sm,
   },
   menuItemSpacer: {
-    flex: 1,
+    width: 0,
   },
   menuSep: {
     height: 0.5,
     backgroundColor: colors.border,
     marginLeft: 50,
+  },
+  helpSectionLabel: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: colors.textMuted,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.xl,
+    marginBottom: spacing.xs,
   },
 
   // Instagram

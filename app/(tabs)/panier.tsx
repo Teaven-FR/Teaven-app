@@ -391,18 +391,26 @@ export default function PanierScreen() {
             const key = getItemKey(item);
             return (
               <View key={key} style={styles.articleCard}>
-                <Image
-                  source={{ uri: item.product.image }}
-                  style={styles.articleImage}
-                  contentFit="cover"
-                  placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
-                />
-                <View style={styles.articleInfo}>
-                  <Text style={styles.articleName} numberOfLines={2}>{item.product.name}</Text>
-                  <Text style={styles.articlePrice}>
-                    {formatPrice(item.product.price)}
-                  </Text>
-                </View>
+                <Pressable
+                  onPress={() => router.push({ pathname: '/produit/[id]', params: { id: item.product.id } })}
+                  style={styles.articleTapZone}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Voir la fiche de ${item.product.name}`}
+                  hitSlop={4}
+                >
+                  <Image
+                    source={{ uri: item.product.image }}
+                    style={styles.articleImage}
+                    contentFit="cover"
+                    placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
+                  />
+                  <View style={styles.articleInfo}>
+                    <Text style={styles.articleName} numberOfLines={2}>{item.product.name}</Text>
+                    <Text style={styles.articlePrice}>
+                      {formatPrice(item.product.price)}
+                    </Text>
+                  </View>
+                </Pressable>
                 <View style={styles.qtyArea}>
                   <View style={styles.qtySelector}>
                     <Pressable
@@ -1019,6 +1027,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 1,
+  },
+  articleTapZone: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   articleImage: {
     width: 56,

@@ -90,16 +90,26 @@ export default function HomeScreen() {
   const defisAnim = useRef(new Animated.Value(0)).current;
   const [birthdayMissing, setBirthdayMissing] = useState(false);
 
-  // Vérifier si le birthday est renseigné dans Square
+  // Vérifier si le birthday est renseigné dans Square.
+  // Important : sur iOS, squareCustomerId peut arriver tard (enrichissement asynchrone).
+  // On déclenche dès qu'on a un téléphone, et on affiche la bannière par défaut tant
+  // qu'on n'a pas confirmé qu'un anniversaire est déjà saisi côté Square.
   useEffect(() => {
-    if (isGuest || !user.squareCustomerId) return;
+    if (isGuest || !user.phone) return;
+    let cancelled = false;
     callEdgeFunction<{ success: boolean; customer: { birthday?: string | null } | null }>(
       'fetch-customer', { phone: user.phone },
     ).then((res) => {
-      if (res.data?.customer && !res.data.customer.birthday) setBirthdayMissing(true);
-      else setBirthdayMissing(false);
+      if (cancelled) return;
+      const birthday = res.data?.customer?.birthday;
+      // Birthday défini → masquer la bannière. Sinon (manquant ou customer non trouvé)
+      // → afficher la bannière pour inviter l'utilisateur à le compléter.
+      setBirthdayMissing(!birthday);
+    }).catch(() => {
+      if (!cancelled) setBirthdayMissing(true);
     });
-  }, [isGuest, user.squareCustomerId, user.phone]);
+    return () => { cancelled = true; };
+  }, [isGuest, user.phone, user.squareCustomerId]);
 
   const DEFI_COMPACT_H = 56;
   const DEFI_FULL_H = 286;

@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/authStore';
+import { supabase } from '@/lib/supabase';
 import { colors, fonts, spacing } from '@/constants/theme';
 
 const CODE_LENGTH = 6;
@@ -28,7 +29,11 @@ function maskPhone(phone: string): string {
 }
 
 export default function OtpScreen() {
-  const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { phone, fullName, email } = useLocalSearchParams<{
+    phone: string;
+    fullName?: string;
+    email?: string;
+  }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -55,6 +60,29 @@ export default function OtpScreen() {
     setIsLoading(true);
 
     const success = await verifyOtp(phone ?? '', otpCode);
+
+    // Si l'OTP provient du flow d'inscription, on enregistre prénom + email côté
+    // profil Supabase et dans le store local. Non bloquant : l'écran continue
+    // si l'upsert échoue (le profil sera complété plus tard).
+    if (success && (fullName || email)) {
+      try {
+        const current = useAuthStore.getState().user;
+        const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (fullName) updates.full_name = fullName;
+        if (email) updates.email = email;
+        if (current) {
+          useAuthStore.getState().setUser({
+            ...current,
+            fullName: fullName || current.fullName,
+            email: email || current.email,
+          });
+          await supabase
+            .from('profiles')
+            .upsert({ id: current.id, ...updates }, { onConflict: 'id' });
+        }
+      } catch { /* non bloquant */ }
+    }
+
     setIsLoading(false);
 
     if (success) {
@@ -62,7 +90,7 @@ export default function OtpScreen() {
     } else {
       setCode('');
     }
-  }, [phone, isLoading, verifyOtp, router]);
+  }, [phone, fullName, email, isLoading, verifyOtp, router]);
 
   const handleCodeChange = (text: string) => {
     const cleaned = text.replace(/[^0-9]/g, '');
