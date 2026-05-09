@@ -45,6 +45,7 @@ import {
 import { Linking } from 'react-native';
 import { ProgressCircle } from '@/components/ui/ProgressCircle';
 import { RechargeModal } from '@/components/ui/RechargeModal';
+import { ProfileCompletionCard } from '@/components/ui/ProfileCompletionCard';
 import { useToast } from '@/contexts/ToastContext';
 import { useCartStore } from '@/stores/cartStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -368,6 +369,9 @@ export default function ProfilScreen() {
             </View>
           </LinearGradient>
         </Pressable>
+
+        {/* ──── Complète ton profil — visible tant que des champs manquent ──── */}
+        <ProfileCompletionCard />
 
         {/* ──── Mes défis — feature card ──── */}
         <Pressable

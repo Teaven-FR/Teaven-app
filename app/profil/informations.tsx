@@ -139,6 +139,18 @@ export default function InformationsScreen() {
       }
     }
 
+    // Bonus de complétion : claim idempotent côté serveur (+50 pts par champ).
+    let completionBonus = 0;
+    const claimField = async (field: 'name' | 'email') => {
+      const res = await callEdgeFunction<{ bonusAwarded: number }>(
+        'claim-profile-bonus',
+        { field },
+      );
+      return res.data?.bonusAwarded ?? 0;
+    };
+    if (trimmedName.length > 0) completionBonus += await claimField('name');
+    if (trimmedEmail.length > 0) completionBonus += await claimField('email');
+
     // Si l'anniversaire a changé → enregistrer côté Square + (éventuel) bonus
     let bonusAwarded = 0;
     if (birthdayChanged && isoBirthday) {
@@ -168,10 +180,24 @@ export default function InformationsScreen() {
       }
     }
 
+    // Reporter le bonus de complétion sur le store local (la jauge se met à jour).
+    const totalBonus = bonusAwarded + completionBonus;
+    if (completionBonus > 0) {
+      const current = useAuthStore.getState().user;
+      if (current) {
+        setUser({
+          ...current,
+          loyaltyPoints: (current.loyaltyPoints ?? 0) + completionBonus,
+        });
+      }
+    }
+
     setIsSaving(false);
     showToast(
-      bonusAwarded > 0
-        ? `Anniversaire enregistré ! +${bonusAwarded} points offerts 🎉`
+      totalBonus > 0
+        ? bonusAwarded > 0
+          ? `Anniversaire enregistré ! +${totalBonus} points offerts 🎉`
+          : `Profil mis à jour — +${totalBonus} pts 🎉`
         : 'Profil mis à jour',
     );
     router.back();

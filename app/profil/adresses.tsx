@@ -18,6 +18,8 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Home, Briefcase, MapPin, Plus, Trash2, Check, Search } from 'lucide-react-native';
 import { callEdgeFunction } from '@/lib/square';
+import { useAuthStore } from '@/stores/authStore';
+import { useToast } from '@/contexts/ToastContext';
 import { colors, fonts, spacing, shadows, radii } from '@/constants/theme';
 import type { Address } from '@/lib/types';
 
@@ -46,9 +48,23 @@ function syncAddressToSquare(addr: Address) {
   });
 }
 
+/** Claim le bonus de complétion 'address' (+50 pts, idempotent côté serveur). */
+async function claimAddressBonus(): Promise<number> {
+  try {
+    const res = await callEdgeFunction<{ bonusAwarded: number }>(
+      'claim-profile-bonus',
+      { field: 'address' },
+    );
+    return res.data?.bonusAwarded ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export default function AdressesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
 
   const [addresses, setAddresses] = useState<Address[]>(INITIAL_ADDRESSES);
   const [modalVisible, setModalVisible] = useState(false);
@@ -142,7 +158,7 @@ export default function AdressesScreen() {
     );
   };
 
-  const addAddress = () => {
+  const addAddress = async () => {
     if (!formLabel.trim() || !formStreet.trim() || !formCity.trim()) return;
     const newAddr: Address = {
       id: Date.now().toString(),
@@ -159,6 +175,19 @@ export default function AdressesScreen() {
     setFormStreet('');
     setFormPostal('');
     setFormCity('');
+
+    // Bonus de complétion (idempotent côté serveur).
+    const bonus = await claimAddressBonus();
+    if (bonus > 0) {
+      const current = useAuthStore.getState().user;
+      if (current) {
+        useAuthStore.getState().setUser({
+          ...current,
+          loyaltyPoints: (current.loyaltyPoints ?? 0) + bonus,
+        });
+      }
+      showToast(`Adresse enregistrée — +${bonus} pts 🎉`);
+    }
   };
 
   return (
