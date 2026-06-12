@@ -28,6 +28,10 @@ async function getUberToken(): Promise<string> {
     }),
   });
   const data = await res.json();
+  if (!res.ok || !data.access_token) {
+    console.error('[uber-direct-create-delivery] OAuth token failed:', res.status, JSON.stringify(data));
+    throw new Error(`Uber OAuth failed (${res.status}): ${data.error_description ?? data.error ?? 'no token'}`);
+  }
   return data.access_token;
 }
 
@@ -65,49 +69,77 @@ serve(async (req) => {
       country: 'FR',
     };
 
+    const uberPayload = {
+      pickup: {
+        name: 'Teaven Franconville',
+        address: defaultPickup,
+        phone_number: '+33000000000',
+      },
+      dropoff: {
+        name: dropoff_address.name ?? 'Client',
+        address: dropoff_address,
+        phone_number: dropoff_address.phone ?? '',
+      },
+      manifest: { description: items_description ?? 'Commande Teaven' },
+      external_id: order_id,
+    };
+
     const res = await fetch(`${UBER_API_BASE}/customers/${customerId}/deliveries`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pickup: {
-          name: 'Teaven Franconville',
-          address: defaultPickup,
-          phone_number: '+33000000000',
-        },
-        dropoff: {
-          name: dropoff_address.name ?? 'Client',
-          address: dropoff_address,
-          phone_number: dropoff_address.phone ?? '',
-        },
-        manifest: { description: items_description ?? 'Commande Teaven' },
-        external_id: order_id,
-      }),
+      body: JSON.stringify(uberPayload),
     });
 
     const delivery = await res.json();
 
-    // Sauvegarder dans Supabase
+    // ── Échec API Uber : ne PAS masquer, renvoyer l'erreur au client et logger
+    //    Sans ce check, on insérait un placeholder en DB avec provider_delivery_id=NULL
+    //    et on retournait success:true — la commande devenait fantôme côté Uber.
+    if (!res.ok || !delivery.id) {
+      console.error('[uber-direct-create-delivery] Uber API error', {
+        status: res.status,
+        order_id,
+        payload: uberPayload,
+        response: delivery,
+      });
+      const firstError = Array.isArray(delivery?.errors) ? delivery.errors[0] : null;
+      const friendlyMsg = firstError?.message
+        ?? delivery?.message
+        ?? `Échec création livraison Uber (${res.status})`;
+      return new Response(JSON.stringify({
+        error: friendlyMsg,
+        code: delivery?.code ?? firstError?.code ?? `UBER_${res.status}`,
+        details: delivery,
+      }), { status: res.status >= 500 ? 502 : 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Sauvegarder dans Supabase — schéma DB réel :
+    //   id, order_id, provider, provider_delivery_id, status,
+    //   courier_name, courier_phone, estimated_pickup, estimated_dropoff,
+    //   tracking_url, proof_of_delivery, created_at, updated_at
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    await supabase.from('deliveries').insert({
+    const { error: dbErr } = await supabase.from('deliveries').insert({
       order_id,
-      uber_delivery_id: delivery.id,
+      provider: 'uber_direct',
+      provider_delivery_id: delivery.id,
       status: delivery.status ?? 'pending',
-      tracking_url: delivery.tracking_url,
-      estimated_dropoff_at: delivery.dropoff.eta,
-      dropoff_address: dropoff_address,
-      pickup_address: defaultPickup,
-      fee_cents: delivery.fee ? Math.round(delivery.fee * 100) : null,
+      tracking_url: delivery.tracking_url ?? null,
+      estimated_dropoff: delivery.dropoff?.eta ?? null,
+      estimated_pickup: delivery.pickup?.eta ?? null,
     });
+    if (dbErr) {
+      console.error('[uber-direct-create-delivery] DB insert error (non-fatal):', dbErr);
+    }
 
     return new Response(JSON.stringify({
       success: true,
       delivery_id: delivery.id,
       tracking_url: delivery.tracking_url,
-      estimated_delivery_time: delivery.dropoff.eta,
+      estimated_delivery_time: delivery.dropoff?.eta,
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {

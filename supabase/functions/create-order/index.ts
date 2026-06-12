@@ -82,7 +82,18 @@ serve(async (req) => {
       );
     }
 
-    const { items, pickupTime, customerName, customerPhone, rewardTierId, loyaltyAccountId, discounts: rawDiscounts } = body;
+    const { items, pickupTime, customerName, customerPhone, rewardTierId, loyaltyAccountId, discounts: rawDiscounts, mode, subtotal, deliveryAddress } = body as {
+      items: OrderLineItem[];
+      pickupTime?: string;
+      customerName?: string;
+      customerPhone?: string;
+      rewardTierId?: string;
+      loyaltyAccountId?: string;
+      discounts?: unknown;
+      mode?: 'pickup' | 'delivery';
+      subtotal?: number;
+      deliveryAddress?: { street: string; city: string; postalCode: string; complement?: string };
+    };
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return new Response(
@@ -215,20 +226,51 @@ serve(async (req) => {
           reference_id: `TEAVEN-${Date.now()}`,
           line_items: lineItems,
           ...(squareDiscounts.length > 0 ? { discounts: squareDiscounts } : {}),
-          fulfillments: [{
-            type: 'PICKUP',
-            state: 'PROPOSED',
-            pickup_details: {
-              schedule_type: 'SCHEDULED',
-              pickup_at: scheduledPickup,
-              recipient: {
-                display_name: profileName,
-                ...(formattedPhone ? { phone_number: formattedPhone } : {}),
-                ...(profileEmail ? { email_address: profileEmail } : {}),
-              },
-              note: `Commande via app Teaven — ${profileName}`,
-            },
-          }],
+          fulfillments: [
+            // IMPORTANT : state='RESERVED' (et non 'PROPOSED') pour que la commande
+            // apparaisse immédiatement dans le Dashboard Square "Commandes" / KDS /
+            // Square for Restaurants. Un fulfillment 'PROPOSED' reste un brouillon
+            // invisible côté merchant — il faut le promouvoir à 'RESERVED' pour
+            // qu'il rentre dans la file de préparation.
+            mode === 'delivery'
+              ? {
+                  type: 'DELIVERY',
+                  state: 'RESERVED',
+                  delivery_details: {
+                    schedule_type: 'SCHEDULED',
+                    deliver_at: scheduledPickup,
+                    recipient: {
+                      display_name: profileName,
+                      ...(formattedPhone ? { phone_number: formattedPhone } : {}),
+                      ...(profileEmail ? { email_address: profileEmail } : {}),
+                      ...(deliveryAddress ? {
+                        address: {
+                          address_line_1: deliveryAddress.street,
+                          ...(deliveryAddress.complement ? { address_line_2: deliveryAddress.complement } : {}),
+                          locality: deliveryAddress.city,
+                          postal_code: deliveryAddress.postalCode,
+                          country: 'FR',
+                        },
+                      } : {}),
+                    },
+                    note: `Livraison à domicile — ${profileName}`,
+                  },
+                }
+              : {
+                  type: 'PICKUP',
+                  state: 'RESERVED',
+                  pickup_details: {
+                    schedule_type: 'SCHEDULED',
+                    pickup_at: scheduledPickup,
+                    recipient: {
+                      display_name: profileName,
+                      ...(formattedPhone ? { phone_number: formattedPhone } : {}),
+                      ...(profileEmail ? { email_address: profileEmail } : {}),
+                    },
+                    note: `Commande via app Teaven — ${profileName}`,
+                  },
+                },
+          ],
           // rewards est un champ read-only — le loyalty reward est appliqué automatiquement via POST /v2/loyalty/rewards
         },
         idempotency_key: crypto.randomUUID(),
@@ -252,13 +294,19 @@ serve(async (req) => {
 
     const squareOrder = orderData.order;
 
-    // Sauvegarder dans Supabase
+    // Sauvegarder dans Supabase — mode/subtotal envoyés par le client (par
+    // défaut 'pickup' si absent pour compat). C'est ce mode qui décide du
+    // routing app (/order/[id] vs /delivery/[id]) et des STATUS_STEPS
+    // affichés côté tracking.
+    const orderMode = mode === 'delivery' ? 'delivery' : 'pickup';
     const { data: dbOrder, error: dbError } = await supabase
       .from('orders')
       .insert({
         user_id: authUser?.id ?? null,
         square_order_id: squareOrder.id,
         status: 'payment_pending',
+        mode: orderMode,
+        subtotal: typeof subtotal === 'number' ? subtotal : (squareOrder.total_money?.amount ?? 0),
         total_amount: squareOrder.total_money?.amount ?? 0,
         items: items,
         pickup_time: scheduledPickup,
