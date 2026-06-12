@@ -61,9 +61,11 @@ serve(async (req) => {
 
     const token = await getUberToken();
 
-    // Adresse boutique Teaven (pickup par défaut)
+    // Adresse boutique Teaven (pickup par défaut) — adresse réelle de la
+    // Square Location « Bar Teaven » (l'ancienne valeur « 12 Place de la
+    // Gare » était fictive)
     const defaultPickup = pickup_address ?? {
-      street_address: ['12 Place de la Gare', ''],
+      street_address: ['19 Place De La République', ''],
       city: 'Franconville',
       state: 'Île-de-France',
       zip_code: '95130',
@@ -83,7 +85,7 @@ serve(async (req) => {
         zip_code: defaultPickup.zip_code,
         country: defaultPickup.country ?? 'FR',
       }),
-      pickup_phone_number: Deno.env.get('TEAVEN_SHOP_PHONE') ?? '+33000000000',
+      pickup_phone_number: Deno.env.get('TEAVEN_SHOP_PHONE') ?? '+33987536166',
       dropoff_name: dropoff_address.name ?? 'Client',
       dropoff_address: JSON.stringify({
         street_address: dropoff_address.street_address,
