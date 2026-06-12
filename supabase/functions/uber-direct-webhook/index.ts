@@ -1,5 +1,7 @@
 // Edge Function — Webhook Uber Direct → met à jour le statut de livraison
-// Valide la signature HMAC-SHA256
+// Valide la signature HMAC-SHA256 (UBER_DIRECT_SIGNING_KEY)
+// IMPORTANT : déployée avec verify_jwt=false — Uber n'envoie pas de JWT Supabase,
+// l'authentification se fait par la signature HMAC.
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -46,66 +48,92 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    if (kind === 'eats.delivery_status' && data?.delivery_id) {
+    // event.delivery_status (Direct) ou eats.delivery_status (legacy)
+    const isStatusEvent = kind === 'event.delivery_status' || kind === 'eats.delivery_status';
+    const isCourierEvent = kind === 'event.courier_update';
+    const deliveryId = data?.delivery_id ?? data?.id;
+
+    if ((isStatusEvent || isCourierEvent) && deliveryId) {
       const uberStatus = data.status;
       const teavenStatus = STATUS_MAP[uberStatus] ?? uberStatus;
 
+      // Colonnes réelles du schéma deliveries :
+      //   provider_delivery_id, status, courier_name, courier_phone,
+      //   courier_vehicle, courier_lat, courier_lng,
+      //   estimated_pickup, estimated_dropoff, actual_pickup_at,
+      //   actual_dropoff_at, tracking_url, proof_of_delivery
       const updateData: Record<string, unknown> = {
-        status: teavenStatus,
         updated_at: new Date().toISOString(),
       };
+      if (isStatusEvent && uberStatus) updateData.status = teavenStatus;
 
       if (data.courier) {
-        updateData.courier_name = data.courier.name;
-        updateData.courier_phone = data.courier.phone_number;
-        updateData.courier_vehicle = data.courier.vehicle?.make ?? data.courier.vehicle_type;
+        updateData.courier_name = data.courier.name ?? null;
+        updateData.courier_phone = data.courier.phone_number ?? null;
+        updateData.courier_vehicle = data.courier.vehicle?.make ?? data.courier.vehicle_type ?? null;
+        // Position temps réel du livreur (event.courier_update + delivery_status)
+        const loc = data.courier.location ?? data.location;
+        if (loc?.lat != null && loc?.lng != null) {
+          updateData.courier_lat = loc.lat;
+          updateData.courier_lng = loc.lng;
+        }
+      } else if (data.location?.lat != null && data.location?.lng != null) {
+        updateData.courier_lat = data.location.lat;
+        updateData.courier_lng = data.location.lng;
       }
-      if (data.dropoff?.eta) updateData.estimated_dropoff_at = data.dropoff.eta;
+
+      if (data.dropoff_eta ?? data.dropoff?.eta) updateData.estimated_dropoff = data.dropoff_eta ?? data.dropoff.eta;
+      if (data.pickup_eta ?? data.pickup?.eta) updateData.estimated_pickup = data.pickup_eta ?? data.pickup.eta;
+      if (data.tracking_url) updateData.tracking_url = data.tracking_url;
       if (uberStatus === 'pickup_complete') updateData.actual_pickup_at = new Date().toISOString();
       if (uberStatus === 'delivered') updateData.actual_dropoff_at = new Date().toISOString();
 
-      await supabase.from('deliveries')
+      const { error: updErr } = await supabase.from('deliveries')
         .update(updateData)
-        .eq('uber_delivery_id', data.delivery_id);
+        .eq('provider_delivery_id', deliveryId);
+      if (updErr) {
+        console.error('[uber-direct-webhook] DB update error:', updErr);
+      }
 
-      // Envoyer une notification in-app à l'utilisateur
-      const NOTIF_MESSAGES: Record<string, { title: string; body: string }> = {
-        'courier_assigned': { title: 'Coursier en chemin', body: 'Un livreur se dirige vers Teaven pour récupérer votre commande.' },
-        'picked_up': { title: 'Commande récupérée', body: 'Le livreur a récupéré votre commande et arrive bientôt !' },
-        'en_route': { title: 'Livreur en route', body: 'Votre commande est en chemin. Préparez-vous !' },
-        'delivered': { title: 'Commande livrée !', body: 'Votre commande a été livrée. Bon appétit !' },
-        'cancelled': { title: 'Livraison annulée', body: 'Votre livraison a été annulée. Contactez-nous si besoin.' },
-      };
+      // Notification in-app uniquement sur changement de statut
+      if (isStatusEvent) {
+        const NOTIF_MESSAGES: Record<string, { title: string; body: string }> = {
+          'courier_assigned': { title: 'Coursier en chemin', body: 'Un livreur se dirige vers Teaven pour récupérer votre commande.' },
+          'picked_up': { title: 'Commande récupérée', body: 'Le livreur a récupéré votre commande et arrive bientôt !' },
+          'en_route': { title: 'Livreur en route', body: 'Votre commande est en chemin. Préparez-vous !' },
+          'delivered': { title: 'Commande livrée !', body: 'Votre commande a été livrée. Bon appétit !' },
+          'cancelled': { title: 'Livraison annulée', body: 'Votre livraison a été annulée. Contactez-nous si besoin.' },
+        };
 
-      const notif = NOTIF_MESSAGES[teavenStatus];
-      if (notif) {
-        // Trouver le user_id via la commande liée
-        const { data: delivery } = await supabase
-          .from('deliveries')
-          .select('order_id')
-          .eq('uber_delivery_id', data.delivery_id)
-          .single();
-
-        if (delivery?.order_id) {
-          const { data: order } = await supabase
-            .from('orders')
-            .select('user_id')
-            .eq('id', delivery.order_id)
+        const notif = NOTIF_MESSAGES[teavenStatus];
+        if (notif) {
+          const { data: delivery } = await supabase
+            .from('deliveries')
+            .select('order_id')
+            .eq('provider_delivery_id', deliveryId)
             .single();
 
-          if (order?.user_id) {
-            await supabase.from('notifications').insert({
-              user_id: order.user_id,
-              type: 'order',
-              title: notif.title,
-              body: notif.body,
-              data: { delivery_id: data.delivery_id, status: teavenStatus },
-            });
+          if (delivery?.order_id) {
+            const { data: order } = await supabase
+              .from('orders')
+              .select('user_id')
+              .eq('id', delivery.order_id)
+              .single();
+
+            if (order?.user_id) {
+              await supabase.from('notifications').insert({
+                user_id: order.user_id,
+                type: 'order',
+                title: notif.title,
+                body: notif.body,
+                data: { delivery_id: deliveryId, status: teavenStatus },
+              });
+            }
           }
         }
       }
 
-      console.log(`Livraison ${data.delivery_id} mise à jour : ${teavenStatus}`);
+      console.log(`Livraison ${deliveryId} mise à jour : ${teavenStatus ?? 'courier_update'}`);
     }
 
     return new Response('ok', { status: 200 });

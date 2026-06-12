@@ -64,6 +64,14 @@ serve(async (req) => {
     const addressFormatted = [addr.address_line_1, `${addr.postal_code ?? ''} ${addr.locality ?? ''}`]
       .filter(Boolean).join(', ');
 
+    // Données live Square Location : téléphone + coordonnées GPS de la boutique
+    // (utilisées par la carte de suivi livraison et le bouton support — fini
+    // les valeurs codées en dur côté app)
+    const phone = location.phone_number ?? null;
+    const coordinates = location.coordinates
+      ? { latitude: location.coordinates.latitude, longitude: location.coordinates.longitude }
+      : null;
+
     if (todayPeriods.length === 0) {
       // Fermé aujourd'hui
       return new Response(JSON.stringify({
@@ -74,6 +82,8 @@ serve(async (req) => {
         location_name: location.name,
         address,
         addressFormatted,
+        phone,
+        coordinates,
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -121,6 +131,8 @@ serve(async (req) => {
       location_name: location.name,
       address,
       addressFormatted,
+      phone,
+      coordinates,
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
