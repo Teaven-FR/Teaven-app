@@ -1,6 +1,7 @@
 // Edge Function — Créer une livraison Uber Direct
-// POST avec : order_id, pickup_address, dropoff_address, items_description
+// POST avec : order_id, pickup_address, dropoff_address, items_description, items
 // Variables requises : UBER_DIRECT_CLIENT_ID, UBER_DIRECT_CLIENT_SECRET, UBER_DIRECT_CUSTOMER_ID
+// Optionnelle : TEAVEN_SHOP_PHONE (téléphone E.164 de la boutique pour le pickup)
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -39,7 +40,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { order_id, pickup_address, dropoff_address, items_description } = await req.json();
+    const { order_id, pickup_address, dropoff_address, items_description, items } = await req.json();
     if (!order_id || !dropoff_address) {
       return new Response(JSON.stringify({ error: 'order_id et dropoff_address requis' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -69,18 +70,36 @@ serve(async (req) => {
       country: 'FR',
     };
 
-    const uberPayload = {
-      pickup: {
-        name: 'Teaven Franconville',
-        address: defaultPickup,
-        phone_number: '+33000000000',
-      },
-      dropoff: {
-        name: dropoff_address.name ?? 'Client',
-        address: dropoff_address,
-        phone_number: dropoff_address.phone ?? '',
-      },
-      manifest: { description: items_description ?? 'Commande Teaven' },
+    // Format Uber Direct API : champs PLATS, adresses JSON-stringifiées.
+    // L'ancien format imbriqué {pickup:{...},dropoff:{...}} était rejeté en 400
+    // par Uber → delivery.id absent → livraison fantôme.
+    const dropoffPhone = (dropoff_address.phone ?? '').trim();
+    const uberPayload: Record<string, unknown> = {
+      pickup_name: 'Teaven Franconville',
+      pickup_address: JSON.stringify({
+        street_address: defaultPickup.street_address,
+        city: defaultPickup.city,
+        state: defaultPickup.state ?? '',
+        zip_code: defaultPickup.zip_code,
+        country: defaultPickup.country ?? 'FR',
+      }),
+      pickup_phone_number: Deno.env.get('TEAVEN_SHOP_PHONE') ?? '+33000000000',
+      dropoff_name: dropoff_address.name ?? 'Client',
+      dropoff_address: JSON.stringify({
+        street_address: dropoff_address.street_address,
+        city: dropoff_address.city,
+        state: dropoff_address.state ?? '',
+        zip_code: dropoff_address.zip_code,
+        country: dropoff_address.country ?? 'FR',
+      }),
+      ...(dropoffPhone ? { dropoff_phone_number: dropoffPhone } : {}),
+      manifest_items: Array.isArray(items) && items.length > 0
+        ? items.map((i: { name?: string; quantity?: number }) => ({
+            name: i.name ?? 'Article Teaven',
+            quantity: i.quantity ?? 1,
+            size: 'small',
+          }))
+        : [{ name: items_description ?? 'Commande Teaven', quantity: 1, size: 'small' }],
       external_id: order_id,
     };
 
@@ -93,8 +112,6 @@ serve(async (req) => {
     const delivery = await res.json();
 
     // ── Échec API Uber : ne PAS masquer, renvoyer l'erreur au client et logger
-    //    Sans ce check, on insérait un placeholder en DB avec provider_delivery_id=NULL
-    //    et on retournait success:true — la commande devenait fantôme côté Uber.
     if (!res.ok || !delivery.id) {
       console.error('[uber-direct-create-delivery] Uber API error', {
         status: res.status,
@@ -128,8 +145,8 @@ serve(async (req) => {
       provider_delivery_id: delivery.id,
       status: delivery.status ?? 'pending',
       tracking_url: delivery.tracking_url ?? null,
-      estimated_dropoff: delivery.dropoff?.eta ?? null,
-      estimated_pickup: delivery.pickup?.eta ?? null,
+      estimated_dropoff: delivery.dropoff_eta ?? delivery.dropoff?.eta ?? null,
+      estimated_pickup: delivery.pickup_eta ?? delivery.pickup?.eta ?? null,
     });
     if (dbErr) {
       console.error('[uber-direct-create-delivery] DB insert error (non-fatal):', dbErr);
@@ -139,7 +156,7 @@ serve(async (req) => {
       success: true,
       delivery_id: delivery.id,
       tracking_url: delivery.tracking_url,
-      estimated_delivery_time: delivery.dropoff?.eta,
+      estimated_delivery_time: delivery.dropoff_eta ?? delivery.dropoff?.eta,
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {

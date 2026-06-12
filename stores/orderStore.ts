@@ -138,6 +138,19 @@ export const useOrderStore = create<OrderState>()(
             rewardTierId: rewardTierId ?? undefined,
             loyaltyAccountId: loyaltyAccountId ?? undefined,
             discounts: discounts ?? undefined,
+            // mode + deliveryAddress : sans eux, create-order crée un fulfillment
+            // PICKUP sans adresse → la commande delivery était invisible/incomplète
+            // côté Square et le tracking app routait mal.
+            mode: deliveryMode ?? 'pickup',
+            subtotal,
+            deliveryAddress: deliveryMode === 'delivery' && deliveryAddress
+              ? {
+                  street: deliveryAddress.street,
+                  city: deliveryAddress.city,
+                  postalCode: deliveryAddress.postalCode,
+                  complement: deliveryAddress.complement ?? undefined,
+                }
+              : undefined,
           });
 
           console.warn('[ORDER] create-order result:', JSON.stringify(createResult).slice(0, 500));
@@ -210,6 +223,7 @@ export const useOrderStore = create<OrderState>()(
                   name: authUser?.fullName ?? 'Client',
                   phone: authUser?.phone ?? '',
                 },
+                items: orderItems.map((i) => ({ name: i.name, quantity: i.quantity })),
                 items_description: itemsDesc,
               });
 
