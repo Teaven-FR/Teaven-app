@@ -332,6 +332,52 @@ serve(async (req) => {
       })
       .eq('square_order_id', orderId);
 
+    // ── Avancer le fulfillment Square RESERVED → PREPARED ──
+    // Sans ça, la commande reste en "à accepter" côté Square POS / KDS et
+    // n'apparaît pas dans l'écran de préparation. PREPARED = "en cours de
+    // préparation" → push directement dans le KDS.
+    try {
+      const orderInfoRes = await fetch(`${squareBaseUrl}/v2/orders/${orderId}`, {
+        headers: {
+          'Square-Version': '2025-01-23',
+          'Authorization': `Bearer ${squareAccessToken}`,
+        },
+      });
+      if (orderInfoRes.ok) {
+        const orderInfo = await orderInfoRes.json();
+        const fulfillment = orderInfo.order?.fulfillments?.[0];
+        const version = orderInfo.order?.version;
+        if (fulfillment?.uid && typeof version === 'number') {
+          const updateRes = await fetch(`${squareBaseUrl}/v2/orders/${orderId}`, {
+            method: 'PUT',
+            headers: {
+              'Square-Version': '2025-01-23',
+              'Authorization': `Bearer ${squareAccessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              order: {
+                version,
+                location_id: Deno.env.get('SQUARE_LOCATION_ID'),
+                fulfillments: [{ uid: fulfillment.uid, state: 'PREPARED' }],
+              },
+              idempotency_key: crypto.randomUUID(),
+            }),
+          });
+          if (!updateRes.ok) {
+            const errBody = await updateRes.json().catch(() => ({}));
+            console.error('[process-payment] Fulfillment PREPARED transition failed:', updateRes.status, JSON.stringify(errBody));
+          } else {
+            console.log(`[process-payment] Fulfillment ${fulfillment.uid} → PREPARED (order ${orderId})`);
+          }
+        }
+      } else {
+        console.error('[process-payment] Could not retrieve order to advance fulfillment:', orderInfoRes.status);
+      }
+    } catch (e) {
+      console.error('[process-payment] PREPARED transition exception:', e);
+    }
+
     // --- Loyalty: attribuer des points après paiement réussi ---
     // Base = 10 pts/€ avec multiplicateur par niveau
     const LEVEL_MULTIPLIERS: Record<string, number> = {
