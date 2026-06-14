@@ -235,28 +235,24 @@ serve(async (req) => {
             // qu'il rentre dans la file de préparation.
             mode === 'delivery'
               ? {
-                  type: 'DELIVERY',
+                  // Livraison via Uber Direct = un coursier vient retirer au
+                  // comptoir. Du point de vue Square c'est donc un PICKUP
+                  // (pas DELIVERY, qui suppose que le commerçant livre lui-même
+                  // et que Square exclut du flux KDS). L'adresse client est
+                  // mise dans la note pour info de l'équipe prep.
+                  type: 'PICKUP',
                   state: 'RESERVED',
-                  delivery_details: {
+                  pickup_details: {
                     schedule_type: 'SCHEDULED',
-                    deliver_at: scheduledPickup,
+                    pickup_at: scheduledPickup,
                     recipient: {
-                      display_name: profileName,
+                      display_name: `🚚 Coursier Uber — ${profileName}`,
                       ...(formattedPhone ? { phone_number: formattedPhone } : {}),
                       ...(profileEmail ? { email_address: profileEmail } : {}),
-                      ...(deliveryAddress ? {
-                        address: {
-                          address_line_1: deliveryAddress.street,
-                          ...(deliveryAddress.complement ? { address_line_2: deliveryAddress.complement } : {}),
-                          locality: deliveryAddress.city,
-                          postal_code: deliveryAddress.postalCode,
-                          country: 'FR',
-                        },
-                      } : {}),
                     },
                     note: deliveryAddress
-                      ? `📍 LIVRAISON — ${profileName}\n${deliveryAddress.street}${deliveryAddress.complement ? ` (${deliveryAddress.complement})` : ''}\n${deliveryAddress.postalCode} ${deliveryAddress.city}${formattedPhone ? `\n☎ ${formattedPhone}` : ''}`
-                      : `Livraison à domicile — ${profileName}`,
+                      ? `🚚 LIVRAISON UBER — À REMETTRE AU COURSIER\nClient : ${profileName}\n${deliveryAddress.street}${deliveryAddress.complement ? ` (${deliveryAddress.complement})` : ''}\n${deliveryAddress.postalCode} ${deliveryAddress.city}${formattedPhone ? `\n☎ ${formattedPhone}` : ''}`
+                      : `🚚 LIVRAISON UBER — ${profileName}`,
                   },
                 }
               : {
