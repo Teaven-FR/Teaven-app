@@ -232,10 +232,14 @@ export const useOrderStore = create<OrderState>()(
                 order.trackingUrl = uberResult.data.tracking_url;
                 console.log(`[ORDER] Uber Direct delivery created: ${uberResult.data.delivery_id}${uberResult.data.stub ? ' (stub)' : ''}`);
               } else {
-                console.warn('[ORDER] Uber Direct creation failed:', uberResult.data?.error ?? uberResult.error);
+                const uberErrMsg = uberResult.data?.error ?? uberResult.error ?? 'inconnu';
+                console.error('[ORDER][URGENT] Uber Direct creation failed:', uberErrMsg, JSON.stringify(uberResult.data ?? {}));
+                order.deliveryError = String(uberErrMsg);
               }
             } catch (uberErr) {
-              console.warn('[ORDER] Uber Direct error (non-fatal):', uberErr);
+              const msg = uberErr instanceof Error ? uberErr.message : String(uberErr);
+              console.error('[ORDER][URGENT] Uber Direct exception:', msg);
+              order.deliveryError = msg;
             }
           }
 

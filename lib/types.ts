@@ -131,6 +131,7 @@ export interface Order {
   deliveryFee?: number;
   deliveryId?: string;
   trackingUrl?: string;
+  deliveryError?: string;
   paymentMethod: 'card' | 'wallet' | 'mixed';
   squarePaymentId?: string;
   createdAt: string;

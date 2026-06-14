@@ -224,6 +224,7 @@ serve(async (req) => {
         order: {
           location_id: locationId,
           reference_id: `TEAVEN-${Date.now()}`,
+          source: { name: 'Teaven app' },
           line_items: lineItems,
           ...(squareDiscounts.length > 0 ? { discounts: squareDiscounts } : {}),
           fulfillments: [
@@ -253,7 +254,9 @@ serve(async (req) => {
                         },
                       } : {}),
                     },
-                    note: `Livraison à domicile — ${profileName}`,
+                    note: deliveryAddress
+                      ? `📍 LIVRAISON — ${profileName}\n${deliveryAddress.street}${deliveryAddress.complement ? ` (${deliveryAddress.complement})` : ''}\n${deliveryAddress.postalCode} ${deliveryAddress.city}${formattedPhone ? `\n☎ ${formattedPhone}` : ''}`
+                      : `Livraison à domicile — ${profileName}`,
                   },
                 }
               : {
