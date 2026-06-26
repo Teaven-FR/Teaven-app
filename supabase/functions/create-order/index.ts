@@ -308,6 +308,21 @@ serve(async (req) => {
         pickup_time: scheduledPickup,
         customer_name: profileName,
         customer_phone: formattedPhone ?? null,
+        // Adresse de livraison persistée (lat/lng inclus si l'app les fournit)
+        // → permet la création serveur de la livraison Uber (square-webhook)
+        //   et alimente la carte de suivi, indépendamment du build de l'app.
+        delivery_address: orderMode === 'delivery' && deliveryAddress
+          ? {
+              street: deliveryAddress.street,
+              city: deliveryAddress.city,
+              postalCode: deliveryAddress.postalCode,
+              complement: deliveryAddress.complement ?? null,
+              lat: (deliveryAddress as { lat?: number }).lat ?? null,
+              lng: (deliveryAddress as { lng?: number }).lng ?? null,
+              name: profileName,
+              phone: formattedPhone ?? null,
+            }
+          : null,
         created_at: new Date().toISOString(),
       })
       .select()
