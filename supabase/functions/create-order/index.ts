@@ -228,20 +228,17 @@ serve(async (req) => {
           line_items: lineItems,
           ...(squareDiscounts.length > 0 ? { discounts: squareDiscounts } : {}),
           fulfillments: [
-            // IMPORTANT : state='RESERVED' (et non 'PROPOSED') pour que la commande
-            // apparaisse immédiatement dans le Dashboard Square "Commandes" / KDS /
-            // Square for Restaurants. Un fulfillment 'PROPOSED' reste un brouillon
-            // invisible côté merchant — il faut le promouvoir à 'RESERVED' pour
-            // qu'il rentre dans la file de préparation.
+            // Square IMPOSE state='PROPOSED' (ou 'HELD') à la CRÉATION d'une
+            // commande via l'API — créer directement en 'RESERVED' est rejeté
+            // ("Fulfillments must be created with state of PROPOSED or HELD").
+            // C'est le type de fulfillment qui décide de la visibilité KDS :
+            // une livraison Uber = coursier qui retire au comptoir => PICKUP
+            // (comme une commande emporter), et non DELIVERY (que Square exclut
+            // du flux de préparation). L'adresse client est mise dans la note.
             mode === 'delivery'
               ? {
-                  // Livraison via Uber Direct = un coursier vient retirer au
-                  // comptoir. Du point de vue Square c'est donc un PICKUP
-                  // (pas DELIVERY, qui suppose que le commerçant livre lui-même
-                  // et que Square exclut du flux KDS). L'adresse client est
-                  // mise dans la note pour info de l'équipe prep.
                   type: 'PICKUP',
-                  state: 'RESERVED',
+                  state: 'PROPOSED',
                   pickup_details: {
                     schedule_type: 'SCHEDULED',
                     pickup_at: scheduledPickup,
@@ -257,7 +254,7 @@ serve(async (req) => {
                 }
               : {
                   type: 'PICKUP',
-                  state: 'RESERVED',
+                  state: 'PROPOSED',
                   pickup_details: {
                     schedule_type: 'SCHEDULED',
                     pickup_at: scheduledPickup,
