@@ -43,6 +43,10 @@ interface DeliveryStatus {
   actual_pickup_at: string | null;
   actual_dropoff_at: string | null;
   uber_delivery_id: string | null;
+  // Coordonnées destination fournies par le serveur (géocodage de l'adresse).
+  // Permet d'afficher le pin client même si l'app n'a pas géocodé localement.
+  dropoff_lat?: number | null;
+  dropoff_lng?: number | null;
   stub?: boolean;
 }
 
@@ -148,12 +152,15 @@ export default function DeliveryTrackingScreen() {
   const isCancelled = deliveryStatus?.status === 'cancelled' || deliveryStatus?.status === 'returned';
   const currentStepData = STATUS_STEPS[currentStep] ?? STATUS_STEPS[0];
 
-  // Destination = adresse exacte du client (lat/lng géocodés à la sélection
-  // dans le panier). Pas de fallback inventé : si les coordonnées manquent,
-  // on n'affiche ni marqueur destination ni tracé.
+  // Destination = adresse exacte du client. Priorité aux coords locales
+  // (géocodées dans le panier) ; sinon on prend celles fournies par le
+  // serveur via get-status (géocodage de l'adresse persistée). Ainsi le pin
+  // client s'affiche même quand l'app n'a pas géocodé localement.
   const dropoffCoords = order?.deliveryAddress?.lat && order?.deliveryAddress?.lng
     ? { latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng }
-    : null;
+    : (deliveryStatus?.dropoff_lat != null && deliveryStatus?.dropoff_lng != null
+        ? { latitude: deliveryStatus.dropoff_lat, longitude: deliveryStatus.dropoff_lng }
+        : null);
 
   // Position RÉELLE du livreur (webhook Uber → deliveries.courier_lat/lng).
   // Marqueur affiché uniquement quand Uber nous donne une position.
@@ -302,6 +309,19 @@ export default function DeliveryTrackingScreen() {
 
       {/* Bottom card with status details (status déjà dans le hero) */}
       <Animated.View style={[styles.bottomSheet, { opacity: heroOpacity }]}>
+        {/* Suivi en direct Uber — carte temps réel hébergée (route + ETA +
+            position coursier). Disponible dès qu'une livraison est créée. */}
+        {deliveryStatus?.tracking_url && !isDelivered && !isCancelled && (
+          <Pressable
+            onPress={() => Linking.openURL(deliveryStatus.tracking_url!)}
+            style={styles.liveTrackBtn}
+          >
+            <Navigation size={16} color="#FFFFFF" strokeWidth={2} />
+            <Text style={styles.liveTrackText}>Suivre en direct</Text>
+            <ExternalLink size={14} color="#FFFFFF" strokeWidth={2} />
+          </Pressable>
+        )}
+
         {/* Courier info */}
         {deliveryStatus?.courier && (
           <View style={styles.courierCard}>
@@ -603,6 +623,14 @@ const styles = StyleSheet.create({
   progressLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   progressStepLabel: { fontFamily: fonts.regular, fontSize: 9, color: colors.textMuted },
   progressStepLabelActive: { fontFamily: fonts.bold, color: colors.green },
+
+  // Suivi en direct Uber
+  liveTrackBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: colors.green, borderRadius: 16, paddingVertical: 14,
+    marginBottom: spacing.md, ...shadows.card,
+  },
+  liveTrackText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF', letterSpacing: -0.2 },
 
   // Courier
   courierCard: {

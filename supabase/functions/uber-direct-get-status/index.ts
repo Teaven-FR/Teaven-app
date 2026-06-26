@@ -63,6 +63,24 @@ serve(async (req) => {
     const { data: delivery } = await query.maybeSingle();
 
     if (delivery) {
+      // Coordonnées destination (adresse client géocodée) depuis orders.
+      // Permet à la carte de suivi d'afficher le bon pin client.
+      let dropoffLat: number | null = null;
+      let dropoffLng: number | null = null;
+      const lookupOrderId = orderId ?? delivery.order_id;
+      if (lookupOrderId) {
+        const { data: orderRow } = await supabase
+          .from('orders')
+          .select('delivery_address')
+          .eq('id', lookupOrderId)
+          .maybeSingle();
+        const da = orderRow?.delivery_address as { lat?: number | null; lng?: number | null } | null;
+        if (da?.lat != null && da?.lng != null) {
+          dropoffLat = da.lat;
+          dropoffLng = da.lng;
+        }
+      }
+
       return new Response(JSON.stringify({
         success: true,
         status: delivery.status,
@@ -79,6 +97,8 @@ serve(async (req) => {
         actual_pickup_at: delivery.actual_pickup_at,
         actual_dropoff_at: delivery.actual_dropoff_at,
         uber_delivery_id: delivery.provider_delivery_id,
+        dropoff_lat: dropoffLat,
+        dropoff_lng: dropoffLng,
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 

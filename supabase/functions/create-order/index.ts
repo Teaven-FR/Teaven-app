@@ -295,6 +295,37 @@ serve(async (req) => {
     // routing app (/order/[id] vs /delivery/[id]) et des STATUS_STEPS
     // affichés côté tracking.
     const orderMode = mode === 'delivery' ? 'delivery' : 'pickup';
+
+    // Coordonnées GPS de l'adresse de livraison. Priorité aux lat/lng envoyés
+    // par l'app ; sinon géocodage serveur (Google Places Text Search) pour que
+    // la carte de suivi affiche le bon pin, indépendamment du build de l'app.
+    let dropoffLat = (deliveryAddress as { lat?: number } | undefined)?.lat ?? null;
+    let dropoffLng = (deliveryAddress as { lng?: number } | undefined)?.lng ?? null;
+    if (orderMode === 'delivery' && deliveryAddress && (dropoffLat == null || dropoffLng == null)) {
+      const placesKey = Deno.env.get('GOOGLE_PLACES_API_KEY');
+      if (placesKey) {
+        try {
+          const q = `${deliveryAddress.street}, ${deliveryAddress.postalCode} ${deliveryAddress.city}`;
+          const gRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': placesKey, 'X-Goog-FieldMask': 'places.location' },
+            body: JSON.stringify({ textQuery: q, regionCode: 'FR', languageCode: 'fr' }),
+          });
+          const gData = await gRes.json();
+          const loc = gData.places?.[0]?.location;
+          if (loc?.latitude != null && loc?.longitude != null) {
+            dropoffLat = loc.latitude;
+            dropoffLng = loc.longitude;
+            console.log(`[create-order] Geocoded dropoff: ${dropoffLat},${dropoffLng}`);
+          } else {
+            console.warn('[create-order] Geocode returned no location for:', q);
+          }
+        } catch (geoErr) {
+          console.error('[create-order] Geocode error (non-fatal):', geoErr);
+        }
+      }
+    }
+
     const { data: dbOrder, error: dbError } = await supabase
       .from('orders')
       .insert({
@@ -308,17 +339,17 @@ serve(async (req) => {
         pickup_time: scheduledPickup,
         customer_name: profileName,
         customer_phone: formattedPhone ?? null,
-        // Adresse de livraison persistée (lat/lng inclus si l'app les fournit)
-        // → permet la création serveur de la livraison Uber (square-webhook)
-        //   et alimente la carte de suivi, indépendamment du build de l'app.
+        // Adresse de livraison persistée (coords géocodées côté serveur)
+        // → création serveur de la livraison Uber (square-webhook) + carte de
+        //   suivi, indépendamment du build de l'app.
         delivery_address: orderMode === 'delivery' && deliveryAddress
           ? {
               street: deliveryAddress.street,
               city: deliveryAddress.city,
               postalCode: deliveryAddress.postalCode,
               complement: deliveryAddress.complement ?? null,
-              lat: (deliveryAddress as { lat?: number }).lat ?? null,
-              lng: (deliveryAddress as { lng?: number }).lng ?? null,
+              lat: dropoffLat,
+              lng: dropoffLng,
               name: profileName,
               phone: formattedPhone ?? null,
             }
