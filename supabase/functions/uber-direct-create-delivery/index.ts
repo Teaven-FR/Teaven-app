@@ -1,5 +1,6 @@
 // Edge Function — Créer une livraison Uber Direct
 // POST avec : order_id, pickup_address, dropoff_address, items_description, items
+// Optionnel : scheduled_pickup_time (ISO). Sinon lu depuis orders.pickup_time.
 // Variables requises : UBER_DIRECT_CLIENT_ID, UBER_DIRECT_CLIENT_SECRET, UBER_DIRECT_CUSTOMER_ID
 // Optionnelle : TEAVEN_SHOP_PHONE (téléphone E.164 de la boutique pour le pickup)
 
@@ -40,11 +41,52 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { order_id, pickup_address, dropoff_address, items_description, items } = await req.json();
+    const { order_id, pickup_address, dropoff_address, items_description, items, scheduled_pickup_time } = await req.json();
     if (!order_id || !dropoff_address) {
       return new Response(JSON.stringify({ error: 'order_id et dropoff_address requis' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+
+    // ── Déterminer si la commande est programmée (créneau futur) ──
+    // Source : scheduled_pickup_time (body) sinon orders.pickup_time en base.
+    // Lire en base permet à la planification de fonctionner sans modifier
+    // l'app : create-order stocke déjà le créneau choisi dans orders.pickup_time.
+    let scheduledTimeStr: string | null = scheduled_pickup_time ?? null;
+    if (!scheduledTimeStr) {
+      try {
+        const { data: orderRow } = await supabase
+          .from('orders')
+          .select('pickup_time')
+          .eq('id', order_id)
+          .single();
+        scheduledTimeStr = (orderRow?.pickup_time as string | undefined) ?? null;
+      } catch { /* ignore — fallback ASAP */ }
+    }
+
+    // Uber accepte une livraison programmée via pickup_ready_dt / deadlines.
+    // On ne programme que si le créneau est > maintenant + 30 min, sinon ASAP.
+    // Contraintes Uber : pickup_deadline > pickup_ready ; dropoff_ready dans
+    // [pickup_ready, pickup_deadline] ; dropoff_deadline >= dropoff_ready + 20min.
+    let scheduling: Record<string, unknown> = {};
+    let isScheduled = false;
+    if (scheduledTimeStr) {
+      const t = new Date(scheduledTimeStr).getTime();
+      if (!Number.isNaN(t) && t > Date.now() + 30 * 60 * 1000) {
+        isScheduled = true;
+        scheduling = {
+          pickup_ready_dt: new Date(t).toISOString(),
+          pickup_deadline_dt: new Date(t + 15 * 60 * 1000).toISOString(),
+          dropoff_ready_dt: new Date(t).toISOString(),
+          dropoff_deadline_dt: new Date(t + 45 * 60 * 1000).toISOString(),
+        };
+        console.log(`[uber-direct-create-delivery] Scheduled delivery for ${new Date(t).toISOString()} (order ${order_id})`);
+      }
     }
 
     const customerId = Deno.env.get('UBER_DIRECT_CUSTOMER_ID');
@@ -55,15 +97,15 @@ serve(async (req) => {
         stub: true,
         delivery_id: `STUB_${Date.now()}`,
         tracking_url: 'https://uber.com/deliveries/stub',
-        estimated_delivery_time: new Date(Date.now() + 35 * 60 * 1000).toISOString(),
+        estimated_delivery_time: scheduledTimeStr ?? new Date(Date.now() + 35 * 60 * 1000).toISOString(),
+        scheduled: isScheduled,
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const token = await getUberToken();
 
     // Adresse boutique Teaven (pickup par défaut) — adresse réelle de la
-    // Square Location « Bar Teaven » (l'ancienne valeur « 12 Place de la
-    // Gare » était fictive)
+    // Square Location « Bar Teaven »
     const defaultPickup = pickup_address ?? {
       street_address: ['19 Place De La République', ''],
       city: 'Franconville',
@@ -72,9 +114,6 @@ serve(async (req) => {
       country: 'FR',
     };
 
-    // Format Uber Direct API : champs PLATS, adresses JSON-stringifiées.
-    // L'ancien format imbriqué {pickup:{...},dropoff:{...}} était rejeté en 400
-    // par Uber → delivery.id absent → livraison fantôme.
     const dropoffPhone = (dropoff_address.phone ?? '').trim();
     const uberPayload: Record<string, unknown> = {
       pickup_name: 'Teaven Franconville',
@@ -103,6 +142,7 @@ serve(async (req) => {
           }))
         : [{ name: items_description ?? 'Commande Teaven', quantity: 1, size: 'small' }],
       external_id: order_id,
+      ...scheduling,
     };
 
     const res = await fetch(`${UBER_API_BASE}/customers/${customerId}/deliveries`, {
@@ -132,15 +172,7 @@ serve(async (req) => {
       }), { status: res.status >= 500 ? 502 : 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Sauvegarder dans Supabase — schéma DB réel :
-    //   id, order_id, provider, provider_delivery_id, status,
-    //   courier_name, courier_phone, estimated_pickup, estimated_dropoff,
-    //   tracking_url, proof_of_delivery, created_at, updated_at
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
-
+    // Sauvegarder dans Supabase
     const { error: dbErr } = await supabase.from('deliveries').insert({
       order_id,
       provider: 'uber_direct',
@@ -159,6 +191,7 @@ serve(async (req) => {
       delivery_id: delivery.id,
       tracking_url: delivery.tracking_url,
       estimated_delivery_time: delivery.dropoff_eta ?? delivery.dropoff?.eta,
+      scheduled: isScheduled,
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {

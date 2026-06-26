@@ -225,6 +225,9 @@ export const useOrderStore = create<OrderState>()(
                 },
                 items: orderItems.map((i) => ({ name: i.name, quantity: i.quantity })),
                 items_description: itemsDesc,
+                // Créneau choisi par le client : permet une livraison Uber
+                // programmée (sinon la fonction lit orders.pickup_time en base).
+                scheduled_pickup_time: pickupTime ?? undefined,
               });
 
               if (uberResult.data?.success) {
