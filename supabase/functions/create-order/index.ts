@@ -243,13 +243,15 @@ serve(async (req) => {
                     schedule_type: 'SCHEDULED',
                     pickup_at: scheduledPickup,
                     recipient: {
-                      display_name: `🚚 Coursier Uber — ${profileName}`,
+                      display_name: profileName,
                       ...(formattedPhone ? { phone_number: formattedPhone } : {}),
                       ...(profileEmail ? { email_address: profileEmail } : {}),
                     },
+                    // Ticket : simple « Commande en livraison » + adresse (pas
+                    // de mention Uber/coursier, pas d'emoji — illisible à l'impression).
                     note: deliveryAddress
-                      ? `🚚 LIVRAISON UBER — À REMETTRE AU COURSIER\nClient : ${profileName}\n${deliveryAddress.street}${deliveryAddress.complement ? ` (${deliveryAddress.complement})` : ''}\n${deliveryAddress.postalCode} ${deliveryAddress.city}${formattedPhone ? `\n☎ ${formattedPhone}` : ''}`
-                      : `🚚 LIVRAISON UBER — ${profileName}`,
+                      ? `Commande en livraison\n${deliveryAddress.street}${deliveryAddress.complement ? ` (${deliveryAddress.complement})` : ''}\n${deliveryAddress.postalCode} ${deliveryAddress.city}${formattedPhone ? `\nTel : ${formattedPhone}` : ''}`
+                      : `Commande en livraison — ${profileName}`,
                   },
                 }
               : {
