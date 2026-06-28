@@ -22,8 +22,12 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const totalItems = useCartStore((s) => s.totalItems());
 
+  // Bottom inset Android (Samsung) souvent à 0 → on pose un minimum confortable
+  // pour que la zone tactile ne soit pas trop fine.
+  const minBottom = Platform.OS === 'android' ? 14 : 8;
+
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, minBottom) }]}>
       {TAB_CONFIG.map((tab, index) => {
         const isFocused = state.index === index;
         const color = isFocused ? colors.green : colors.textMuted;
@@ -68,8 +72,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(242,241,234,0.92)',
     borderTopWidth: 0.5,
     borderTopColor: colors.border,
-    paddingTop: 10,
-    height: 78,
+    paddingTop: 12,
+    // Android Samsung : la barre était trop fine. On utilise minHeight + paddings
+    // pour garantir une zone tactile confortable même sans inset système.
+    minHeight: Platform.OS === 'android' ? 72 : 78,
     ...Platform.select({
       ios: {
         // Backdrop blur géré nativement sur iOS via BlurView si besoin
@@ -80,7 +86,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 6,
+    paddingVertical: 4,
   },
   iconContainer: {
     position: 'relative',

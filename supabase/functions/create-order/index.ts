@@ -82,7 +82,18 @@ serve(async (req) => {
       );
     }
 
-    const { items, pickupTime, customerName, customerPhone, rewardTierId, loyaltyAccountId, discounts: rawDiscounts } = body;
+    const { items, pickupTime, customerName, customerPhone, rewardTierId, loyaltyAccountId, discounts: rawDiscounts, mode, subtotal, deliveryAddress } = body as {
+      items: OrderLineItem[];
+      pickupTime?: string;
+      customerName?: string;
+      customerPhone?: string;
+      rewardTierId?: string;
+      loyaltyAccountId?: string;
+      discounts?: unknown;
+      mode?: 'pickup' | 'delivery';
+      subtotal?: number;
+      deliveryAddress?: { street: string; city: string; postalCode: string; complement?: string };
+    };
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return new Response(
@@ -213,22 +224,51 @@ serve(async (req) => {
         order: {
           location_id: locationId,
           reference_id: `TEAVEN-${Date.now()}`,
+          source: { name: 'Teaven app' },
           line_items: lineItems,
           ...(squareDiscounts.length > 0 ? { discounts: squareDiscounts } : {}),
-          fulfillments: [{
-            type: 'PICKUP',
-            state: 'PROPOSED',
-            pickup_details: {
-              schedule_type: 'SCHEDULED',
-              pickup_at: scheduledPickup,
-              recipient: {
-                display_name: profileName,
-                ...(formattedPhone ? { phone_number: formattedPhone } : {}),
-                ...(profileEmail ? { email_address: profileEmail } : {}),
-              },
-              note: `Commande via app Teaven — ${profileName}`,
-            },
-          }],
+          fulfillments: [
+            // Square IMPOSE state='PROPOSED' (ou 'HELD') à la CRÉATION d'une
+            // commande via l'API — créer directement en 'RESERVED' est rejeté
+            // ("Fulfillments must be created with state of PROPOSED or HELD").
+            // C'est le type de fulfillment qui décide de la visibilité KDS :
+            // une livraison Uber = coursier qui retire au comptoir => PICKUP
+            // (comme une commande emporter), et non DELIVERY (que Square exclut
+            // du flux de préparation). L'adresse client est mise dans la note.
+            mode === 'delivery'
+              ? {
+                  type: 'PICKUP',
+                  state: 'PROPOSED',
+                  pickup_details: {
+                    schedule_type: 'SCHEDULED',
+                    pickup_at: scheduledPickup,
+                    recipient: {
+                      display_name: profileName,
+                      ...(formattedPhone ? { phone_number: formattedPhone } : {}),
+                      ...(profileEmail ? { email_address: profileEmail } : {}),
+                    },
+                    // Ticket : simple « Commande en livraison » + adresse (pas
+                    // de mention Uber/coursier, pas d'emoji — illisible à l'impression).
+                    note: deliveryAddress
+                      ? `Commande en livraison\n${deliveryAddress.street}${deliveryAddress.complement ? ` (${deliveryAddress.complement})` : ''}\n${deliveryAddress.postalCode} ${deliveryAddress.city}${formattedPhone ? `\nTel : ${formattedPhone}` : ''}`
+                      : `Commande en livraison — ${profileName}`,
+                  },
+                }
+              : {
+                  type: 'PICKUP',
+                  state: 'PROPOSED',
+                  pickup_details: {
+                    schedule_type: 'SCHEDULED',
+                    pickup_at: scheduledPickup,
+                    recipient: {
+                      display_name: profileName,
+                      ...(formattedPhone ? { phone_number: formattedPhone } : {}),
+                      ...(profileEmail ? { email_address: profileEmail } : {}),
+                    },
+                    note: `Commande via app Teaven — ${profileName}`,
+                  },
+                },
+          ],
           // rewards est un champ read-only — le loyalty reward est appliqué automatiquement via POST /v2/loyalty/rewards
         },
         idempotency_key: crypto.randomUUID(),
@@ -252,18 +292,70 @@ serve(async (req) => {
 
     const squareOrder = orderData.order;
 
-    // Sauvegarder dans Supabase
+    // Sauvegarder dans Supabase — mode/subtotal envoyés par le client (par
+    // défaut 'pickup' si absent pour compat). C'est ce mode qui décide du
+    // routing app (/order/[id] vs /delivery/[id]) et des STATUS_STEPS
+    // affichés côté tracking.
+    const orderMode = mode === 'delivery' ? 'delivery' : 'pickup';
+
+    // Coordonnées GPS de l'adresse de livraison. Priorité aux lat/lng envoyés
+    // par l'app ; sinon géocodage serveur (Google Places Text Search) pour que
+    // la carte de suivi affiche le bon pin, indépendamment du build de l'app.
+    let dropoffLat = (deliveryAddress as { lat?: number } | undefined)?.lat ?? null;
+    let dropoffLng = (deliveryAddress as { lng?: number } | undefined)?.lng ?? null;
+    if (orderMode === 'delivery' && deliveryAddress && (dropoffLat == null || dropoffLng == null)) {
+      const placesKey = Deno.env.get('GOOGLE_PLACES_API_KEY');
+      if (placesKey) {
+        try {
+          const q = `${deliveryAddress.street}, ${deliveryAddress.postalCode} ${deliveryAddress.city}`;
+          const gRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': placesKey, 'X-Goog-FieldMask': 'places.location' },
+            body: JSON.stringify({ textQuery: q, regionCode: 'FR', languageCode: 'fr' }),
+          });
+          const gData = await gRes.json();
+          const loc = gData.places?.[0]?.location;
+          if (loc?.latitude != null && loc?.longitude != null) {
+            dropoffLat = loc.latitude;
+            dropoffLng = loc.longitude;
+            console.log(`[create-order] Geocoded dropoff: ${dropoffLat},${dropoffLng}`);
+          } else {
+            console.warn('[create-order] Geocode returned no location for:', q);
+          }
+        } catch (geoErr) {
+          console.error('[create-order] Geocode error (non-fatal):', geoErr);
+        }
+      }
+    }
+
     const { data: dbOrder, error: dbError } = await supabase
       .from('orders')
       .insert({
         user_id: authUser?.id ?? null,
         square_order_id: squareOrder.id,
         status: 'payment_pending',
+        mode: orderMode,
+        subtotal: typeof subtotal === 'number' ? subtotal : (squareOrder.total_money?.amount ?? 0),
         total_amount: squareOrder.total_money?.amount ?? 0,
         items: items,
         pickup_time: scheduledPickup,
         customer_name: profileName,
         customer_phone: formattedPhone ?? null,
+        // Adresse de livraison persistée (coords géocodées côté serveur)
+        // → création serveur de la livraison Uber (square-webhook) + carte de
+        //   suivi, indépendamment du build de l'app.
+        delivery_address: orderMode === 'delivery' && deliveryAddress
+          ? {
+              street: deliveryAddress.street,
+              city: deliveryAddress.city,
+              postalCode: deliveryAddress.postalCode,
+              complement: deliveryAddress.complement ?? null,
+              lat: dropoffLat,
+              lng: dropoffLng,
+              name: profileName,
+              phone: formattedPhone ?? null,
+            }
+          : null,
         created_at: new Date().toISOString(),
       })
       .select()

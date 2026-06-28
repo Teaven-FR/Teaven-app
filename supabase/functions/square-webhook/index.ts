@@ -123,9 +123,51 @@ serve(async (req) => {
         // NOTE : les points sont déjà crédités par process-payment, pas de double comptage ici
         const { data: orderRow } = await supabase
           .from('orders')
-          .select('user_id, items')
+          .select('id, user_id, items, mode, delivery_address')
           .eq('square_order_id', payment.order_id)
           .maybeSingle();
+
+        // ── Créer la livraison Uber Direct côté SERVEUR pour les commandes
+        // livraison. Déclenché de façon fiable au paiement (indépendant du
+        // build de l'app, qui n'appelait pas toujours la création). Lit
+        // l'adresse persistée (orders.delivery_address) et le créneau
+        // (orders.pickup_time, géré dans uber-direct-create-delivery).
+        try {
+          const da = orderRow?.delivery_address as
+            | { street?: string; city?: string; postalCode?: string; complement?: string; name?: string; phone?: string }
+            | null;
+          if (orderRow?.id && orderRow.mode === 'delivery' && da) {
+            // Idempotence : ne pas recréer si une livraison Uber existe déjà
+            const { data: existing } = await supabase
+              .from('deliveries')
+              .select('id, provider_delivery_id')
+              .eq('order_id', orderRow.id)
+              .maybeSingle();
+            if (!existing?.provider_delivery_id) {
+              const dItems = Array.isArray(orderRow.items)
+                ? (orderRow.items as Array<{ name?: string; quantity?: number }>).map((i) => ({ name: i.name, quantity: i.quantity }))
+                : [];
+              const uberRes = await supabase.functions.invoke('uber-direct-create-delivery', {
+                body: {
+                  order_id: orderRow.id,
+                  dropoff_address: {
+                    street_address: [da.street ?? '', da.complement ?? ''],
+                    city: da.city ?? '',
+                    zip_code: da.postalCode ?? '',
+                    country: 'FR',
+                    name: da.name ?? 'Client',
+                    phone: da.phone ?? '',
+                  },
+                  items: dItems,
+                  items_description: dItems.map((i) => `${i.quantity}x ${i.name}`).join(', '),
+                },
+              });
+              console.log(`[square-webhook] Uber delivery create for order ${orderRow.id}:`, JSON.stringify(uberRes.data ?? uberRes.error).slice(0, 300));
+            }
+          }
+        } catch (delErr) {
+          console.error('[square-webhook] Uber delivery creation error (non-fatal):', delErr);
+        }
 
         if (orderRow?.user_id) {
           const weekStart = new Date();

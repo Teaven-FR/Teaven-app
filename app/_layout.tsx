@@ -91,6 +91,7 @@ function RootNavigator() {
         }}
       />
       <Stack.Screen name="auth/login" />
+      <Stack.Screen name="auth/register" />
       <Stack.Screen name="auth/otp" />
       <Stack.Screen
         name="order/[id]"

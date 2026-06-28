@@ -138,6 +138,19 @@ export const useOrderStore = create<OrderState>()(
             rewardTierId: rewardTierId ?? undefined,
             loyaltyAccountId: loyaltyAccountId ?? undefined,
             discounts: discounts ?? undefined,
+            // mode + deliveryAddress : sans eux, create-order crée un fulfillment
+            // PICKUP sans adresse → la commande delivery était invisible/incomplète
+            // côté Square et le tracking app routait mal.
+            mode: deliveryMode ?? 'pickup',
+            subtotal,
+            deliveryAddress: deliveryMode === 'delivery' && deliveryAddress
+              ? {
+                  street: deliveryAddress.street,
+                  city: deliveryAddress.city,
+                  postalCode: deliveryAddress.postalCode,
+                  complement: deliveryAddress.complement ?? undefined,
+                }
+              : undefined,
           });
 
           console.warn('[ORDER] create-order result:', JSON.stringify(createResult).slice(0, 500));
@@ -210,7 +223,11 @@ export const useOrderStore = create<OrderState>()(
                   name: authUser?.fullName ?? 'Client',
                   phone: authUser?.phone ?? '',
                 },
+                items: orderItems.map((i) => ({ name: i.name, quantity: i.quantity })),
                 items_description: itemsDesc,
+                // Créneau choisi par le client : permet une livraison Uber
+                // programmée (sinon la fonction lit orders.pickup_time en base).
+                scheduled_pickup_time: pickupTime ?? undefined,
               });
 
               if (uberResult.data?.success) {
@@ -218,10 +235,14 @@ export const useOrderStore = create<OrderState>()(
                 order.trackingUrl = uberResult.data.tracking_url;
                 console.log(`[ORDER] Uber Direct delivery created: ${uberResult.data.delivery_id}${uberResult.data.stub ? ' (stub)' : ''}`);
               } else {
-                console.warn('[ORDER] Uber Direct creation failed:', uberResult.data?.error ?? uberResult.error);
+                const uberErrMsg = uberResult.data?.error ?? uberResult.error ?? 'inconnu';
+                console.error('[ORDER][URGENT] Uber Direct creation failed:', uberErrMsg, JSON.stringify(uberResult.data ?? {}));
+                order.deliveryError = String(uberErrMsg);
               }
             } catch (uberErr) {
-              console.warn('[ORDER] Uber Direct error (non-fatal):', uberErr);
+              const msg = uberErr instanceof Error ? uberErr.message : String(uberErr);
+              console.error('[ORDER][URGENT] Uber Direct exception:', msg);
+              order.deliveryError = msg;
             }
           }
 

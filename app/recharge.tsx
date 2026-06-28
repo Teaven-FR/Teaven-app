@@ -1,5 +1,5 @@
 // Écran Recharge Wallet — paiement par carte via Square Web Payments SDK
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
-import { ArrowLeft, Shield, Wallet, AlertCircle } from 'lucide-react-native';
+import { ArrowLeft, Shield, Wallet, AlertCircle, LogIn } from 'lucide-react-native';
 import { callEdgeFunction } from '@/lib/square';
+import { supabase } from '@/lib/supabase';
 import { useUser } from '@/hooks/useUser';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/contexts/ToastContext';
@@ -93,6 +94,17 @@ export default function RechargeScreen() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasSession, setHasSession] = useState<boolean | null>(null);
+
+  // Vérifier qu'une vraie session Supabase existe avant d'autoriser la recharge.
+  // Le mode dev OTP "000000" pose un mockUser sans session → recharge impossible.
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled) setHasSession(!!data.session?.access_token);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const fmt = (cents: number) => `${(cents / 100).toFixed(2).replace('.', ',')} €`;
 
@@ -152,6 +164,36 @@ export default function RechargeScreen() {
       <View style={[styles.container, styles.centered, { paddingTop: insets.top }]}>
         <ActivityIndicator color="#C27B5A" size="large" />
         <Text style={styles.processingText}>Rechargement en cours…</Text>
+      </View>
+    );
+  }
+
+  // Pas de session Supabase active → on ne peut pas recharger côté serveur.
+  // On guide l'utilisateur vers une vraie connexion (OTP SMS).
+  if (hasSession === false) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <ArrowLeft size={18} color={colors.text} strokeWidth={1.5} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Recharger mon wallet</Text>
+          <View style={{ width: 36 }} />
+        </View>
+        <View style={[styles.centered, { flex: 1, paddingHorizontal: spacing.xxl }]}>
+          <Wallet size={40} color="#C27B5A" strokeWidth={1.2} />
+          <Text style={styles.processingText}>Connexion requise</Text>
+          <Text style={styles.guideText}>
+            Pour recharger votre portefeuille, connectez-vous avec votre numéro de téléphone.
+          </Text>
+          <Pressable
+            onPress={() => router.replace('/auth/login')}
+            style={styles.loginCta}
+          >
+            <LogIn size={16} color="#FFFFFF" strokeWidth={2} />
+            <Text style={styles.loginCtaText}>Se connecter</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -238,4 +280,24 @@ const styles = StyleSheet.create({
   },
   footerText: { fontFamily: fonts.regular, fontSize: 10, color: colors.textMuted },
   processingText: { fontFamily: fonts.bold, fontSize: 16, color: colors.text, marginTop: 16 },
+  guideText: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  loginCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#C27B5A',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    marginTop: 24,
+  },
+  loginCtaText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
 });

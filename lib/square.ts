@@ -36,12 +36,22 @@ async function fetchEdgeFunction<T>(
   return { data: json as T, error: null };
 }
 
-/** Appel générique à une Edge Function — retry automatique avec anon key si JWT invalide */
+/** Liste des fonctions edge qui exigent un user authentifié — pas de fallback anon */
+const AUTH_REQUIRED_FUNCTIONS = new Set([
+  'process-recharge',
+  'process-payment',
+  'manage-wallet',
+  'claim-birthday-bonus',
+]);
+
+/** Appel générique à une Edge Function — refresh auto du token, fallback anon si possible */
 export async function callEdgeFunction<T>(
   functionName: string,
   body: Record<string, unknown>,
   accessToken?: string,
 ): Promise<EdgeFunctionResponse<T>> {
+  const requiresAuth = AUTH_REQUIRED_FUNCTIONS.has(functionName);
+
   // 1. Essayer avec le token user si disponible
   let token = accessToken;
   if (!token) {
@@ -53,17 +63,33 @@ export async function callEdgeFunction<T>(
 
   if (token) {
     const result = await fetchEdgeFunction<T>(functionName, body, token);
-    // Si ça marche → retourner
     if (!result.error) return result;
-    // Si "Invalid JWT" → retry avec anon key
+
+    // Si "Invalid JWT" → tenter de rafraîchir la session avant de retomber sur anon
     if (result.error.includes('Invalid JWT') || result.error.includes('invalid_jwt')) {
-      console.warn(`[${functionName}] Token invalide, retry avec anon key`);
+      console.warn(`[${functionName}] Token invalide, tentative de refresh`);
+      try {
+        const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+        if (refreshed?.access_token) {
+          const retried = await fetchEdgeFunction<T>(functionName, body, refreshed.access_token);
+          if (!retried.error) return retried;
+        }
+      } catch { /* refresh failed */ }
+
+      if (requiresAuth) {
+        return { data: null, error: 'Connexion requise. Reconnectez-vous pour continuer.' };
+      }
       return fetchEdgeFunction<T>(functionName, body, ANON_KEY);
     }
     return result;
   }
 
-  // 2. Pas de token → utiliser anon key directement
+  // 2. Pas de token → fonction protégée : on rejette explicitement
+  if (requiresAuth) {
+    return { data: null, error: 'Connexion requise. Reconnectez-vous pour continuer.' };
+  }
+
+  // 3. Pas de token → fonction publique : utiliser anon key
   return fetchEdgeFunction<T>(functionName, body, ANON_KEY);
 }
 

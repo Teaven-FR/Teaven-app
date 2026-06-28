@@ -29,19 +29,24 @@ import {
   Clock,
 } from 'lucide-react-native';
 import { useOrderStore } from '@/stores/orderStore';
+import { useLocation } from '@/hooks/useLocation';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/constants/config';
 import { colors, fonts, spacing, shadows } from '@/constants/theme';
 
 interface DeliveryStatus {
   success: boolean;
   status: string;
-  courier: { name: string; phone: string; vehicle: string } | null;
+  courier: { name: string; phone: string; vehicle: string; lat?: number | null; lng?: number | null } | null;
   tracking_url: string | null;
   estimated_pickup_at: string | null;
   estimated_dropoff_at: string | null;
   actual_pickup_at: string | null;
   actual_dropoff_at: string | null;
   uber_delivery_id: string | null;
+  // Coordonnées destination fournies par le serveur (géocodage de l'adresse).
+  // Permet d'afficher le pin client même si l'app n'a pas géocodé localement.
+  dropoff_lat?: number | null;
+  dropoff_lng?: number | null;
   stub?: boolean;
 }
 
@@ -77,15 +82,20 @@ function formatETATime(isoDate: string | null): string {
   return new Date(isoDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
-// Teaven Franconville coordinates
-const STORE_COORDS = { latitude: 48.9894, longitude: 2.2294 };
+// Coordonnées boutique par défaut (utilisées seulement si Square Location
+// ne renvoie pas encore les coordonnées GPS)
+const STORE_COORDS_FALLBACK = { latitude: 48.9894, longitude: 2.2294 };
 
 export default function DeliveryTrackingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const order = useOrderStore((s) => s.getOrderById(id ?? ''));
+  const { location: storeLocation } = useLocation();
   const useNative = Platform.OS !== 'web';
+
+  // Coordonnées boutique live (Square Location API)
+  const storeCoords = storeLocation.coordinates ?? STORE_COORDS_FALLBACK;
 
   const [deliveryStatus, setDeliveryStatus] = useState<DeliveryStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -142,17 +152,21 @@ export default function DeliveryTrackingScreen() {
   const isCancelled = deliveryStatus?.status === 'cancelled' || deliveryStatus?.status === 'returned';
   const currentStepData = STATUS_STEPS[currentStep] ?? STATUS_STEPS[0];
 
-  // Delivery destination coords (fallback to a point near store)
+  // Destination = adresse exacte du client. Priorité aux coords locales
+  // (géocodées dans le panier) ; sinon on prend celles fournies par le
+  // serveur via get-status (géocodage de l'adresse persistée). Ainsi le pin
+  // client s'affiche même quand l'app n'a pas géocodé localement.
   const dropoffCoords = order?.deliveryAddress?.lat && order?.deliveryAddress?.lng
     ? { latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng }
-    : { latitude: STORE_COORDS.latitude + 0.008, longitude: STORE_COORDS.longitude + 0.005 };
+    : (deliveryStatus?.dropoff_lat != null && deliveryStatus?.dropoff_lng != null
+        ? { latitude: deliveryStatus.dropoff_lat, longitude: deliveryStatus.dropoff_lng }
+        : null);
 
-  // Simulated courier position (interpolated between store and dropoff based on step)
-  const courierProgress = currentStep >= 3 ? 0.7 : currentStep >= 2 ? 0.3 : 0;
-  const courierCoords = {
-    latitude: STORE_COORDS.latitude + (dropoffCoords.latitude - STORE_COORDS.latitude) * courierProgress,
-    longitude: STORE_COORDS.longitude + (dropoffCoords.longitude - STORE_COORDS.longitude) * courierProgress,
-  };
+  // Position RÉELLE du livreur (webhook Uber → deliveries.courier_lat/lng).
+  // Marqueur affiché uniquement quand Uber nous donne une position.
+  const courierCoords = deliveryStatus?.courier?.lat != null && deliveryStatus?.courier?.lng != null
+    ? { latitude: deliveryStatus.courier.lat, longitude: deliveryStatus.courier.lng }
+    : null;
 
   const animatedWidth = progressWidth.interpolate({
     inputRange: [0, 100],
@@ -231,11 +245,16 @@ export default function DeliveryTrackingScreen() {
         <MapView
           style={styles.map}
           provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-          initialRegion={{
-            latitude: (STORE_COORDS.latitude + dropoffCoords.latitude) / 2,
-            longitude: (STORE_COORDS.longitude + dropoffCoords.longitude) / 2,
-            latitudeDelta: Math.abs(STORE_COORDS.latitude - dropoffCoords.latitude) * 2.5 + 0.005,
-            longitudeDelta: Math.abs(STORE_COORDS.longitude - dropoffCoords.longitude) * 2.5 + 0.005,
+          initialRegion={dropoffCoords ? {
+            latitude: (storeCoords.latitude + dropoffCoords.latitude) / 2,
+            longitude: (storeCoords.longitude + dropoffCoords.longitude) / 2,
+            latitudeDelta: Math.abs(storeCoords.latitude - dropoffCoords.latitude) * 2.5 + 0.005,
+            longitudeDelta: Math.abs(storeCoords.longitude - dropoffCoords.longitude) * 2.5 + 0.005,
+          } : {
+            latitude: storeCoords.latitude,
+            longitude: storeCoords.longitude,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
           }}
           scrollEnabled={true}
           zoomEnabled={true}
@@ -244,21 +263,23 @@ export default function DeliveryTrackingScreen() {
           customMapStyle={MAP_STYLE}
         >
           {/* Store marker */}
-          <Marker coordinate={STORE_COORDS} anchor={{ x: 0.5, y: 0.5 }}>
+          <Marker coordinate={storeCoords} anchor={{ x: 0.5, y: 0.5 }}>
             <View style={styles.markerStore}>
               <Sparkles size={12} color="#FFFFFF" strokeWidth={2} />
             </View>
           </Marker>
 
-          {/* Destination marker */}
-          <Marker coordinate={dropoffCoords} anchor={{ x: 0.5, y: 1 }}>
-            <View style={styles.markerDestination}>
-              <MapPin size={20} color={colors.green} strokeWidth={2} fill={colors.greenLight} />
-            </View>
-          </Marker>
+          {/* Destination marker — adresse exacte du client uniquement */}
+          {dropoffCoords && (
+            <Marker coordinate={dropoffCoords} anchor={{ x: 0.5, y: 1 }}>
+              <View style={styles.markerDestination}>
+                <MapPin size={20} color={colors.green} strokeWidth={2} fill={colors.greenLight} />
+              </View>
+            </Marker>
+          )}
 
-          {/* Courier marker (when en route) */}
-          {currentStep >= 2 && !isDelivered && (
+          {/* Courier marker — position réelle Uber uniquement */}
+          {courierCoords && !isDelivered && (
             <Marker coordinate={courierCoords} anchor={{ x: 0.5, y: 0.5 }}>
               <View style={styles.markerCourier}>
                 <Truck size={14} color="#FFFFFF" strokeWidth={2} />
@@ -266,13 +287,15 @@ export default function DeliveryTrackingScreen() {
             </Marker>
           )}
 
-          {/* Route line */}
-          <Polyline
-            coordinates={[STORE_COORDS, dropoffCoords]}
-            strokeColor={colors.green}
-            strokeWidth={3}
-            lineDashPattern={[8, 6]}
-          />
+          {/* Route line — uniquement si destination réelle */}
+          {dropoffCoords && (
+            <Polyline
+              coordinates={[storeCoords, dropoffCoords]}
+              strokeColor={colors.green}
+              strokeWidth={3}
+              lineDashPattern={[8, 6]}
+            />
+          )}
         </MapView>
 
         {/* ETA overlay on map */}
@@ -286,6 +309,19 @@ export default function DeliveryTrackingScreen() {
 
       {/* Bottom card with status details (status déjà dans le hero) */}
       <Animated.View style={[styles.bottomSheet, { opacity: heroOpacity }]}>
+        {/* Suivi en direct Uber — carte temps réel hébergée (route + ETA +
+            position coursier). Disponible dès qu'une livraison est créée. */}
+        {deliveryStatus?.tracking_url && !isDelivered && !isCancelled && (
+          <Pressable
+            onPress={() => Linking.openURL(deliveryStatus.tracking_url!)}
+            style={styles.liveTrackBtn}
+          >
+            <Navigation size={16} color="#FFFFFF" strokeWidth={2} />
+            <Text style={styles.liveTrackText}>Suivre en direct</Text>
+            <ExternalLink size={14} color="#FFFFFF" strokeWidth={2} />
+          </Pressable>
+        )}
+
         {/* Courier info */}
         {deliveryStatus?.courier && (
           <View style={styles.courierCard}>
@@ -392,10 +428,10 @@ export default function DeliveryTrackingScreen() {
           </View>
         )}
 
-        {/* Support — appeler la boutique si problème */}
-        {!isDelivered && !isCancelled && (
+        {/* Support — numéro réel de la boutique (Square Location), masqué si absent */}
+        {!isDelivered && !isCancelled && storeLocation.phone && (
           <Pressable
-            onPress={() => Linking.openURL('tel:+33130100000')}
+            onPress={() => Linking.openURL(`tel:${storeLocation.phone}`)}
             style={({ pressed }) => [styles.supportBtn, pressed && { opacity: 0.85 }]}
             accessibilityRole="button"
             accessibilityLabel="Appeler la boutique en cas de problème"
@@ -587,6 +623,14 @@ const styles = StyleSheet.create({
   progressLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   progressStepLabel: { fontFamily: fonts.regular, fontSize: 9, color: colors.textMuted },
   progressStepLabelActive: { fontFamily: fonts.bold, color: colors.green },
+
+  // Suivi en direct Uber
+  liveTrackBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: colors.green, borderRadius: 16, paddingVertical: 14,
+    marginBottom: spacing.md, ...shadows.card,
+  },
+  liveTrackText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF', letterSpacing: -0.2 },
 
   // Courier
   courierCard: {

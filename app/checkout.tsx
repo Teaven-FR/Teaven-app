@@ -249,7 +249,7 @@ export default function CheckoutScreen() {
             onPress={async () => {
               setIsProcessing(true);
               try {
-                await createOrder(cartItems, 'wallet', false, undefined, wallet.giftCardId ?? undefined, pickupTime, undefined, loyaltyAccountId ?? undefined, discounts);
+                await createOrder(cartItems, 'wallet', false, undefined, wallet.giftCardId ?? undefined, pickupTime, undefined, loyaltyAccountId ?? undefined, discounts, deliveryMode, deliveryAddress, deliveryFee);
                 router.replace('/order-confirmation');
               } catch (err: unknown) {
                 setError(err instanceof Error ? err.message : 'Erreur');

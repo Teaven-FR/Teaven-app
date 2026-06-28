@@ -20,6 +20,10 @@ export interface LocationData {
   open: number;
   close: number;
   closed: boolean;
+  /** Téléphone boutique (Square Location, E.164) — null si non renseigné */
+  phone: string | null;
+  /** Coordonnées GPS boutique (Square Location) — null si non renseignées */
+  coordinates: { latitude: number; longitude: number } | null;
 }
 
 // Cache en mémoire pour éviter de refetcher à chaque montage
@@ -34,6 +38,8 @@ const FALLBACK: LocationData = {
   open: 9,
   close: 20,
   closed: false,
+  phone: null,
+  coordinates: null,
 };
 
 export function useLocation() {
@@ -68,6 +74,8 @@ export function useLocation() {
           open: data.open ?? 9,
           close: data.close ?? 20,
           closed: data.closed ?? false,
+          phone: data.phone ?? null,
+          coordinates: data.coordinates ?? null,
         };
 
         cachedLocation = loc;

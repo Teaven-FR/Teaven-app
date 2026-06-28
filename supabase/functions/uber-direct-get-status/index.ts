@@ -1,5 +1,5 @@
 // Edge Function — Récupérer le statut d'une livraison Uber Direct
-// GET avec ?delivery_id=xxx
+// GET avec ?delivery_id=xxx ou ?order_id=xxx
 // Lit d'abord dans Supabase (mis à jour par webhook), fallback sur API Uber
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
@@ -50,15 +50,37 @@ serve(async (req) => {
     );
 
     // 1. Lire le statut depuis Supabase (source de vérité via webhook)
+    //    Colonnes réelles : provider_delivery_id, estimated_pickup/dropoff,
+    //    courier_name/phone/vehicle, courier_lat/lng, actual_*_at
+    //    (l'ancienne version lisait uber_delivery_id / estimated_*_at qui
+    //    n'existent pas → ETA et coursier jamais retournés)
     let query = supabase.from('deliveries').select('*');
     if (deliveryId) {
-      query = query.eq('uber_delivery_id', deliveryId);
+      query = query.eq('provider_delivery_id', deliveryId);
     } else {
       query = query.eq('order_id', orderId);
     }
-    const { data: delivery } = await query.single();
+    const { data: delivery } = await query.maybeSingle();
 
     if (delivery) {
+      // Coordonnées destination (adresse client géocodée) depuis orders.
+      // Permet à la carte de suivi d'afficher le bon pin client.
+      let dropoffLat: number | null = null;
+      let dropoffLng: number | null = null;
+      const lookupOrderId = orderId ?? delivery.order_id;
+      if (lookupOrderId) {
+        const { data: orderRow } = await supabase
+          .from('orders')
+          .select('delivery_address')
+          .eq('id', lookupOrderId)
+          .maybeSingle();
+        const da = orderRow?.delivery_address as { lat?: number | null; lng?: number | null } | null;
+        if (da?.lat != null && da?.lng != null) {
+          dropoffLat = da.lat;
+          dropoffLng = da.lng;
+        }
+      }
+
       return new Response(JSON.stringify({
         success: true,
         status: delivery.status,
@@ -66,20 +88,23 @@ serve(async (req) => {
           name: delivery.courier_name,
           phone: delivery.courier_phone,
           vehicle: delivery.courier_vehicle,
+          lat: delivery.courier_lat,
+          lng: delivery.courier_lng,
         } : null,
         tracking_url: delivery.tracking_url,
-        estimated_pickup_at: delivery.estimated_pickup_at,
-        estimated_dropoff_at: delivery.estimated_dropoff_at,
+        estimated_pickup_at: delivery.estimated_pickup,
+        estimated_dropoff_at: delivery.estimated_dropoff,
         actual_pickup_at: delivery.actual_pickup_at,
         actual_dropoff_at: delivery.actual_dropoff_at,
-        uber_delivery_id: delivery.uber_delivery_id,
+        uber_delivery_id: delivery.provider_delivery_id,
+        dropoff_lat: dropoffLat,
+        dropoff_lng: dropoffLng,
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // 2. Si pas en base et delivery_id fourni → requête directe Uber API
     const customerId = Deno.env.get('UBER_DIRECT_CUSTOMER_ID');
     if (!customerId || !deliveryId) {
-      // Stub mode
       if (deliveryId?.startsWith('STUB_')) {
         return new Response(JSON.stringify({
           success: true,
@@ -113,10 +138,14 @@ serve(async (req) => {
       courier: uberData.courier ? {
         name: uberData.courier.name,
         phone: uberData.courier.phone_number,
-        vehicle: uberData.courier.vehicle?.make,
+        vehicle: uberData.courier.vehicle?.make ?? uberData.courier.vehicle_type,
+        lat: uberData.courier.location?.lat,
+        lng: uberData.courier.location?.lng,
       } : null,
       tracking_url: uberData.tracking_url,
-      estimated_dropoff_at: uberData.dropoff?.eta,
+      estimated_pickup_at: uberData.pickup_eta ?? uberData.pickup?.eta,
+      estimated_dropoff_at: uberData.dropoff_eta ?? uberData.dropoff?.eta,
+      uber_delivery_id: uberData.id,
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
