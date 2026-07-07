@@ -5,6 +5,11 @@ name: Maquette boutique · assets teaven.co
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/teaven-boutique-brief-fpvr0z
+    paths:
+      - '.github/workflows/fetch-maquette-assets.yml'
 
 permissions:
   contents: write
