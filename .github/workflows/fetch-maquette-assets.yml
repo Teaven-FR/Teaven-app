@@ -1,0 +1,82 @@
+name: Maquette boutique · assets teaven.co
+# Outil ponctuel : récupère le catalogue Shopify public de teaven.co,
+# ses photos produits et sa charte, pour construire la maquette de la
+# future boutique. Déclenchement manuel uniquement.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/teaven-boutique-brief-fpvr0z
+
+      - name: Recuperer catalogue, pages et photos
+        run: |
+          set -x
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+          OUT=maquette-assets
+          mkdir -p "$OUT/site" "$OUT/photos" "$OUT/ambiance"
+
+          fetch() { curl -sSL --max-time 40 -A "$UA" -H "Accept-Language: fr-FR,fr;q=0.9" "$1" -o "$2" || echo "ECHEC: $1"; }
+
+          # --- Catalogue Shopify public ---
+          for p in 1 2 3; do
+            fetch "https://teaven.co/products.json?limit=250&page=$p" "$OUT/site/products-$p.json"
+          done
+          fetch "https://teaven.co/collections.json?limit=250" "$OUT/site/collections.json"
+
+          # --- Pages pour la charte graphique ---
+          fetch "https://teaven.co/" "$OUT/site/home.html"
+          fetch "https://teaven.co/sitemap.xml" "$OUT/site/sitemap.xml"
+          fetch "https://teaven.co/collections/matcha" "$OUT/site/collection-matcha.html"
+          fetch "https://teaven.co/products/matcha-80g" "$OUT/site/produit-matcha-80g.html"
+
+          # CSS du theme referencees par la home
+          if [ -s "$OUT/site/home.html" ]; then
+            grep -oE 'href="[^"]*\.css[^"]*"' "$OUT/site/home.html" | sed -E 's/^href="//; s/"$//' | head -6 | while read -r css; do
+              case "$css" in //*) css="https:$css";; /*) css="https://teaven.co$css";; esac
+              n=$(echo "$css" | md5sum | cut -c1-8)
+              fetch "$css" "$OUT/site/theme-$n.css"
+            done
+          fi
+
+          # --- Photos produits depuis le CDN Shopify (largeur 900px) ---
+          if [ -s "$OUT/site/products-1.json" ] && jq -e '.products' "$OUT/site/products-1.json" >/dev/null 2>&1; then
+            jq -r '.products[] | .handle as $h | (.images[0:2] | to_entries[] | [$h, (.key|tostring), .value.src] | @tsv)' "$OUT"/site/products-*.json 2>/dev/null | while IFS=$'\t' read -r handle idx src; do
+              sep='?'; case "$src" in *\?*) sep='&';; esac
+              suffix=''; [ "$idx" != "0" ] && suffix="-$((idx+1))"
+              fetch "${src}${sep}width=900" "$OUT/photos/${handle}${suffix}.jpg"
+            done
+            jq -r '[.products[].title] | length' "$OUT"/site/products-1.json || true
+          fi
+
+          # --- Photos d ambiance (Unsplash, memes visuels que l app mobile) ---
+          amb() { fetch "https://images.unsplash.com/$1?w=1200&q=72&fit=crop" "$OUT/ambiance/$2.jpg"; }
+          amb "photo-1536256263959-770b48d82b0a" "matcha-latte"
+          amb "photo-1571934811356-5cc061b6821f" "the-tasse"
+          amb "photo-1556881286-fc6915169721"    "theiere"
+          amb "photo-1509042239860-f550ce710b93" "cafe-ambiance"
+          amb "photo-1495474472287-4d71bcdd2085" "tasse-table"
+          amb "photo-1590301157890-4810ed352733" "plantation"
+          amb "photo-1638176066666-ffb2f013c7dd" "matcha-poudre"
+          amb "photo-1605090930601-71c4b981c2ac" "the-vrac"
+
+          # Nettoyage des fichiers vides ou en erreur
+          find "$OUT" -type f -size -200c -delete
+          du -sh "$OUT" && find "$OUT" -type f | sort
+
+      - name: Commit et push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add maquette-assets
+          git diff --cached --quiet && echo "Rien a committer" && exit 0
+          git commit -m "chore(maquette): assets teaven.co (catalogue, photos, charte) via Actions"
+          git push origin claude/teaven-boutique-brief-fpvr0z
