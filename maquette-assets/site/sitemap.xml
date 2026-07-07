@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- This is the parent sitemap linking to additional sitemaps for products, collections and pages as shown below. The sitemap can not be edited manually, but is kept up to date in real time. -->
+  <sitemap>
+    <loc>https://teaven.co/sitemap_agentic_discovery.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://teaven.co/sitemap_products_1.xml?from=7756815007995&amp;to=8040017494267</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://teaven.co/sitemap_pages_1.xml?from=98804400379&amp;to=148883538261</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://teaven.co/sitemap_collections_1.xml?from=397479870715&amp;to=642557903189</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://teaven.co/sitemap_blogs_1.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://teaven.co/fr-ch/sitemap_products_1.xml?from=7756815007995&amp;to=8040017494267</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://teaven.co/fr-ch/sitemap_pages_1.xml?from=98804400379&amp;to=148883538261</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://teaven.co/fr-ch/sitemap_collections_1.xml?from=397479870715&amp;to=642557903189</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://teaven.co/fr-ch/sitemap_blogs_1.xml</loc>
+  </sitemap>
+</sitemapindex>
