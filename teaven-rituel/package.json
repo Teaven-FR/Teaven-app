@@ -1,0 +1,5 @@
+{
+  "name": "teaven-rituel",
+  "private": true,
+  "scripts": { "build": "node fetch-assets.mjs && python3 apply-patch.py && python3 apply-patch2.py && python3 apply-patch3.py" }
+}
